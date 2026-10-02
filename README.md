@@ -61,6 +61,14 @@ Run `jeng` on its own for the TUI, or pass a prompt to run once and exit:
 jeng "what files are in src?"
 ```
 
+The TUI shows the context size the model is actually working with, and has a few keys of its own:
+
+| Key         | Does                                        |
+| ----------- | ------------------------------------------- |
+| `ctrl+esc`  | quit                                        |
+| `ctrl+l`    | clear the conversation and loaded protocols  |
+| `ctrl+r`    | show or hide what the model is thinking      |
+
 ## How it works?
 
 Jeng loads up and edits context on the following locations:
@@ -85,13 +93,14 @@ Jeng imports it and calls it, handing over the `input` it was given and keeping 
 ```ts
 /**
  * name: greet
- * description: greets whoever is named in the input
+ * description: greets whoever is named in the input. input: { who: string }
  */
 
 export default async (input: { who: string }) => `hi ${input.who}`
 ```
 
 Jeng only ever sees the name and the description, so write the description for the model, not for yourself.
+Name the input fields in it: that description is all Jeng has to go on when it later calls the gadget.
 
 ## Protocols
 

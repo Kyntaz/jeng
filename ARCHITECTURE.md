@@ -20,6 +20,17 @@ This should make Jeng particularly well suited to work with local or weaker mode
     - It is the only source of configuration once found, so the environment is a fallback rather than a second voice.
     - Anything it leaves out falls back to the same default the environment would have supplied, which keeps a config file from having to be complete.
 
+## Turns
+
+A turn is one request to the model, and it may end in text or in an action. Keeping that turn well formed is most of what separates an agent that works from one that spirals, so the rules are few and stated once.
+
+- An assistant message carrying an action is always followed by the message carrying that action's result, in the history as well as in the request. A history that keeps the request and forgets the result replays a call the model never saw answered, which is what sends it round again.
+- The same action with the same arguments twice in a row means nothing changed in between, so the agent stops and says so. The same action again *after* something else is legitimate, because the context moved.
+- Arguments that are not a JSON object come back as an error rather than being handed to a gadget.
+- A gadget is named after the header it was validated against, not after whatever the model called it, so the name the model reads back is the name on disk.
+- Creating a gadget that already exists rewrites it. The model cannot edit files, so refusing would leave it unable to fix a gadget it is unhappy with.
+- Models that think may spend a turn reasoning and end with no answer at all. Rather than return nothing, the agent falls back to that reasoning, because it is the closest thing to an answer.
+
 ## Configuration
 
 `config` is the single definition of where Jeng's homes and model come from, so a caller never has to know how they were chosen.
@@ -64,6 +75,7 @@ A gadget's default export takes the action's `input` and its return value become
 - Rejections are phrased as one sentence naming the offending field, because that sentence is read by the model, who then gets to fix its own attempt.
 - Nothing is written until validation passes, so a rejected creation leaves the home exactly as it was.
 - A gadget is compiled but never executed at creation time, so writing a gadget cannot run arbitrary code before you have looked at it.
+- A gadget whose name already exists is overwritten rather than rejected, because the model has no way to edit a file it is unhappy with. It is still validated first, so a rewrite cannot be a way in either.
 
 ## Stack
 

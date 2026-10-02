@@ -6,13 +6,20 @@ import { renderTui } from "./tui";
 const collect = (value: string, previous: string[]) => [...previous, value];
 
 async function once(agent: Agent, prompt: string): Promise<void> {
-    await agent.send(prompt, {
+    // A turn that ends in reasoning rather than an answer streams no text, so
+    // fall back to whatever send resolved with rather than printing nothing.
+    let streamed = false;
+    const reply = await agent.send(prompt, {
         onEvent: (event) => {
-            if (event.type === "text") process.stdout.write(event.text);
+            if (event.type === "text") {
+                streamed = true;
+                process.stdout.write(event.text);
+            }
             if (event.type === "tool") process.stderr.write(`\n⚙ ${event.action}\n`);
             if (event.type === "result") process.stderr.write(`↳ ${event.content}\n`);
         },
     });
+    if (!streamed) process.stdout.write(reply);
     process.stdout.write("\n");
 }
 

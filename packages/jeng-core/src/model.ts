@@ -19,7 +19,9 @@ export interface ToolCall {
 
 export interface Turn {
     text: string;
+    reasoning: string;
     toolCall: ToolCall | undefined;
+    promptTokens: number;
 }
 
 export interface ToolSpec {
@@ -93,10 +95,12 @@ export async function chat(
         config: ModelConfig;
         tools?: ToolSpec[];
         onDelta?: (text: string) => void;
+        onReasoning?: (text: string) => void;
+        onUsage?: (promptTokens: number) => void;
         signal?: AbortSignal;
     },
 ): Promise<Turn> {
-    const { config, tools, onDelta, signal } = options;
+    const { config, tools, onDelta, onReasoning, onUsage, signal } = options;
     const headers: Record<string, string> = { "content-type": "application/json" };
     if (config.apiKey) headers.authorization = `Bearer ${config.apiKey}`;
 
@@ -110,6 +114,7 @@ export async function chat(
             tools: tools?.map((tool) => ({ type: "function", function: tool })),
             tool_choice: "auto",
             stream: true,
+            stream_options: { include_usage: true },
         }),
     });
 
@@ -120,11 +125,23 @@ export async function chat(
     }
 
     let text = "";
+    let reasoning = "";
+    let promptTokens = 0;
     let call: { id: string; name: string; args: string } | undefined;
 
     for await (const data of lines(response.body)) {
         if (data === "[DONE]") break;
-        const chunk = JSON.parse(data) as { choices?: { delta?: Record<string, unknown> }[] };
+        const chunk = JSON.parse(data) as {
+            choices?: { delta?: Record<string, unknown> }[];
+            usage?: { prompt_tokens?: number };
+        };
+
+        const used = chunk.usage?.prompt_tokens;
+        if (used) {
+            promptTokens = used;
+            onUsage?.(used);
+        }
+
         const delta = chunk.choices?.[0]?.delta;
         if (!delta) continue;
 
@@ -132,6 +149,12 @@ export async function chat(
         if (typeof piece === "string" && piece) {
             text += piece;
             onDelta?.(piece);
+        }
+
+        const thought = delta.reasoning;
+        if (typeof thought === "string" && thought) {
+            reasoning += thought;
+            onReasoning?.(thought);
         }
 
         const next = firstToolCall(delta);
@@ -146,17 +169,22 @@ export async function chat(
 
     return {
         text,
+        reasoning,
         toolCall: call
             ? { id: call.id, name: call.name, arguments: parseArgs(call.args) }
             : undefined,
+        promptTokens,
     };
 }
 
-function parseArgs(args: string): Record<string, unknown> {
-    if (!args) return {};
+export function parseArgs(args: string): Record<string, unknown> {
+    if (!args.trim()) return {};
     try {
-        return JSON.parse(args) as Record<string, unknown>;
+        const parsed: unknown = JSON.parse(args);
+        if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed))
+            return { error: "arguments must be a json object" };
+        return parsed as Record<string, unknown>;
     } catch {
-        return { input: args };
+        return { error: `arguments are not valid json: ${args.slice(0, 120)}` };
     }
 }

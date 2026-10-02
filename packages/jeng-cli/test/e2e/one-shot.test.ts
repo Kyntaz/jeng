@@ -3,14 +3,17 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
-function fakeModel(chunks: string[]): { url: string; stop: () => void } {
+function fakeModel(chunks: string[], reasoning = ""): { url: string; stop: () => void } {
     const server = Bun.serve({
         port: 0,
         fetch() {
             const frames = chunks.map(
                 (content) => `data: ${JSON.stringify({ choices: [{ delta: { content } }] })}\n\n`,
             );
-            return new Response([...frames, "data: [DONE]\n\n"].join(""), {
+            const thoughts = reasoning
+                ? `data: ${JSON.stringify({ choices: [{ delta: { reasoning } }] })}\n\n`
+                : "";
+            return new Response([thoughts, ...frames, "data: [DONE]\n\n"].join(""), {
                 headers: { "content-type": "text/event-stream" },
             });
         },
@@ -43,6 +46,42 @@ describe("jeng", () => {
         expect({ code, answer: stdout.trim() }).toEqual({
             code: 0,
             answer: "hello from the fake model",
+        });
+        model.stop();
+        await rm(home, { recursive: true, force: true });
+    });
+
+    test("prints the answer even when the model only thought it", async () => {
+        const home = await mkdtemp(join(tmpdir(), "jeng-cli-"));
+        const model = fakeModel([], "the answer is 4");
+
+        const proc = Bun.spawn(
+            [
+                "bun",
+                "run",
+                resolve("packages/jeng-cli/src/index.ts"),
+                "what is 2+2?",
+                "--home",
+                home,
+            ],
+            {
+                cwd: resolve("."),
+                env: {
+                    ...process.env,
+                    JENG_BASE_URL: model.url,
+                    JENG_MODEL: "fake",
+                    JENG_API_KEY: "",
+                },
+                stdout: "pipe",
+                stderr: "pipe",
+            },
+        );
+
+        const [stdout, code] = await Promise.all([new Response(proc.stdout).text(), proc.exited]);
+
+        expect({ code, answer: stdout.trim() }).toEqual({
+            code: 0,
+            answer: "the answer is 4",
         });
         model.stop();
         await rm(home, { recursive: true, force: true });

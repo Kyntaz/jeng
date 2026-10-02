@@ -139,6 +139,75 @@ describe("actions", () => {
         await cleanup();
     });
 
+    test("run_gadget passes a json string input on as an object", async () => {
+        const { ctx, dir, cleanup } = await context();
+        await Bun.write(
+            join(dir, "gadgets", "greet.ts"),
+            // biome-ignore lint/suspicious/noTemplateCurlyInString: gadget source, not a template
+            "/**\n * name: greet\n * description: says hi\n */\n\nexport default async (input: { who: string }) => `hi ${input.who}`\n",
+        );
+        ctx.homes = [await loadHome(dir)];
+
+        const result = await runAction(
+            "run_gadget",
+            { name: "greet", input: '{"who":"world"}' },
+            ctx,
+        );
+
+        expect(result).toEqual({ ok: true, content: "hi world" });
+        await cleanup();
+    });
+
+    test("run_gadget rejects an input string that is not json", async () => {
+        const { ctx, dir, cleanup } = await context();
+        await Bun.write(
+            join(dir, "gadgets", "greet.ts"),
+            "/**\n * name: greet\n * description: says hi\n */\n\nexport default async () => 'hi'\n",
+        );
+        ctx.homes = [await loadHome(dir)];
+
+        expect(await runAction("run_gadget", { name: "greet", input: "world" }, ctx)).toEqual({
+            ok: false,
+            content: "input must be a json object, not a string",
+        });
+        await cleanup();
+    });
+
+    test("names a gadget after its own header, not the name the model passed", async () => {
+        const { ctx, dir, cleanup } = await context();
+
+        const result = await runAction(
+            "create_gadget",
+            {
+                name: "",
+                source: "/**\n * name: greet\n * description: says hi\n */\n\nexport default async () => 'hi'\n",
+            },
+            ctx,
+        );
+
+        expect(result.ok).toBe(true);
+        expect(ctx.homes[0].gadgets.map((gadget) => gadget.name)).toEqual(["greet"]);
+        expect(await Bun.file(join(dir, "gadgets", "greet.ts")).exists()).toBe(true);
+        await cleanup();
+    });
+
+    test("lets a gadget be rewritten, since the model cannot edit files itself", async () => {
+        const { ctx, dir, cleanup } = await context();
+        const broken =
+            "/**\n * name: greet\n * description: says hi\n */\n\nexport default async () => 'hi'\n";
+        const fixed =
+            "/**\n * name: greet\n * description: says hi properly\n */\n\nexport default async () => 'hello'\n";
+
+        await runAction("create_gadget", { source: broken }, ctx);
+        const result = await runAction("create_gadget", { source: fixed }, ctx);
+
+        expect(result.ok).toBe(true);
+        expect(result.content).toContain('gadget "greet" rewritten');
+        expect(await Bun.file(join(dir, "gadgets", "greet.ts")).text()).toBe(fixed);
+        expect(ctx.homes[0].gadgets.length).toBe(1);
+        await cleanup();
+    });
+
     test("an unknown action lists the ones that do exist", async () => {
         const { ctx, cleanup } = await context();
 

@@ -1,6 +1,6 @@
 import { join } from "node:path";
 import { runGadget } from "./gadget";
-import { writeProtocol } from "./header";
+import { parseGadget, writeProtocol } from "./header";
 import { type Home, loadHome } from "./home";
 import { validateGadget, validateGadgetSyntax, validateProtocol } from "./validate";
 
@@ -11,18 +11,44 @@ export const ACTIONS = ["run_gadget", "load_protocol", "create_protocol", "creat
 export const JENG_TOOL = {
     name: "jeng",
     description: [
-        "Do something. You have no other tool.",
-        "action=run_gadget name, input: run an existing gadget with input as a JSON object.",
-        "action=load_protocol name: pull a protocol's contents into your context.",
-        "action=create_protocol name, when, description, content: commit knowledge to memory.",
-        "action=create_gadget name, description, source: write a new gadget. source is a complete TypeScript file that starts with a `/** name: <name> */` `/** description: <description> */` header and ends in an `export default` function.",
+        "Do one thing. This is your only tool.",
+        "",
+        "Reply with either one jeng call or a final answer in plain text, never both.",
+        "",
+        'action="run_gadget", name=<existing gadget>, input=<object>',
+        "  Run a gadget. `name` must be a gadget listed under Gadgets in your context.",
+        'action="create_gadget", name=<new kebab-case name>, description=<one line>, source=<TypeScript>',
+        "  Write a gadget you do not have yet.",
+        "  source must be a complete TypeScript file that starts with this exact 4-line comment",
+        "  header, where the words `name:` and `description:` are literal and required:",
+        "",
+        "  /**",
+        "   * name: count-lines",
+        "   * description: counts the lines of a file. input: { path: string }",
+        "   */",
+        "",
+        "  Then code that compiles with bun, ending in:",
+        "  export default async (input: { path: string }) => string",
+        "  Only `node:*` builtins and the `Bun` global are available. No other package can be imported.",
+        "  The description is all you will see about this gadget later, so name its input fields.",
+        'action="load_protocol", name=<existing protocol>',
+        "  Pull a protocol's body into your context. Use it when the protocol's `when` matches the task.",
+        'action="create_protocol", name=<new kebab-case name>, when=<when to load it>, description=<one line>, content=<knowledge>',
+        "  Save knowledge worth keeping. Never save a guess: only what you actually learned.",
+        "",
+        "After every call you get a result. Read it before deciding what to do next.",
+        "If a result is an error, do not repeat that same call. Change the arguments, or answer without it.",
+        "If you cannot do something, say so in one line instead of calling a tool.",
     ].join("\n"),
     parameters: {
         type: "object",
         properties: {
             action: { type: "string", enum: ACTIONS },
             name: { type: "string", description: "gadget or protocol name, kebab-case" },
-            input: { type: "object", description: "input for run_gadget" },
+            input: {
+                type: "object",
+                description: "arguments for run_gadget, as an object",
+            },
             when: {
                 type: "string",
                 description: "for create_protocol: when to load this protocol",
@@ -31,7 +57,7 @@ export const JENG_TOOL = {
             content: { type: "string", description: "for create_protocol: the markdown body" },
             source: {
                 type: "string",
-                description: "for create_gadget: the complete TypeScript source",
+                description: "for create_gadget: the complete TypeScript file, header first",
             },
         },
         required: ["action"],
@@ -44,6 +70,19 @@ export interface ActionContext {
 }
 
 const primaryHome = (ctx: ActionContext) => ctx.homes[0]?.dir ?? join(ctx.cwd, ".jeng");
+
+// Models often send `input` as a json string rather than an object; a gadget
+// written against an object signature would otherwise receive a string.
+function coerceInput(input: unknown): { bad: string } | { bad: undefined; value: unknown } {
+    if (input === undefined || input === null) return { bad: undefined, value: {} };
+    if (typeof input !== "string") return { bad: undefined, value: input };
+
+    try {
+        return { bad: undefined, value: JSON.parse(input) };
+    } catch {
+        return { bad: "input must be a json object, not a string" };
+    }
+}
 
 const findGadget = (ctx: ActionContext, name: string) =>
     ctx.homes.flatMap((home) => home.gadgets).find((it) => it.name === name);
@@ -67,7 +106,10 @@ async function runGadgetAction(
     const found = findGadget(ctx, name);
     if (!found) return { ok: false, content: `no gadget named "${name}"` };
 
-    const result = await runGadget(found.file, args.input);
+    const input = coerceInput(args.input);
+    if (input.bad !== undefined) return { ok: false, content: input.bad };
+
+    const result = await runGadget(found.file, input.value);
     return { ok: result.ok, content: result.ok ? result.output : result.error };
 }
 
@@ -108,12 +150,14 @@ async function createGadgetAction(
     ctx: ActionContext,
     args: Record<string, unknown>,
 ): Promise<ActionResult> {
-    const name = String(args.name ?? "");
-    if (findGadget(ctx, name)) return { ok: false, content: `gadget "${name}" already exists` };
-
     const source = String(args.source ?? "");
     const valid = validateGadget(source);
     if (!valid.ok) return { ok: false, content: valid.error };
+
+    // The header is what every later read sees, so the file is named after it
+    // rather than after whatever the model passed as `name`.
+    const name = parseGadget(source)?.name ?? "";
+    const existing = findGadget(ctx, name);
 
     const dir = join(primaryHome(ctx), "gadgets");
     await Bun.$`mkdir -p ${dir}`.quiet();
@@ -127,11 +171,18 @@ async function createGadgetAction(
         return { ok: false, content: compiles.error };
     }
 
+    // The model cannot edit files, so rewriting a gadget it is unhappy with is
+    // the only way it can fix one. Validation has already passed either way.
     await Bun.write(join(dir, `${name}.ts`), source);
     await Bun.file(temp).delete();
     await refreshPrimary(ctx);
 
-    return { ok: true, content: `gadget "${name}" created at ${join(dir, `${name}.ts`)}` };
+    return {
+        ok: true,
+        content: existing
+            ? `gadget "${name}" rewritten at ${join(dir, `${name}.ts`)}`
+            : `gadget "${name}" created at ${join(dir, `${name}.ts`)}`,
+    };
 }
 
 export async function runAction(
