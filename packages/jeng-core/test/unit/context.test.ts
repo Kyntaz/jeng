@@ -5,8 +5,17 @@ import type { Home } from "../../src/home";
 const HOME: Home = {
     dir: "/home/jeng",
     agents: "speak plainly",
-    gadgets: [{ name: "greet", description: "says hi", when: "", file: "/home/jeng/gadgets/greet.ts" }],
-    protocols: [{ name: "deploy", description: "shipping steps", when: "deploying", file: "/home/jeng/protocols/deploy.md" }],
+    gadgets: [
+        { name: "greet", description: "says hi", when: "", file: "/home/jeng/gadgets/greet.ts" },
+    ],
+    protocols: [
+        {
+            name: "deploy",
+            description: "shipping steps",
+            when: "deploying",
+            file: "/home/jeng/protocols/deploy.md",
+        },
+    ],
 };
 
 describe("context", () => {
@@ -22,10 +31,14 @@ describe("context", () => {
     });
 
     test("places loaded protocol bodies in context", () => {
-        expect(buildContext([HOME], [], [{ name: "deploy", body: "run make then push" }])).toContain("run make then push");
+        expect(
+            buildContext([HOME], [], [{ name: "deploy", body: "run make then push" }]),
+        ).toContain("run make then push");
     });
 
     test("omits sections that have nothing in them", () => {
-        expect(buildContext([{ dir: "/empty", agents: undefined, gadgets: [], protocols: [] }], [])).not.toContain("## Gadgets");
+        expect(
+            buildContext([{ dir: "/empty", agents: undefined, gadgets: [], protocols: [] }], []),
+        ).not.toContain("## Gadgets");
     });
 });

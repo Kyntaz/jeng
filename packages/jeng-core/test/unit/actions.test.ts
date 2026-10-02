@@ -2,10 +2,14 @@ import { describe, expect, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { runAction, type ActionContext } from "../../src/actions";
+import { type ActionContext, runAction } from "../../src/actions";
 import { loadHome } from "../../src/home";
 
-async function context(): Promise<{ ctx: ActionContext; dir: string; cleanup: () => Promise<void> }> {
+async function context(): Promise<{
+    ctx: ActionContext;
+    dir: string;
+    cleanup: () => Promise<void>;
+}> {
     const dir = await mkdtemp(join(tmpdir(), "jeng-actions-"));
     return {
         dir,
@@ -18,7 +22,11 @@ describe("actions", () => {
     test("create_protocol writes the protocol and makes it available", async () => {
         const { ctx, cleanup } = await context();
 
-        const result = await runAction("create_protocol", { name: "deploy", description: "how we ship", when: "deploying", content: "run make" }, ctx);
+        const result = await runAction(
+            "create_protocol",
+            { name: "deploy", description: "how we ship", when: "deploying", content: "run make" },
+            ctx,
+        );
 
         expect(result.ok).toBe(true);
         expect(ctx.homes[0].protocols.map((protocol) => protocol.name)).toEqual(["deploy"]);
@@ -27,9 +35,19 @@ describe("actions", () => {
 
     test("create_protocol refuses to overwrite an existing protocol", async () => {
         const { ctx, cleanup } = await context();
-        await runAction("create_protocol", { name: "deploy", description: "how we ship", when: "deploying", content: "run make" }, ctx);
+        await runAction(
+            "create_protocol",
+            { name: "deploy", description: "how we ship", when: "deploying", content: "run make" },
+            ctx,
+        );
 
-        expect(await runAction("create_protocol", { name: "deploy", description: "other", when: "later", content: "x" }, ctx)).toEqual({
+        expect(
+            await runAction(
+                "create_protocol",
+                { name: "deploy", description: "other", when: "later", content: "x" },
+                ctx,
+            ),
+        ).toEqual({
             ok: false,
             content: 'protocol "deploy" already exists',
         });
@@ -39,9 +57,21 @@ describe("actions", () => {
     test("create_protocol rejects an invalid protocol and leaves the home untouched", async () => {
         const { ctx, cleanup } = await context();
 
-        const result = await runAction("create_protocol", { name: "Deploy Flow", description: "how we ship", when: "deploying", content: "run make" }, ctx);
+        const result = await runAction(
+            "create_protocol",
+            {
+                name: "Deploy Flow",
+                description: "how we ship",
+                when: "deploying",
+                content: "run make",
+            },
+            ctx,
+        );
 
-        expect(result).toEqual({ ok: false, content: 'header `name` must be kebab-case (got "Deploy Flow"), e.g. `deploy-flow`' });
+        expect(result).toEqual({
+            ok: false,
+            content: 'header `name` must be kebab-case (got "Deploy Flow"), e.g. `deploy-flow`',
+        });
         expect(ctx.homes[0].protocols).toEqual([]);
         await cleanup();
     });
@@ -49,7 +79,11 @@ describe("actions", () => {
     test("create_protocol reports the specific header problem it found", async () => {
         const { ctx, cleanup } = await context();
 
-        const result = await runAction("create_protocol", { name: "deploy", description: "how we ship", content: "run make" }, ctx);
+        const result = await runAction(
+            "create_protocol",
+            { name: "deploy", description: "how we ship", content: "run make" },
+            ctx,
+        );
 
         expect(result).toEqual({ ok: false, content: "header is missing a non-empty `when`" });
         expect(ctx.homes[0].protocols).toEqual([]);
@@ -58,7 +92,8 @@ describe("actions", () => {
 
     test("create_gadget writes a gadget that compiles and makes it available", async () => {
         const { ctx, cleanup } = await context();
-        const source = "/**\n * name: greet\n * description: says hi\n */\n\nexport default () => \"hi\"\n";
+        const source =
+            '/**\n * name: greet\n * description: says hi\n */\n\nexport default () => "hi"\n';
 
         const result = await runAction("create_gadget", { name: "greet", source }, ctx);
 
@@ -69,7 +104,8 @@ describe("actions", () => {
 
     test("create_gadget rejects a gadget that does not compile and leaves no trace", async () => {
         const { ctx, dir, cleanup } = await context();
-        const source = "/**\n * name: broken\n * description: nope\n */\n\nexport default () => {\n";
+        const source =
+            "/**\n * name: broken\n * description: nope\n */\n\nexport default () => {\n";
 
         const result = await runAction("create_gadget", { name: "broken", source }, ctx);
 
@@ -81,7 +117,11 @@ describe("actions", () => {
 
     test("load_protocol hands back the whole protocol", async () => {
         const { ctx, cleanup } = await context();
-        await runAction("create_protocol", { name: "deploy", description: "how we ship", when: "deploying", content: "run make" }, ctx);
+        await runAction(
+            "create_protocol",
+            { name: "deploy", description: "how we ship", when: "deploying", content: "run make" },
+            ctx,
+        );
 
         const result = await runAction("load_protocol", { name: "deploy" }, ctx);
 
@@ -92,7 +132,10 @@ describe("actions", () => {
     test("run_gadget rejects an unknown gadget by name", async () => {
         const { ctx, cleanup } = await context();
 
-        expect(await runAction("run_gadget", { name: "nope" }, ctx)).toEqual({ ok: false, content: 'no gadget named "nope"' });
+        expect(await runAction("run_gadget", { name: "nope" }, ctx)).toEqual({
+            ok: false,
+            content: 'no gadget named "nope"',
+        });
         await cleanup();
     });
 
@@ -101,7 +144,8 @@ describe("actions", () => {
 
         expect(await runAction("teleport", {}, ctx)).toEqual({
             ok: false,
-            content: 'unknown action "teleport". Available: run_gadget, load_protocol, create_protocol, create_gadget',
+            content:
+                'unknown action "teleport". Available: run_gadget, load_protocol, create_protocol, create_gadget',
         });
         await cleanup();
     });

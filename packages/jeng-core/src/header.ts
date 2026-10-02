@@ -15,7 +15,11 @@ function fields(block: string): Header {
         const match = /^\s*\*?\s*([a-z]+)\s*:\s*(.+?)\s*$/.exec(line);
         if (match) values[match[1]] = match[2];
     }
-    return { name: values.name ?? "", description: values.description ?? "", when: values.when ?? "" };
+    return {
+        name: values.name ?? "",
+        description: values.description ?? "",
+        when: values.when ?? "",
+    };
 }
 
 export function parseProtocol(source: string): { header: Header; body: string } | null {

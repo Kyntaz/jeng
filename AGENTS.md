@@ -23,6 +23,7 @@
 - Combine functional, object oriented and procedural approaches, whichever fits the problem best.
 - Don't write code that isn't used and don't export constructs that aren't imported.
 - Keep modules under 300 lines, and make sure everything a module exports is related.
+- Formatting is Biome's job: run `bun run format` instead of hand-aligning whitespace. `bun run check` runs the formatter and the linter together, and must pass.
 
 ### Tests
 

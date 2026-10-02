@@ -15,27 +15,41 @@ function section(title: string, lines: string[]): string {
     return lines.length === 0 ? "" : `## ${title}\n\n${lines.join("\n")}`;
 }
 
-export function buildContext(homes: Home[], agentsFiles: AgentsFile[], memory: Memory[] = []): string {
+export function buildContext(
+    homes: Home[],
+    agentsFiles: AgentsFile[],
+    memory: Memory[] = [],
+): string {
     const agents = section(
         "Always loaded instructions",
         homes
-            .flatMap((home) => (home.agents ? [`### ${home.dir}/AGENTS.md\n${home.agents.trim()}`] : []))
+            .flatMap((home) =>
+                home.agents ? [`### ${home.dir}/AGENTS.md\n${home.agents.trim()}`] : [],
+            )
             .concat(agentsFiles.map((file) => `### ${file.dir}/AGENTS.md\n${file.content.trim()}`)),
     );
 
     const gadgets = section(
         "Gadgets",
-        homes.flatMap((home) => home.gadgets.map((gadget) => `- \`${gadget.name}\`: ${gadget.description}`)),
+        homes.flatMap((home) =>
+            home.gadgets.map((gadget) => `- \`${gadget.name}\`: ${gadget.description}`),
+        ),
     );
 
     const protocols = section(
         "Protocols",
         homes.flatMap((home) =>
-            home.protocols.map((protocol) => `- \`${protocol.name}\` (load when: ${protocol.when}): ${protocol.description}`),
+            home.protocols.map(
+                (protocol) =>
+                    `- \`${protocol.name}\` (load when: ${protocol.when}): ${protocol.description}`,
+            ),
         ),
     );
 
-    const memorySection = section("Memory", memory.map((item) => `### ${item.name}\n\n${item.body.trim()}`));
+    const memorySection = section(
+        "Memory",
+        memory.map((item) => `### ${item.name}\n\n${item.body.trim()}`),
+    );
 
     return [IDENTITY, memorySection, agents, gadgets, protocols].filter(Boolean).join("\n\n");
 }

@@ -72,6 +72,7 @@ A gadget's default export takes the action's `input` and its return value become
 - **OpenTUI** powers the CLI's TUI.
 - **commander** to simplify declaration of the CLI itself.
 - **React** and **JSX** powers Jeng's UIs, reactivity and state management.
+- **Biome** for linting and formatting (`bun run check`).
 - **git** for version management.
 
 ## File Structure
@@ -80,6 +81,7 @@ The following structure includes only the most relevant files and paths of the p
 
 - `.` (the root of the project)
     - `/package.json` (top level workspace package)
+    - `/biome.json` (linter and formatter configuration)
     - `/README.md`
     - `/ARCHITECTURE.md`
     - `/AGENTS.md`

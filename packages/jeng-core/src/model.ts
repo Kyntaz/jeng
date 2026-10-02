@@ -35,18 +35,29 @@ function firstToolCall(delta: Record<string, unknown>) {
 
     const fn = (call.function ?? {}) as Record<string, unknown>;
     const args = typeof fn.arguments === "string" ? fn.arguments : "";
-    return { id: typeof call.id === "string" ? call.id : undefined, name: typeof fn.name === "string" ? fn.name : "", args };
+    return {
+        id: typeof call.id === "string" ? call.id : undefined,
+        name: typeof fn.name === "string" ? fn.name : "",
+        args,
+    };
 }
 
 async function* lines(body: ReadableStream<Uint8Array>): AsyncGenerator<string> {
-    const reader = body.pipeThrough(new TransformStream({ transform(chunk, controller) { controller.enqueue(new TextDecoder().decode(chunk, { stream: true })); } })).getReader();
+    const reader = body
+        .pipeThrough(
+            new TransformStream({
+                transform(chunk, controller) {
+                    controller.enqueue(new TextDecoder().decode(chunk, { stream: true }));
+                },
+            }),
+        )
+        .getReader();
     let buffer = "";
     for (;;) {
         const { done, value } = await reader.read();
         if (done) break;
         buffer += value;
-        let index: number;
-        while ((index = buffer.indexOf("\n")) >= 0) {
+        for (let index = buffer.indexOf("\n"); index >= 0; index = buffer.indexOf("\n")) {
             const line = buffer.slice(0, index).trim();
             buffer = buffer.slice(index + 1);
             if (line.startsWith("data:")) yield line.slice(5).trim();
@@ -55,12 +66,22 @@ async function* lines(body: ReadableStream<Uint8Array>): AsyncGenerator<string> 
 }
 
 function wire(message: Message): Record<string, unknown> {
-    if (message.role === "tool") return { role: "tool", tool_call_id: message.toolCallId, content: message.content };
+    if (message.role === "tool")
+        return { role: "tool", tool_call_id: message.toolCallId, content: message.content };
     if (message.toolCall) {
         return {
             role: "assistant",
             content: message.content || null,
-            tool_calls: [{ id: message.toolCall.id, type: "function", function: { name: message.toolCall.name, arguments: JSON.stringify(message.toolCall.arguments) } }],
+            tool_calls: [
+                {
+                    id: message.toolCall.id,
+                    type: "function",
+                    function: {
+                        name: message.toolCall.name,
+                        arguments: JSON.stringify(message.toolCall.arguments),
+                    },
+                },
+            ],
         };
     }
     return { role: message.role, content: message.content };
@@ -68,7 +89,12 @@ function wire(message: Message): Record<string, unknown> {
 
 export async function chat(
     messages: Message[],
-    options: { config: ModelConfig; tools?: ToolSpec[]; onDelta?: (text: string) => void; signal?: AbortSignal },
+    options: {
+        config: ModelConfig;
+        tools?: ToolSpec[];
+        onDelta?: (text: string) => void;
+        signal?: AbortSignal;
+    },
 ): Promise<Turn> {
     const { config, tools, onDelta, signal } = options;
     const headers: Record<string, string> = { "content-type": "application/json" };
@@ -88,7 +114,9 @@ export async function chat(
     });
 
     if (!response.ok || !response.body) {
-        throw new Error(`model request failed: ${response.status} ${(await response.text()).trim()}`);
+        throw new Error(
+            `model request failed: ${response.status} ${(await response.text()).trim()}`,
+        );
     }
 
     let text = "";
@@ -116,7 +144,12 @@ export async function chat(
         }
     }
 
-    return { text, toolCall: call ? { id: call.id, name: call.name, arguments: parseArgs(call.args) } : undefined };
+    return {
+        text,
+        toolCall: call
+            ? { id: call.id, name: call.name, arguments: parseArgs(call.args) }
+            : undefined,
+    };
 }
 
 function parseArgs(args: string): Record<string, unknown> {

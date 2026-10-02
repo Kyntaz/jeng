@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
+import { type Agent, createAgent, loadConfig } from "@jeng/core";
 import { Command } from "commander";
-import { createAgent, loadConfig, type Agent } from "@jeng/core";
 import { renderTui } from "./tui";
 
 const collect = (value: string, previous: string[]) => [...previous, value];
@@ -21,7 +21,10 @@ new Command()
     .description("An agent for you.")
     .argument("[prompt...]", "run a single prompt and exit instead of opening the TUI")
     .option("--home <dir>", "home folder; repeat for multiple agents", collect, [])
-    .option("-c, --config <file>", "configuration file; defaults to ./jeng.json, then <home>/jeng.json")
+    .option(
+        "-c, --config <file>",
+        "configuration file; defaults to ./jeng.json, then <home>/jeng.json",
+    )
     .showHelpAfterError()
     .action(async (prompt: string[], options: { home: string[]; config: string | undefined }) => {
         let config: Awaited<ReturnType<typeof loadConfig>>;

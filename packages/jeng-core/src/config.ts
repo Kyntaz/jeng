@@ -22,7 +22,10 @@ export function defaultModel(): ModelConfig {
     return { baseUrl: "http://localhost:11434/v1", apiKey: undefined, model: "gpt-4o-mini" };
 }
 
-export function resolveHomes(homeArgs: string[] = [], env: Record<string, string | undefined> = process.env): string[] {
+export function resolveHomes(
+    homeArgs: string[] = [],
+    env: Record<string, string | undefined> = process.env,
+): string[] {
     if (homeArgs.length > 0) return homeArgs;
     if (env.JENG_HOME) return env.JENG_HOME.split(";").filter(Boolean);
     return [defaultHome()];
@@ -30,7 +33,11 @@ export function resolveHomes(homeArgs: string[] = [], env: Record<string, string
 
 export function resolveConfig(env: Record<string, string | undefined> = process.env): ModelConfig {
     const baseUrl = env.JENG_BASE_URL ?? defaultModel().baseUrl;
-    return { baseUrl: baseUrl.replace(/\/$/, ""), apiKey: env.JENG_API_KEY ?? env.OPENAI_API_KEY, model: env.JENG_MODEL ?? defaultModel().model };
+    return {
+        baseUrl: baseUrl.replace(/\/$/, ""),
+        apiKey: env.JENG_API_KEY ?? env.OPENAI_API_KEY,
+        model: env.JENG_MODEL ?? defaultModel().model,
+    };
 }
 
 function fail(path: string, reason: string): never {
@@ -48,40 +55,67 @@ async function loadConfigFile(path: string): Promise<FileConfig> {
         return fail(path, error instanceof Error ? error.message : "not valid json");
     }
 
-    if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) return fail(path, "expected a json object");
+    if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed))
+        return fail(path, "expected a json object");
     const raw = parsed as Record<string, unknown>;
 
-    for (const key of Object.keys(raw)) if (key !== "homes" && key !== "model") fail(path, `unknown key ${key}`);
+    for (const key of Object.keys(raw))
+        if (key !== "homes" && key !== "model") fail(path, `unknown key ${key}`);
 
     const homes = raw.homes;
-    if (homes !== undefined && (!Array.isArray(homes) || homes.some((home) => typeof home !== "string"))) {
+    if (
+        homes !== undefined &&
+        (!Array.isArray(homes) || homes.some((home) => typeof home !== "string"))
+    ) {
         return fail(path, "homes must be an array of paths");
     }
 
     const model = raw.model;
-    if (model !== undefined && (typeof model !== "object" || model === null || Array.isArray(model))) {
+    if (
+        model !== undefined &&
+        (typeof model !== "object" || model === null || Array.isArray(model))
+    ) {
         return fail(path, "model must be an object");
     }
 
     const fields = (model ?? {}) as Record<string, unknown>;
     for (const key of Object.keys(fields)) {
-        if (key !== "baseUrl" && key !== "apiKey" && key !== "model") fail(path, `unknown model key ${key}`);
-        if (fields[key] !== undefined && typeof fields[key] !== "string") fail(path, `model.${key} must be a string`);
+        if (key !== "baseUrl" && key !== "apiKey" && key !== "model")
+            fail(path, `unknown model key ${key}`);
+        if (fields[key] !== undefined && typeof fields[key] !== "string")
+            fail(path, `model.${key} must be a string`);
     }
 
     return {
-        homes: (homes as string[] | undefined)?.map((home) => (home === "~" || home.startsWith("~/") ? join(homedir(), home.slice(1)) : isAbsolute(home) ? home : resolve(dirname(path), home))),
+        homes: (homes as string[] | undefined)?.map((home) =>
+            home === "~" || home.startsWith("~/")
+                ? join(homedir(), home.slice(1))
+                : isAbsolute(home)
+                  ? home
+                  : resolve(dirname(path), home),
+        ),
         model: fields as Partial<ModelConfig>,
     };
 }
 
 async function findConfig(cwd: string, home: string): Promise<string | undefined> {
-    const candidates = [join(cwd, FILE_NAME), join(home, FILE_NAME), join(defaultHome(), FILE_NAME)];
+    const candidates = [
+        join(cwd, FILE_NAME),
+        join(home, FILE_NAME),
+        join(defaultHome(), FILE_NAME),
+    ];
     for (const candidate of candidates) if (await Bun.file(candidate).exists()) return candidate;
     return undefined;
 }
 
-export async function loadConfig(options: { path?: string; homeArgs?: string[]; cwd?: string; env?: Record<string, string | undefined> } = {}): Promise<Config> {
+export async function loadConfig(
+    options: {
+        path?: string;
+        homeArgs?: string[];
+        cwd?: string;
+        env?: Record<string, string | undefined>;
+    } = {},
+): Promise<Config> {
     const env = options.env ?? process.env;
     const cwd = options.cwd ?? process.cwd();
     const fromArgs = options.homeArgs ?? [];
@@ -93,6 +127,10 @@ export async function loadConfig(options: { path?: string; homeArgs?: string[]; 
     const baseUrl = file.model?.baseUrl ?? defaultModel().baseUrl;
     return {
         homes: fromArgs.length > 0 ? fromArgs : (file.homes ?? [defaultHome()]),
-        model: { baseUrl: baseUrl.replace(/\/$/, ""), apiKey: file.model?.apiKey, model: file.model?.model ?? defaultModel().model },
+        model: {
+            baseUrl: baseUrl.replace(/\/$/, ""),
+            apiKey: file.model?.apiKey,
+            model: file.model?.model ?? defaultModel().model,
+        },
     };
 }

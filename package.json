@@ -8,9 +8,13 @@
     "scripts": {
         "jeng": "bun run packages/jeng-cli/src/index.ts",
         "test": "bun test",
-        "typecheck": "tsc --noEmit"
+        "typecheck": "tsc --noEmit",
+        "format": "biome format --write .",
+        "lint": "biome lint .",
+        "check": "biome check ."
     },
     "devDependencies": {
+        "@biomejs/biome": "^2.5.15",
         "@types/bun": "latest",
         "@types/react": "latest",
         "typescript": "^5.9.0"

@@ -27,18 +27,35 @@ describe("config", () => {
     test("reads the home and the model from the environment when no config file exists", async () => {
         const cwd = await scratch();
 
-        const config = await loadConfig({ cwd, env: { JENG_HOME: "/c;/d", JENG_BASE_URL: "http://host/v1/", JENG_API_KEY: "k", JENG_MODEL: "qwen" } });
+        const config = await loadConfig({
+            cwd,
+            env: {
+                JENG_HOME: "/c;/d",
+                JENG_BASE_URL: "http://host/v1/",
+                JENG_API_KEY: "k",
+                JENG_MODEL: "qwen",
+            },
+        });
 
-        expect(config).toEqual({ homes: ["/c", "/d"], model: { baseUrl: "http://host/v1", apiKey: "k", model: "qwen" } });
+        expect(config).toEqual({
+            homes: ["/c", "/d"],
+            model: { baseUrl: "http://host/v1", apiKey: "k", model: "qwen" },
+        });
         await rm(cwd, { recursive: true, force: true });
     });
 
     test("loads the homes and the model from the file named by --config", async () => {
-        const cwd = await scratch({ homes: ["/a", "/b"], model: { baseUrl: "http://host/v1/", apiKey: "k", model: "qwen" } });
+        const cwd = await scratch({
+            homes: ["/a", "/b"],
+            model: { baseUrl: "http://host/v1/", apiKey: "k", model: "qwen" },
+        });
 
         const config = await loadConfig({ path: join(cwd, "jeng.json"), cwd, env: {} });
 
-        expect(config).toEqual({ homes: ["/a", "/b"], model: { baseUrl: "http://host/v1", apiKey: "k", model: "qwen" } });
+        expect(config).toEqual({
+            homes: ["/a", "/b"],
+            model: { baseUrl: "http://host/v1", apiKey: "k", model: "qwen" },
+        });
         await rm(cwd, { recursive: true, force: true });
     });
 
@@ -65,7 +82,10 @@ describe("config", () => {
     test("ignores the environment entirely once a config file is loaded", async () => {
         const cwd = await scratch({ model: { model: "from-file" } });
 
-        const config = await loadConfig({ cwd, env: { JENG_BASE_URL: "http://host/v1", JENG_API_KEY: "k", JENG_MODEL: "from-env" } });
+        const config = await loadConfig({
+            cwd,
+            env: { JENG_BASE_URL: "http://host/v1", JENG_API_KEY: "k", JENG_MODEL: "from-env" },
+        });
 
         expect(config.model).toEqual({ ...defaults, model: "from-file" });
         await rm(cwd, { recursive: true, force: true });
@@ -94,14 +114,19 @@ describe("config", () => {
 
         const config = await loadConfig({ cwd, env: {} });
 
-        expect(config.homes).toEqual([join(require("node:os").homedir(), ".jeng"), join(cwd, "nested")]);
+        expect(config.homes).toEqual([
+            join(require("node:os").homedir(), ".jeng"),
+            join(cwd, "nested"),
+        ]);
         await rm(cwd, { recursive: true, force: true });
     });
 
     test("throws when --config points at a file that isn't there", async () => {
         const cwd = await scratch();
 
-        expect(loadConfig({ path: join(cwd, "nope.json"), cwd, env: {} })).rejects.toThrow("config file not found");
+        expect(loadConfig({ path: join(cwd, "nope.json"), cwd, env: {} })).rejects.toThrow(
+            "config file not found",
+        );
         await rm(cwd, { recursive: true, force: true });
     });
 
@@ -109,7 +134,9 @@ describe("config", () => {
         const cwd = await scratch();
         await Bun.write(join(cwd, "jeng.json"), "{ not json");
 
-        expect(loadConfig({ cwd, env: {} })).rejects.toThrow(`invalid config at ${join(cwd, "jeng.json")}`);
+        expect(loadConfig({ cwd, env: {} })).rejects.toThrow(
+            `invalid config at ${join(cwd, "jeng.json")}`,
+        );
         await rm(cwd, { recursive: true, force: true });
     });
 

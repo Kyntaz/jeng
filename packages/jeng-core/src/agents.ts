@@ -16,7 +16,8 @@ export async function loadAgentsFiles(cwd: string): Promise<AgentsFile[]> {
     const found: AgentsFile[] = [];
     for (const dir of chain.reverse()) {
         const file = join(dir, "AGENTS.md");
-        if (await Bun.file(file).exists()) found.push({ dir, content: await Bun.file(file).text() });
+        if (await Bun.file(file).exists())
+            found.push({ dir, content: await Bun.file(file).text() });
     }
     return found;
 }

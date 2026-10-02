@@ -4,8 +4,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { validateGadget, validateGadgetSyntax, validateProtocol } from "../../src/validate";
 
-const PROTOCOL = "---\nname: deploy-flow\ndescription: how we ship\nwhen: deploying\n---\n\nrun make then push\n";
-const GADGET = "/**\n * name: greet\n * description: greets\n */\n\nexport default async () => \"hi\"\n";
+const PROTOCOL =
+    "---\nname: deploy-flow\ndescription: how we ship\nwhen: deploying\n---\n\nrun make then push\n";
+const GADGET =
+    '/**\n * name: greet\n * description: greets\n */\n\nexport default async () => "hi"\n';
 
 describe("validate", () => {
     test("accepts a well formed protocol", () => {
@@ -13,7 +15,9 @@ describe("validate", () => {
     });
 
     test("names the missing header field of a protocol", () => {
-        expect(validateProtocol("---\nname: deploy-flow\ndescription: how we ship\n---\n\nbody\n")).toEqual({
+        expect(
+            validateProtocol("---\nname: deploy-flow\ndescription: how we ship\n---\n\nbody\n"),
+        ).toEqual({
             ok: false,
             error: "header is missing a non-empty `when`",
         });
@@ -27,9 +31,14 @@ describe("validate", () => {
     });
 
     test("rejects a protocol with an empty body", () => {
-        const result = validateProtocol("---\nname: deploy-flow\ndescription: how we ship\nwhen: deploying\n---\n");
+        const result = validateProtocol(
+            "---\nname: deploy-flow\ndescription: how we ship\nwhen: deploying\n---\n",
+        );
 
-        expect(result).toEqual({ ok: false, error: "protocol body is empty; write the knowledge itself below the header" });
+        expect(result).toEqual({
+            ok: false,
+            error: "protocol body is empty; write the knowledge itself below the header",
+        });
     });
 
     test("accepts a well formed gadget", () => {
@@ -37,13 +46,18 @@ describe("validate", () => {
     });
 
     test("rejects a gadget without a header", () => {
-        const result = validateGadget("export default async () => \"hi\"\n");
+        const result = validateGadget('export default async () => "hi"\n');
 
-        expect(result).toEqual({ ok: false, error: "gadget must start with a `/** ... */` header of `field: value` lines" });
+        expect(result).toEqual({
+            ok: false,
+            error: "gadget must start with a `/** ... */` header of `field: value` lines",
+        });
     });
 
     test("rejects a gadget without a default export", () => {
-        const result = validateGadget("/**\n * name: greet\n * description: greets\n */\n\nconst hi = () => \"hi\"\n");
+        const result = validateGadget(
+            '/**\n * name: greet\n * description: greets\n */\n\nconst hi = () => "hi"\n',
+        );
 
         expect(result).toEqual({ ok: false, error: "gadget must `export default` a function" });
     });
@@ -60,7 +74,10 @@ describe("validate", () => {
     test("rejects a gadget that does not compile", async () => {
         const dir = await mkdtemp(join(tmpdir(), "jeng-validate-"));
         const file = join(dir, "broken.ts");
-        await Bun.write(file, "/**\n * name: broken\n * description: nope\n */\n\nexport default async () => {\n");
+        await Bun.write(
+            file,
+            "/**\n * name: broken\n * description: nope\n */\n\nexport default async () => {\n",
+        );
 
         const result = await validateGadgetSyntax(file);
 

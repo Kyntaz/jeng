@@ -1,8 +1,8 @@
-import { runAction, JENG_TOOL, type ActionContext } from "./actions";
+import { type ActionContext, JENG_TOOL, runAction } from "./actions";
 import { loadAgentsFiles } from "./agents";
-import { buildContext, type Memory } from "./context";
-import { loadHomes, type Home } from "./home";
 import { defaultHome, defaultModel } from "./config";
+import { buildContext, type Memory } from "./context";
+import { type Home, loadHomes } from "./home";
 import { chat, type Message, type ModelConfig } from "./model";
 
 const MAX_TURNS = 20;
@@ -17,7 +17,10 @@ export interface Agent {
     cwd: string;
     history: Message[];
     memory: Memory[];
-    send(prompt: string, options?: { signal?: AbortSignal; onEvent?: (event: AgentEvent) => void }): Promise<string>;
+    send(
+        prompt: string,
+        options?: { signal?: AbortSignal; onEvent?: (event: AgentEvent) => void },
+    ): Promise<string>;
 }
 
 export interface AgentOptions {
@@ -36,7 +39,10 @@ export async function createAgent(options: AgentOptions = {}): Promise<Agent> {
     const history = options.history ?? [];
     const memory: Memory[] = [];
 
-    async function send(prompt: string, sendOptions: { signal?: AbortSignal; onEvent?: (event: AgentEvent) => void } = {}): Promise<string> {
+    async function send(
+        prompt: string,
+        sendOptions: { signal?: AbortSignal; onEvent?: (event: AgentEvent) => void } = {},
+    ): Promise<string> {
         const { signal, onEvent } = sendOptions;
         const messages: Message[] = [
             { role: "system", content: "" },
@@ -55,19 +61,27 @@ export async function createAgent(options: AgentOptions = {}): Promise<Agent> {
                 onDelta: (text) => onEvent?.({ type: "text", text }),
             });
 
-            const message: Message = { role: "assistant", content: reply.text, toolCall: reply.toolCall };
+            const message: Message = {
+                role: "assistant",
+                content: reply.text,
+                toolCall: reply.toolCall,
+            };
             history.push(message);
             messages.push(message);
             if (!reply.toolCall) return reply.text;
 
-            const { action, ...args } = reply.toolCall.arguments as { action?: string } & Record<string, unknown>;
+            const { action, ...args } = reply.toolCall.arguments as { action?: string } & Record<
+                string,
+                unknown
+            >;
             onEvent?.({ type: "tool", action: String(action ?? ""), args });
 
             const result = await runAction(String(action ?? ""), args, ctx);
             onEvent?.({ type: "result", content: result.content, ok: result.ok });
             messages.push({ role: "tool", toolCallId: reply.toolCall.id, content: result.content });
 
-            if (action === "load_protocol" && result.ok) memory.push({ name: String(args.name ?? ""), body: result.content });
+            if (action === "load_protocol" && result.ok)
+                memory.push({ name: String(args.name ?? ""), body: result.content });
         }
         return "";
     }

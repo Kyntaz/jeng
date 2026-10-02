@@ -1,7 +1,7 @@
 import { join } from "node:path";
 import { runGadget } from "./gadget";
-import { loadHome, type Home } from "./home";
 import { writeProtocol } from "./header";
+import { type Home, loadHome } from "./home";
 import { validateGadget, validateGadgetSyntax, validateProtocol } from "./validate";
 
 export type ActionResult = { ok: boolean; content: string };
@@ -23,10 +23,16 @@ export const JENG_TOOL = {
             action: { type: "string", enum: ACTIONS },
             name: { type: "string", description: "gadget or protocol name, kebab-case" },
             input: { type: "object", description: "input for run_gadget" },
-            when: { type: "string", description: "for create_protocol: when to load this protocol" },
+            when: {
+                type: "string",
+                description: "for create_protocol: when to load this protocol",
+            },
             description: { type: "string" },
             content: { type: "string", description: "for create_protocol: the markdown body" },
-            source: { type: "string", description: "for create_gadget: the complete TypeScript source" },
+            source: {
+                type: "string",
+                description: "for create_gadget: the complete TypeScript source",
+            },
         },
         required: ["action"],
     },
@@ -39,17 +45,24 @@ export interface ActionContext {
 
 const primaryHome = (ctx: ActionContext) => ctx.homes[0]?.dir ?? join(ctx.cwd, ".jeng");
 
-const findGadget = (ctx: ActionContext, name: string) => ctx.homes.flatMap((home) => home.gadgets).find((it) => it.name === name);
+const findGadget = (ctx: ActionContext, name: string) =>
+    ctx.homes.flatMap((home) => home.gadgets).find((it) => it.name === name);
 
-const findProtocol = (ctx: ActionContext, name: string) => ctx.homes.flatMap((home) => home.protocols).find((it) => it.name === name);
+const findProtocol = (ctx: ActionContext, name: string) =>
+    ctx.homes.flatMap((home) => home.protocols).find((it) => it.name === name);
 
 async function refreshPrimary(ctx: ActionContext): Promise<void> {
     const dir = primaryHome(ctx);
-    const refreshed = await Promise.all(ctx.homes.map((home) => (home.dir === dir ? loadHome(home.dir) : home)));
+    const refreshed = await Promise.all(
+        ctx.homes.map((home) => (home.dir === dir ? loadHome(home.dir) : home)),
+    );
     ctx.homes.splice(0, ctx.homes.length, ...refreshed);
 }
 
-async function runGadgetAction(ctx: ActionContext, args: Record<string, unknown>): Promise<ActionResult> {
+async function runGadgetAction(
+    ctx: ActionContext,
+    args: Record<string, unknown>,
+): Promise<ActionResult> {
     const name = String(args.name ?? "");
     const found = findGadget(ctx, name);
     if (!found) return { ok: false, content: `no gadget named "${name}"` };
@@ -58,7 +71,10 @@ async function runGadgetAction(ctx: ActionContext, args: Record<string, unknown>
     return { ok: result.ok, content: result.ok ? result.output : result.error };
 }
 
-async function loadProtocolAction(ctx: ActionContext, args: Record<string, unknown>): Promise<ActionResult> {
+async function loadProtocolAction(
+    ctx: ActionContext,
+    args: Record<string, unknown>,
+): Promise<ActionResult> {
     const name = String(args.name ?? "");
     const found = findProtocol(ctx, name);
     if (!found) return { ok: false, content: `no protocol named "${name}"` };
@@ -66,7 +82,10 @@ async function loadProtocolAction(ctx: ActionContext, args: Record<string, unkno
     return { ok: true, content: await Bun.file(found.file).text() };
 }
 
-async function createProtocolAction(ctx: ActionContext, args: Record<string, unknown>): Promise<ActionResult> {
+async function createProtocolAction(
+    ctx: ActionContext,
+    args: Record<string, unknown>,
+): Promise<ActionResult> {
     const name = String(args.name ?? "");
     if (findProtocol(ctx, name)) return { ok: false, content: `protocol "${name}" already exists` };
 
@@ -85,7 +104,10 @@ async function createProtocolAction(ctx: ActionContext, args: Record<string, unk
     return { ok: true, content: `protocol "${name}" committed. It is available from now on.` };
 }
 
-async function createGadgetAction(ctx: ActionContext, args: Record<string, unknown>): Promise<ActionResult> {
+async function createGadgetAction(
+    ctx: ActionContext,
+    args: Record<string, unknown>,
+): Promise<ActionResult> {
     const name = String(args.name ?? "");
     if (findGadget(ctx, name)) return { ok: false, content: `gadget "${name}" already exists` };
 
@@ -112,7 +134,11 @@ async function createGadgetAction(ctx: ActionContext, args: Record<string, unkno
     return { ok: true, content: `gadget "${name}" created at ${join(dir, `${name}.ts`)}` };
 }
 
-export async function runAction(action: string, args: Record<string, unknown>, ctx: ActionContext): Promise<ActionResult> {
+export async function runAction(
+    action: string,
+    args: Record<string, unknown>,
+    ctx: ActionContext,
+): Promise<ActionResult> {
     switch (action) {
         case "run_gadget":
             return await runGadgetAction(ctx, args);
@@ -123,6 +149,9 @@ export async function runAction(action: string, args: Record<string, unknown>, c
         case "create_gadget":
             return await createGadgetAction(ctx, args);
         default:
-            return { ok: false, content: `unknown action "${action}". Available: ${ACTIONS.join(", ")}` };
+            return {
+                ok: false,
+                content: `unknown action "${action}". Available: ${ACTIONS.join(", ")}`,
+            };
     }
 }

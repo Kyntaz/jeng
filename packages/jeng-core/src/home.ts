@@ -1,5 +1,5 @@
-import { basename, join } from "node:path";
 import { statSync } from "node:fs";
+import { basename, join } from "node:path";
 import { parseGadget, parseProtocol } from "./header";
 
 export interface GadgetRef {
@@ -26,18 +26,31 @@ const isDirectory = (path: string) => {
     }
 };
 
-async function describe(file: string, folder: "gadgets" | "protocols"): Promise<Omit<GadgetRef, "file">> {
+async function describe(
+    file: string,
+    folder: "gadgets" | "protocols",
+): Promise<Omit<GadgetRef, "file">> {
     const fallback = basename(file).replace(/\.[^.]+$/, "");
     const source = await Bun.file(file).text();
     const header = folder === "gadgets" ? parseGadget(source) : parseProtocol(source)?.header;
-    return { name: header?.name || fallback, description: header?.description ?? "", when: header?.when ?? "" };
+    return {
+        name: header?.name || fallback,
+        description: header?.description ?? "",
+        when: header?.when ?? "",
+    };
 }
 
-async function collect(dir: string, folder: "gadgets" | "protocols", extension: string): Promise<GadgetRef[]> {
+async function collect(
+    dir: string,
+    folder: "gadgets" | "protocols",
+    extension: string,
+): Promise<GadgetRef[]> {
     const root = join(dir, folder);
     if (!isDirectory(root)) return [];
 
-    const entries = [...new Bun.Glob(`*${extension}`).scanSync({ cwd: root, onlyFiles: true })].sort();
+    const entries = [
+        ...new Bun.Glob(`*${extension}`).scanSync({ cwd: root, onlyFiles: true }),
+    ].sort();
     return await Promise.all(
         entries.map(async (entry) => {
             const file = join(root, entry);

@@ -1,4 +1,4 @@
-import { parseGadget, parseProtocol, type Header } from "./header";
+import { type Header, parseGadget, parseProtocol } from "./header";
 
 export type Validation = { ok: true } | { ok: false; error: string };
 
@@ -6,42 +6,65 @@ const NAME = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 
 function checkHeader(header: Header, required: (keyof Header)[]): Validation {
     for (const key of required) {
-        if (!header[key].trim()) return { ok: false, error: `header is missing a non-empty \`${key}\`` };
+        if (!header[key].trim())
+            return { ok: false, error: `header is missing a non-empty \`${key}\`` };
     }
     if (!NAME.test(header.name)) {
         const suggestion = header.name.toLowerCase().replace(/[^a-z0-9]+/g, "-");
-        return { ok: false, error: `header \`name\` must be kebab-case (got "${header.name}"), e.g. \`${suggestion}\`` };
+        return {
+            ok: false,
+            error: `header \`name\` must be kebab-case (got "${header.name}"), e.g. \`${suggestion}\``,
+        };
     }
     return { ok: true };
 }
 
 export function validateProtocol(source: string): Validation {
     const parsed = parseProtocol(source);
-    if (!parsed) return { ok: false, error: "protocol must start with a `---` fenced header of `field: value` lines" };
+    if (!parsed)
+        return {
+            ok: false,
+            error: "protocol must start with a `---` fenced header of `field: value` lines",
+        };
 
     const valid = checkHeader(parsed.header, ["name", "description", "when"]);
     if (!valid.ok) return valid;
-    if (!parsed.body.trim()) return { ok: false, error: "protocol body is empty; write the knowledge itself below the header" };
+    if (!parsed.body.trim())
+        return {
+            ok: false,
+            error: "protocol body is empty; write the knowledge itself below the header",
+        };
 
     return { ok: true };
 }
 
 export function validateGadget(source: string): Validation {
     const header = parseGadget(source);
-    if (!header) return { ok: false, error: "gadget must start with a `/** ... */` header of `field: value` lines" };
+    if (!header)
+        return {
+            ok: false,
+            error: "gadget must start with a `/** ... */` header of `field: value` lines",
+        };
 
     const valid = checkHeader(header, ["name", "description"]);
     if (!valid.ok) return valid;
-    if (!/export\s+default|as\s+default/.test(source)) return { ok: false, error: "gadget must `export default` a function" };
+    if (!/export\s+default|as\s+default/.test(source))
+        return { ok: false, error: "gadget must `export default` a function" };
 
     return { ok: true };
 }
 
 export async function validateGadgetSyntax(file: string): Promise<Validation> {
-    const proc = Bun.spawn(["bun", "build", "--target=bun", "--no-bundle", file], { stdout: "pipe", stderr: "pipe" });
+    const proc = Bun.spawn(["bun", "build", "--target=bun", "--no-bundle", file], {
+        stdout: "pipe",
+        stderr: "pipe",
+    });
     const [code, stderr] = await Promise.all([proc.exited, new Response(proc.stderr).text()]);
     if (code === 0) return { ok: true };
 
-    const detail = stderr.split("\n").find((line) => /error/i.test(line)) ?? stderr.trim().split("\n")[0] ?? "unknown error";
+    const detail =
+        stderr.split("\n").find((line) => /error/i.test(line)) ??
+        stderr.trim().split("\n")[0] ??
+        "unknown error";
     return { ok: false, error: `gadget does not compile: ${detail.trim()}` };
 }
