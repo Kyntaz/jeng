@@ -1,0 +1,63 @@
+# Jeng Architecture
+
+## Core ideas
+
+Jeng is the most bare-bones agentic harness possible.
+Out of the box, it knows how to create gadgets to interact with the system and how to commit protocols into memory.
+The idea is that Jeng grows with you, evolving to fit specifically your needs.
+This should make Jeng particularly well suited to work with local or weaker models.
+
+### Jeng concepts
+
+- **AGENTS file** is a file containing information that should always be loaded into the agent's context.
+- **Gadget** is a bun script, written in TypeScript, with a special header with information describing how to use the gadget that is added to Jeng's context.
+- **Protocol** is a Markdown file with information committed by Jeng, including a special header that gives Jeng information about when it should load the protocol.
+- **Action** is something that Jeng can do out-of-the-box.
+    - **Create Gadget** creates a new Gadget that can be used later.
+    - **Create Protocol** creates a new Protocol that can be referenced later.
+
+## Stack
+
+- **bun** is used as the runtime that powers Jeng.
+- **TypeScript** is the main programming language for Jeng.
+- **OpenTUI** powers the CLI's TUI.
+- **commander** to simplify declaration of the CLI itself.
+- **React** and **JSX** powers Jeng's UIs, reactivity and state management.
+- **git** for version management.
+
+## File Structure
+
+The following structure includes only the most relevant files and paths of the project.
+
+- `.` (the root of the project)
+    - `/package.json` (top level workspace package)
+    - `/README.md`
+    - `/ARCHITECTURE.md`
+    - `/AGENTS.md`
+    - `/packages`
+        - `/jeng-core` (core jeng behaviors)
+            - `/package.json`
+            - `/src` (TypeScript files with the core behavior of jeng)
+            - `/test`
+                `/unit` (unit tests; structure mirrors `../src`)
+                `/e2e` (tests mirroring realistic uses of this library)
+        - `/jeng-cli` (the CLI to interact with jeng)
+            - `/package.json`
+            - `/src` (the TypeScript files with the CLI and TUI used to interact with Jeng through a console)
+            - `/test`
+                - `/unit` (unit tests; structure mirrors `../src`)
+                - `/e2e` (tests simulating user journeys interacting with Jeng's CLI)
+
+## Code organization
+
+Each `/src` folder contains a structure of modules and sub-modules.
+Folders inside `/src` describe modules with sub-modules and should always have an `index.ts` file.
+Each module should only import from sibling modules; there shouldn't be direct imports from the internals of a module.
+
+
+## Testing strategy
+
+There are two types of tests:
+
+- Unit tests mirror the structure of the source code and validate the behaviors of each exported structure independently.
+- E2E tests describe the end to end utilization of the package they're part of.
