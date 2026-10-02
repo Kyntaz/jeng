@@ -1,0 +1,12 @@
+{
+    "name": "@jeng/cli",
+    "version": "0.1.0",
+    "type": "module",
+    "bin": {
+        "jeng": "./src/index.ts"
+    },
+    "main": "./src/index.ts",
+    "dependencies": {
+        "@jeng/core": "workspace:*"
+    }
+}

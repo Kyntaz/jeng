@@ -1,0 +1,24 @@
+{
+    "name": "jeng",
+    "private": true,
+    "type": "module",
+    "workspaces": [
+        "packages/*"
+    ],
+    "scripts": {
+        "jeng": "bun run packages/jeng-cli/src/index.ts",
+        "test": "bun test",
+        "typecheck": "tsc --noEmit"
+    },
+    "devDependencies": {
+        "@types/bun": "latest",
+        "@types/react": "latest",
+        "typescript": "^5.9.0"
+    },
+    "dependencies": {
+        "@opentui/core": "latest",
+        "@opentui/react": "latest",
+        "commander": "latest",
+        "react": "latest"
+    }
+}
