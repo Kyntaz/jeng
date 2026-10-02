@@ -21,12 +21,33 @@ bun install -g jeng
 ## Configuration
 
 Jeng talks to any OpenAI-compatible endpoint, so a local model works as well as a hosted one.
+A config file is JSON, so you can keep one per agent and pick between them:
+
+```json
+{
+    "homes": ["~/.jeng", "~/work-agent"],
+    "model": { "baseUrl": "http://localhost:11434/v1", "apiKey": "sk-...", "model": "gpt-4o-mini" }
+}
+```
+
+Point Jeng at one with `-c`:
+
+```sh
+jeng -c ~/agents/researcher.json "what files are in src?"
+```
+
+Without `-c`, Jeng looks for `./jeng.json`, then `jeng.json` inside the first home folder.
+Every key is optional, and any key you leave out falls back to its default.
+
+Once a config file is found it is the only source of configuration; the environment is
+read only when there is no config file, which keeps existing setups working:
 
 | Variable       | Default                      | Meaning                        |
 | -------------- | ---------------------------- | ------------------------------ |
 | `JENG_BASE_URL`| `http://localhost:11434/v1`  | OpenAI-compatible base url     |
 | `JENG_API_KEY` | `OPENAI_API_KEY`             | sent as a bearer token if set  |
 | `JENG_MODEL`   | `gpt-4o-mini`                | model name                     |
+| `JENG_HOME`    | `~/.jeng`                    | `;`-separated home folders     |
 
 ## How to use?
 
@@ -44,7 +65,7 @@ jeng "what files are in src?"
 
 Jeng loads up and edits context on the following locations:
 
-- `~/.jeng` (you can change this path through the `JENG_HOME` environment variable or the `--home` argument)
+- `~/.jeng` (you can change this path through the `homes` key of a config file, the `JENG_HOME` environment variable or the `--home` argument)
     - `/protocols`
         - `/*.md` (memory files containing situational knowledge that Jeng may want to load into context)
     - `/gadgets`

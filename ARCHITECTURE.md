@@ -15,6 +15,18 @@ This should make Jeng particularly well suited to work with local or weaker mode
 - **Action** is something that Jeng can do out-of-the-box.
     - **Create Gadget** creates a new Gadget that can be used later. This checks the Gadget to make sure it is valid and rejects it otherwise.
     - **Create Protocol** creates a new Protocol that can be referenced later. This checks the structure of the protocol to make sure it is valid and rejects it otherwise.
+- **Config file** is a JSON file named through `-c`/`--config`, holding the homes to load and the model to talk to.
+    - It exists so one disk can carry several agents, each with a config of its own.
+    - It is the only source of configuration once found, so the environment is a fallback rather than a second voice.
+    - Anything it leaves out falls back to the same default the environment would have supplied, which keeps a config file from having to be complete.
+
+## Configuration
+
+`config` is the single definition of where Jeng's homes and model come from, so a caller never has to know how they were chosen.
+
+- Resolution is one function, because homes and model are decided together and disagreeing with each other would be the confusing case.
+- A config file that cannot be read, parsed or understood is an error rather than a silent fallback, because an agent quietly running on the wrong model or the wrong memory is worse than one that refuses to start.
+- `createAgent` never reads config itself; it takes homes and a model as given. A library should not depend on the caller's working directory, and the CLI is the only place that knows about `-c`.
 
 ## Headers
 

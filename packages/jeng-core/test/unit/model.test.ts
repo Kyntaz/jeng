@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { chat, resolveConfig } from "../../src/model";
+import { chat } from "../../src/model";
 
 function fakeModel(replies: Record<string, unknown>[][]) {
     let turn = 0;
@@ -18,23 +18,11 @@ function fakeModel(replies: Record<string, unknown>[][]) {
 }
 
 describe("model", () => {
-    test("falls back to a local endpoint, no key and a small model", () => {
-        expect(resolveConfig({})).toEqual({ baseUrl: "http://localhost:11434/v1", apiKey: undefined, model: "gpt-4o-mini" });
-    });
-
-    test("reads the endpoint, key and model from the environment", () => {
-        expect(resolveConfig({ JENG_BASE_URL: "http://host/v1/", JENG_API_KEY: "k", JENG_MODEL: "qwen" })).toEqual({
-            baseUrl: "http://host/v1",
-            apiKey: "k",
-            model: "qwen",
-        });
-    });
-
     test("streams text deltas and reports them as they arrive", async () => {
         const model = fakeModel([[{ content: "Hel" }, { content: "lo" }]]);
         const deltas: string[] = [];
 
-        const turn = await chat([{ role: "user", content: "hi" }], { config: { ...resolveConfig({}), baseUrl: model.url }, onDelta: (text) => deltas.push(text) });
+        const turn = await chat([{ role: "user", content: "hi" }], { config: { baseUrl: model.url, apiKey: undefined, model: "fake" }, onDelta: (text) => deltas.push(text) });
 
         expect(turn).toEqual({ text: "Hello", toolCall: undefined });
         expect(deltas).toEqual(["Hel", "lo"]);
@@ -49,7 +37,7 @@ describe("model", () => {
             ],
         ]);
 
-        const turn = await chat([{ role: "user", content: "hi" }], { config: { ...resolveConfig({}), baseUrl: model.url } });
+        const turn = await chat([{ role: "user", content: "hi" }], { config: { baseUrl: model.url, apiKey: undefined, model: "fake" } });
 
         expect(turn.toolCall).toEqual({ id: "call_1", name: "jeng", arguments: { action: "run_gadget", name: "greet" } });
         model.stop();
@@ -58,7 +46,7 @@ describe("model", () => {
     test("falls back to raw input when the arguments are not json", async () => {
         const model = fakeModel([[{ tool_calls: [{ id: "call_1", function: { name: "jeng", arguments: "oops" } }] }]]);
 
-        const turn = await chat([{ role: "user", content: "hi" }], { config: { ...resolveConfig({}), baseUrl: model.url } });
+        const turn = await chat([{ role: "user", content: "hi" }], { config: { baseUrl: model.url, apiKey: undefined, model: "fake" } });
 
         expect(turn.toolCall?.arguments).toEqual({ input: "oops" });
         model.stop();

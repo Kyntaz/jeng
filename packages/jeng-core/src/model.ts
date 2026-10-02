@@ -28,11 +28,6 @@ export interface ToolSpec {
     parameters: Record<string, unknown>;
 }
 
-export function resolveConfig(env: Record<string, string | undefined> = process.env): ModelConfig {
-    const baseUrl = env.JENG_BASE_URL ?? "http://localhost:11434/v1";
-    return { baseUrl: baseUrl.replace(/\/$/, ""), apiKey: env.JENG_API_KEY ?? env.OPENAI_API_KEY, model: env.JENG_MODEL ?? "gpt-4o-mini" };
-}
-
 function firstToolCall(delta: Record<string, unknown>) {
     const calls = (delta.tool_calls ?? []) as Record<string, unknown>[];
     const call = calls[0];

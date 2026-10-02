@@ -1,8 +1,9 @@
 import { runAction, JENG_TOOL, type ActionContext } from "./actions";
 import { loadAgentsFiles } from "./agents";
 import { buildContext, type Memory } from "./context";
-import { loadHomes, resolveHomes, type Home } from "./home";
-import { chat, resolveConfig, type Message, type ModelConfig } from "./model";
+import { loadHomes, type Home } from "./home";
+import { defaultHome, defaultModel } from "./config";
+import { chat, type Message, type ModelConfig } from "./model";
 
 const MAX_TURNS = 20;
 
@@ -28,8 +29,8 @@ export interface AgentOptions {
 
 export async function createAgent(options: AgentOptions = {}): Promise<Agent> {
     const cwd = options.cwd ?? process.cwd();
-    const config = options.config ?? resolveConfig();
-    const homes = await loadHomes(options.homes ?? resolveHomes());
+    const config = options.config ?? defaultModel();
+    const homes = await loadHomes(options.homes ?? [defaultHome()]);
     const agentsFiles = await loadAgentsFiles(cwd);
     const ctx: ActionContext = { homes, cwd };
     const history = options.history ?? [];

@@ -1,12 +1,11 @@
 #!/usr/bin/env bun
 import { Command } from "commander";
-import { createAgent, resolveConfig } from "@jeng/core";
+import { createAgent, loadConfig, type Agent } from "@jeng/core";
 import { renderTui } from "./tui";
 
 const collect = (value: string, previous: string[]) => [...previous, value];
 
-async function once(homes: string[], prompt: string): Promise<void> {
-    const agent = await createAgent({ homes: homes.length > 0 ? homes : undefined });
+async function once(agent: Agent, prompt: string): Promise<void> {
     await agent.send(prompt, {
         onEvent: (event) => {
             if (event.type === "text") process.stdout.write(event.text);
@@ -22,13 +21,20 @@ new Command()
     .description("An agent for you.")
     .argument("[prompt...]", "run a single prompt and exit instead of opening the TUI")
     .option("--home <dir>", "home folder; repeat for multiple agents", collect, [])
+    .option("-c, --config <file>", "configuration file; defaults to ./jeng.json, then <home>/jeng.json")
     .showHelpAfterError()
-    .action(async (prompt: string[], options: { home: string[] }) => {
-        const text = prompt.join(" ");
-        if (text) await once(options.home, text);
-        else {
-            const agent = await createAgent({ homes: options.home.length > 0 ? options.home : undefined, config: resolveConfig() });
-            await renderTui(agent);
+    .action(async (prompt: string[], options: { home: string[]; config: string | undefined }) => {
+        let config: Awaited<ReturnType<typeof loadConfig>>;
+        try {
+            config = await loadConfig({ path: options.config, homeArgs: options.home });
+        } catch (error) {
+            process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
+            process.exit(1);
         }
+
+        const agent = await createAgent({ homes: config.homes, config: config.model });
+        const text = prompt.join(" ");
+        if (text) await once(agent, text);
+        else await renderTui(agent);
     })
     .parse();

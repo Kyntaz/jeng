@@ -1,4 +1,3 @@
-import { homedir } from "node:os";
 import { basename, join } from "node:path";
 import { statSync } from "node:fs";
 import { parseGadget, parseProtocol } from "./header";
@@ -17,12 +16,6 @@ export interface Home {
     agents: string | undefined;
     gadgets: GadgetRef[];
     protocols: ProtocolRef[];
-}
-
-export function resolveHomes(homeArgs: string[] = [], env: Record<string, string | undefined> = process.env): string[] {
-    if (homeArgs.length > 0) return homeArgs;
-    if (env.JENG_HOME) return env.JENG_HOME.split(";").filter(Boolean);
-    return [join(homedir(), ".jeng")];
 }
 
 const isDirectory = (path: string) => {
