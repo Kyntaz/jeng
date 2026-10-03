@@ -31,7 +31,7 @@ describe("model", () => {
         const deltas: string[] = [];
 
         const turn = await chat([{ role: "user", content: "hi" }], {
-            config: { baseUrl: model.url, apiKey: undefined, model: "fake" },
+            config: { baseUrl: model.url, apiKey: undefined, model: "fake", contextWindow: 8192 },
             onDelta: (text) => deltas.push(text),
         });
 
@@ -52,7 +52,7 @@ describe("model", () => {
         const thoughts: string[] = [];
 
         const turn = await chat([{ role: "user", content: "hi" }], {
-            config: { baseUrl: model.url, apiKey: undefined, model: "fake" },
+            config: { baseUrl: model.url, apiKey: undefined, model: "fake", contextWindow: 8192 },
             onReasoning: (text) => thoughts.push(text),
         });
 
@@ -69,7 +69,7 @@ describe("model", () => {
         const sizes: number[] = [];
 
         const turn = await chat([{ role: "user", content: "hi" }], {
-            config: { baseUrl: model.url, apiKey: undefined, model: "fake" },
+            config: { baseUrl: model.url, apiKey: undefined, model: "fake", contextWindow: 8192 },
             onUsage: (promptTokens) => sizes.push(promptTokens),
         });
 
@@ -91,7 +91,7 @@ describe("model", () => {
         ]);
 
         const turn = await chat([{ role: "user", content: "hi" }], {
-            config: { baseUrl: model.url, apiKey: undefined, model: "fake" },
+            config: { baseUrl: model.url, apiKey: undefined, model: "fake", contextWindow: 8192 },
         });
 
         expect(turn.toolCall).toEqual({
@@ -108,7 +108,7 @@ describe("model", () => {
         ]);
 
         const turn = await chat([{ role: "user", content: "hi" }], {
-            config: { baseUrl: model.url, apiKey: undefined, model: "fake" },
+            config: { baseUrl: model.url, apiKey: undefined, model: "fake", contextWindow: 8192 },
         });
 
         expect(turn.toolCall?.arguments.error).toBe("arguments are not valid json: oops");
@@ -121,7 +121,7 @@ describe("model", () => {
         ]);
 
         const turn = await chat([{ role: "user", content: "hi" }], {
-            config: { baseUrl: model.url, apiKey: undefined, model: "fake" },
+            config: { baseUrl: model.url, apiKey: undefined, model: "fake", contextWindow: 8192 },
         });
 
         expect(turn.toolCall?.arguments).toEqual({ error: "arguments must be a json object" });

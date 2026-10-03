@@ -3,43 +3,65 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
-function fakeModel(chunks: string[], reasoning = ""): { url: string; stop: () => void } {
+function fakeModel(scripted: Step[], reasoning = ""): { url: string; stop: () => void } {
+    let turn = 0;
     const server = Bun.serve({
         port: 0,
         fetch() {
-            const frames = chunks.map(
-                (content) => `data: ${JSON.stringify({ choices: [{ delta: { content } }] })}\n\n`,
-            );
+            const step = scripted[turn++] ?? {};
             const thoughts = reasoning
                 ? `data: ${JSON.stringify({ choices: [{ delta: { reasoning } }] })}\n\n`
                 : "";
-            return new Response([thoughts, ...frames, "data: [DONE]\n\n"].join(""), {
-                headers: { "content-type": "text/event-stream" },
-            });
+            const delta = step.call
+                ? {
+                      tool_calls: [
+                          { id: `call_${turn}`, function: { name: "jeng", arguments: step.call } },
+                      ],
+                  }
+                : { content: step.delta ?? "" };
+            return new Response(
+                [
+                    thoughts,
+                    `data: ${JSON.stringify({ choices: [{ delta }] })}\n\n`,
+                    "data: [DONE]\n\n",
+                ].join(""),
+                { headers: { "content-type": "text/event-stream" } },
+            );
         },
     });
     return { url: `http://localhost:${server.port}/v1`, stop: () => server.stop(true) };
 }
 
+interface Step {
+    delta?: string;
+    call?: string;
+}
+
+const end = (content: string) => ({ call: JSON.stringify({ action: "end", content }) });
+
+function run(home: string, prompt: string, model: string, args: string[] = []) {
+    return Bun.spawn(
+        ["bun", "run", resolve("packages/jeng-cli/src/index.ts"), prompt, "--home", home, ...args],
+        {
+            cwd: resolve("."),
+            env: {
+                ...process.env,
+                JENG_BASE_URL: model,
+                JENG_MODEL: "fake",
+                JENG_API_KEY: "",
+            },
+            stdout: "pipe",
+            stderr: "pipe",
+        },
+    );
+}
+
 describe("jeng", () => {
     test("runs a single prompt and prints the answer", async () => {
         const home = await mkdtemp(join(tmpdir(), "jeng-cli-"));
-        const model = fakeModel(["hello ", "from the fake model"]);
+        const model = fakeModel([end("hello from the fake model")]);
 
-        const proc = Bun.spawn(
-            ["bun", "run", resolve("packages/jeng-cli/src/index.ts"), "say hi", "--home", home],
-            {
-                cwd: resolve("."),
-                env: {
-                    ...process.env,
-                    JENG_BASE_URL: model.url,
-                    JENG_MODEL: "fake",
-                    JENG_API_KEY: "",
-                },
-                stdout: "pipe",
-                stderr: "pipe",
-            },
-        );
+        const proc = run(home, "say hi", model.url);
 
         const [stdout, code] = await Promise.all([new Response(proc.stdout).text(), proc.exited]);
 
@@ -51,45 +73,38 @@ describe("jeng", () => {
         await rm(home, { recursive: true, force: true });
     });
 
-    test("prints the answer even when the model only thought it", async () => {
+    test("keeps talking and only prints the answer the model ends with", async () => {
         const home = await mkdtemp(join(tmpdir(), "jeng-cli-"));
-        const model = fakeModel([], "the answer is 4");
+        const model = fakeModel([{ delta: "let me check" }, { delta: "one moment" }, end("4")]);
 
-        const proc = Bun.spawn(
-            [
-                "bun",
-                "run",
-                resolve("packages/jeng-cli/src/index.ts"),
-                "what is 2+2?",
-                "--home",
-                home,
-            ],
-            {
-                cwd: resolve("."),
-                env: {
-                    ...process.env,
-                    JENG_BASE_URL: model.url,
-                    JENG_MODEL: "fake",
-                    JENG_API_KEY: "",
-                },
-                stdout: "pipe",
-                stderr: "pipe",
-            },
-        );
+        const proc = run(home, "what is 2+2?", model.url);
 
         const [stdout, code] = await Promise.all([new Response(proc.stdout).text(), proc.exited]);
 
         expect({ code, answer: stdout.trim() }).toEqual({
             code: 0,
-            answer: "the answer is 4",
+            answer: "let me checkone moment\n4",
         });
+        model.stop();
+        await rm(home, { recursive: true, force: true });
+    });
+
+    test("prints the answer when the model only thought and then ended", async () => {
+        const home = await mkdtemp(join(tmpdir(), "jeng-cli-"));
+        const model = fakeModel([end("4")], "two plus two is four");
+
+        const proc = run(home, "what is 2+2?", model.url);
+
+        const [stdout, code] = await Promise.all([new Response(proc.stdout).text(), proc.exited]);
+
+        expect({ code, answer: stdout.trim() }).toEqual({ code: 0, answer: "4" });
         model.stop();
         await rm(home, { recursive: true, force: true });
     });
 
     test("takes its whole configuration from the json file it is pointed at", async () => {
         const home = await mkdtemp(join(tmpdir(), "jeng-cli-"));
-        const model = fakeModel(["configured ", "through a file"]);
+        const model = fakeModel([end("configured through a file")]);
         const config = join(home, "jeng.json");
         await Bun.write(
             config,

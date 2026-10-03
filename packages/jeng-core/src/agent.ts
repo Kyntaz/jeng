@@ -5,7 +5,8 @@ import { buildContext, type Memory } from "./context";
 import { type Home, loadHomes } from "./home";
 import { chat, type Message, type ModelConfig } from "./model";
 
-const MAX_TURNS = 20;
+const NUDGE =
+    'That was plain text, which does not reach the user. Call action="end" with that answer now, or call a tool if you still need one.';
 
 export type AgentEvent =
     | { type: "text"; text: string }
@@ -20,6 +21,7 @@ export interface Agent {
     history: Message[];
     memory: Memory[];
     clear: () => void;
+    inject: (text: string) => void;
     send(
         prompt: string,
         options?: { signal?: AbortSignal; onEvent?: (event: AgentEvent) => void },
@@ -31,6 +33,7 @@ export interface AgentOptions {
     homes?: string[];
     config?: ModelConfig;
     history?: Message[];
+    maxTurns?: number;
 }
 
 export async function createAgent(options: AgentOptions = {}): Promise<Agent> {
@@ -41,12 +44,19 @@ export async function createAgent(options: AgentOptions = {}): Promise<Agent> {
     const ctx: ActionContext = { homes, cwd };
     const history = options.history ?? [];
     const memory: Memory[] = [];
+    const maxTurns = options.maxTurns ?? Infinity;
+    const pending: string[] = [];
+    let promptTokens = 0;
 
     async function send(
         prompt: string,
         sendOptions: { signal?: AbortSignal; onEvent?: (event: AgentEvent) => void } = {},
     ): Promise<string> {
         const { signal, onEvent } = sendOptions;
+        // Anything injected after the last turn ended never got read by the
+        // model, so it becomes part of the conversation before this prompt
+        // rather than an oddity trailing the next one.
+        for (const text of pending.splice(0)) history.push({ role: "user", content: text });
         const messages: Message[] = [
             { role: "system", content: "" },
             ...history,
@@ -54,9 +64,25 @@ export async function createAgent(options: AgentOptions = {}): Promise<Agent> {
         ];
         history.push({ role: "user", content: prompt });
         let previous = "";
+        let nudged = false;
 
-        for (let turn = 0; turn < MAX_TURNS; turn++) {
-            messages[0].content = buildContext(ctx.homes, agentsFiles, memory);
+        for (let turn = 0; turn < maxTurns; turn++) {
+            messages[0].content = buildContext(ctx.homes, agentsFiles, memory, {
+                tokens: promptTokens,
+                contextWindow: config.contextWindow,
+            });
+
+            // The previous iteration always ended with a result rather than a
+            // pending call, so this is the one point where a user message does
+            // not break a tool call from its result.
+            const incoming = pending.splice(0);
+            if (incoming.length === 0 && nudged) incoming.push(NUDGE);
+            for (const text of incoming) {
+                const message: Message = { role: "user", content: text };
+                messages.push(message);
+                history.push(message);
+            }
+            nudged = false;
 
             const reply = await chat(messages, {
                 config,
@@ -64,7 +90,10 @@ export async function createAgent(options: AgentOptions = {}): Promise<Agent> {
                 signal,
                 onDelta: (text) => onEvent?.({ type: "text", text }),
                 onReasoning: (text) => onEvent?.({ type: "reasoning", text }),
-                onUsage: (promptTokens) => onEvent?.({ type: "usage", promptTokens }),
+                onUsage: (tokens) => {
+                    promptTokens = tokens;
+                    onEvent?.({ type: "usage", promptTokens: tokens });
+                },
             });
 
             const message: Message = {
@@ -74,52 +103,90 @@ export async function createAgent(options: AgentOptions = {}): Promise<Agent> {
             };
             history.push(message);
             messages.push(message);
-            if (!reply.toolCall) {
-                // A thinking model can spend its turn reasoning and end with no
-                // answer at all; its reasoning is the closest thing to one.
-                if (!reply.text.trim() && reply.reasoning.trim()) return reply.reasoning.trim();
-                if (!reply.text.trim()) return "I had nothing to say. Ask me again.";
-                return reply.text;
-            }
 
-            const { action, ...args } = reply.toolCall.arguments as { action?: string } & Record<
-                string,
-                unknown
-            >;
+            const { action, ...args } = (reply.toolCall?.arguments ?? {}) as {
+                action?: string;
+            } & Record<string, unknown>;
             const name = String(action ?? "");
-            onEvent?.({ type: "tool", action: name, args });
 
-            // A model that reissues the call it just made, having learned
-            // nothing in between, will never make progress; report the blocker
-            // instead of burning the turn budget. A retry after some other call
-            // is legitimate, because the context has changed.
-            const signature = `${name}:${JSON.stringify(args)}`;
-            if (signature === previous) {
-                const stopped = `stopped: "${name}" was called twice in a row with the same arguments. Say what you know instead of calling it again.`;
-                onEvent?.({ type: "result", content: stopped, ok: false });
-                history.push({
+            if (reply.toolCall) {
+                onEvent?.({ type: "tool", action: name, args });
+
+                const paired: Message = {
                     role: "tool",
                     toolCallId: reply.toolCall.id,
-                    content: stopped,
-                });
-                return stopped;
+                    content: "",
+                };
+                const close = (content: string) => {
+                    paired.content = content;
+                    messages.push(paired);
+                    history.push(paired);
+                };
+
+                if (name === "end") {
+                    const answer = String(args.content ?? "").trim();
+                    if (!answer) {
+                        const complaint =
+                            "end was called with no content. Put the answer in content.";
+                        onEvent?.({ type: "result", content: complaint, ok: false });
+                        close(complaint);
+                        continue;
+                    }
+                    close("ended");
+                    return answer;
+                }
+
+                if (name === "compact") {
+                    const summary = String(args.summary ?? "").trim();
+                    if (!summary) {
+                        const complaint = "compact was called with no summary. Say what to keep.";
+                        onEvent?.({ type: "result", content: complaint, ok: false });
+                        close(complaint);
+                        continue;
+                    }
+                    close("compacted");
+
+                    // The pending compact call goes with the rest of the
+                    // transcript, so nothing is left needing a result. history is
+                    // aliased onto the Agent, so it is emptied rather than
+                    // replaced; memory and homes are not the transcript.
+                    history.length = 0;
+                    history.push({
+                        role: "user",
+                        content: `[earlier conversation, compacted]\n\n${summary}`,
+                    });
+                    messages.length = 0;
+                    messages.push({ role: "system", content: "" }, ...history);
+                    continue;
+                }
+
+                // A model that reissues the call it just made, having learned
+                // nothing in between, will never make progress; report the blocker
+                // instead of looping on it. A retry after some other call is
+                // legitimate, because the context has changed.
+                const signature = `${name}:${JSON.stringify(args)}`;
+                if (signature === previous) {
+                    const stopped = `stopped: "${name}" was called twice in a row with the same arguments. Say what you know instead of calling it again.`;
+                    onEvent?.({ type: "result", content: stopped, ok: false });
+                    close(stopped);
+                    return stopped;
+                }
+                previous = signature;
+
+                const result = await runAction(name, args, ctx);
+                onEvent?.({ type: "result", content: result.content, ok: result.ok });
+                close(result.content);
+
+                if (action === "load_protocol" && result.ok)
+                    memory.push({ name: String(args.name ?? ""), body: result.content });
+                continue;
             }
-            previous = signature;
 
-            const result = await runAction(name, args, ctx);
-            onEvent?.({ type: "result", content: result.content, ok: result.ok });
-            const toolMessage: Message = {
-                role: "tool",
-                toolCallId: reply.toolCall.id,
-                content: result.content,
-            };
-            messages.push(toolMessage);
-            history.push(toolMessage);
-
-            if (action === "load_protocol" && result.ok)
-                memory.push({ name: String(args.name ?? ""), body: result.content });
+            // Nothing you say ends a turn, so plain text is progress towards an
+            // answer you have not handed over yet. The next iteration nudges.
+            nudged = true;
         }
-        return `stopped after ${MAX_TURNS} turns without an answer.`;
+        return `stopped after ${maxTurns} turns without ending.`;
     }
 
     function clear(): void {
@@ -127,5 +194,15 @@ export async function createAgent(options: AgentOptions = {}): Promise<Agent> {
         memory.length = 0;
     }
 
-    return { homes: ctx.homes, cwd, history, memory, clear, send };
+    return {
+        homes: ctx.homes,
+        cwd,
+        history,
+        memory,
+        clear,
+        inject: (text: string) => {
+            pending.push(text);
+        },
+        send,
+    };
 }

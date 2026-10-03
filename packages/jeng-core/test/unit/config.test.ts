@@ -10,7 +10,12 @@ async function scratch(config?: unknown): Promise<string> {
     return dir;
 }
 
-const defaults = { baseUrl: "http://localhost:11434/v1", apiKey: undefined, model: "gpt-4o-mini" };
+const defaults = {
+    baseUrl: "http://localhost:11434/v1",
+    apiKey: undefined,
+    model: "gpt-4o-mini",
+    contextWindow: 8192,
+};
 
 describe("config", () => {
     test("falls back to the default home and model when nothing is configured", async () => {
@@ -34,12 +39,18 @@ describe("config", () => {
                 JENG_BASE_URL: "http://host/v1/",
                 JENG_API_KEY: "k",
                 JENG_MODEL: "qwen",
+                JENG_CONTEXT: "4096",
             },
         });
 
         expect(config).toEqual({
             homes: ["/c", "/d"],
-            model: { baseUrl: "http://host/v1", apiKey: "k", model: "qwen" },
+            model: {
+                baseUrl: "http://host/v1",
+                apiKey: "k",
+                model: "qwen",
+                contextWindow: 4096,
+            },
         });
         await rm(cwd, { recursive: true, force: true });
     });
@@ -47,14 +58,19 @@ describe("config", () => {
     test("loads the homes and the model from the file named by --config", async () => {
         const cwd = await scratch({
             homes: ["/a", "/b"],
-            model: { baseUrl: "http://host/v1/", apiKey: "k", model: "qwen" },
+            model: { baseUrl: "http://host/v1/", apiKey: "k", model: "qwen", contextWindow: 4096 },
         });
 
         const config = await loadConfig({ path: join(cwd, "jeng.json"), cwd, env: {} });
 
         expect(config).toEqual({
             homes: ["/a", "/b"],
-            model: { baseUrl: "http://host/v1", apiKey: "k", model: "qwen" },
+            model: {
+                baseUrl: "http://host/v1",
+                apiKey: "k",
+                model: "qwen",
+                contextWindow: 4096,
+            },
         });
         await rm(cwd, { recursive: true, force: true });
     });
@@ -121,6 +137,20 @@ describe("config", () => {
         await rm(cwd, { recursive: true, force: true });
     });
 
+    test("throws when a home is the whole home folder rather than a folder inside it", async () => {
+        const cwd = await scratch({ homes: ["~"] });
+
+        expect(loadConfig({ cwd, env: {} })).rejects.toThrow('"~" is your entire home folder');
+        await rm(cwd, { recursive: true, force: true });
+    });
+
+    test("throws on a home of ~ buried among valid ones", async () => {
+        const cwd = await scratch({ homes: ["~/.jeng", "~"] });
+
+        expect(loadConfig({ cwd, env: {} })).rejects.toThrow('"~" is your entire home folder');
+        await rm(cwd, { recursive: true, force: true });
+    });
+
     test("throws when --config points at a file that isn't there", async () => {
         const cwd = await scratch();
 
@@ -151,6 +181,15 @@ describe("config", () => {
         const cwd = await scratch({ model: { model: 7 } });
 
         expect(loadConfig({ cwd, env: {} })).rejects.toThrow("model.model must be a string");
+        await rm(cwd, { recursive: true, force: true });
+    });
+
+    test("throws on a contextWindow that isn't a number", async () => {
+        const cwd = await scratch({ model: { contextWindow: "8192" } });
+
+        expect(loadConfig({ cwd, env: {} })).rejects.toThrow(
+            "model.contextWindow must be a number",
+        );
         await rm(cwd, { recursive: true, force: true });
     });
 });

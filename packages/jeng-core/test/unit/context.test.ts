@@ -41,4 +41,20 @@ describe("context", () => {
             buildContext([{ dir: "/empty", agents: undefined, gadgets: [], protocols: [] }], []),
         ).not.toContain("## Gadgets");
     });
+
+    test("tells the model how much of its context is gone", () => {
+        expect(buildContext([HOME], [], [], { tokens: 1200, contextWindow: 8192 })).toContain(
+            "Context: 1200/8192 tokens.",
+        );
+    });
+
+    test("tells the model to compact once it is near the limit", () => {
+        expect(buildContext([HOME], [], [], { tokens: 7000, contextWindow: 8192 })).toContain(
+            "Compact now.",
+        );
+    });
+
+    test("leaves the context line out when nothing is known yet", () => {
+        expect(buildContext([HOME], [])).not.toContain("Context:");
+    });
 });

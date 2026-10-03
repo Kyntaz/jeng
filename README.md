@@ -26,7 +26,12 @@ A config file is JSON, so you can keep one per agent and pick between them:
 ```json
 {
     "homes": ["~/.jeng", "~/work-agent"],
-    "model": { "baseUrl": "http://localhost:11434/v1", "apiKey": "sk-...", "model": "gpt-4o-mini" }
+    "model": {
+        "baseUrl": "http://localhost:11434/v1",
+        "apiKey": "sk-...",
+        "model": "gpt-4o-mini",
+        "contextWindow": 8192
+    }
 }
 ```
 
@@ -35,6 +40,9 @@ Point Jeng at one with `-c`:
 ```sh
 jeng -c ~/agents/researcher.json "what files are in src?"
 ```
+
+A home is a folder Jeng writes to, so a home of `~` on its own is rejected: that is your
+whole home folder rather than a folder inside it. Use `~/.jeng` or name a subfolder.
 
 Without `-c`, Jeng looks for `./jeng.json`, then `jeng.json` inside the first home folder.
 Every key is optional, and any key you leave out falls back to its default.
@@ -47,6 +55,7 @@ read only when there is no config file, which keeps existing setups working:
 | `JENG_BASE_URL`| `http://localhost:11434/v1`  | OpenAI-compatible base url     |
 | `JENG_API_KEY` | `OPENAI_API_KEY`             | sent as a bearer token if set  |
 | `JENG_MODEL`   | `gpt-4o-mini`                | model name                     |
+| `JENG_CONTEXT` | `8192`                       | context window, in tokens      |
 | `JENG_HOME`    | `~/.jeng`                    | `;`-separated home folders     |
 
 ## How to use?
@@ -67,9 +76,16 @@ The TUI shows the context size the model is actually working with, and has a few
 | ----------- | ------------------------------------------- |
 | `ctrl+esc`  | quit                                        |
 | `ctrl+l`    | clear the conversation and loaded protocols  |
+| `esc`       | interrupt what Jeng is doing right now      |
 | `ctrl+r`    | show or hide what the model is thinking      |
 
+The line stays focused while Jeng works, so you can keep typing.
+Anything you send mid-turn reaches the model between two of its calls instead of cutting the current one short, and `esc` is what cuts it short.
+
 ## How it works?
+
+Jeng keeps working until it decides it has an answer, and there is no time limit on that.
+Your answer is a call rather than something Jeng says in passing, so Jeng narrating while it works never reads as a finished turn.
 
 Jeng loads up and edits context on the following locations:
 
@@ -119,6 +135,13 @@ run `make deploy`, then watch the logs for five minutes before walking away.
 
 Both a gadget and a protocol are validated before they are written to disk.
 A gadget that doesn't compile or is missing its header is rejected with the reason, and Jeng gets to try again.
+
+## Context
+
+The first line of Jeng's context is how much of it is gone, because a model cannot work that out for itself.
+Tell it the size of the window with `contextWindow` or `JENG_CONTEXT`, and once it gets near that line Jeng summarizes the conversation so far and carries on from the summary instead of stopping.
+Jeng writes that summary itself, and forgets the transcript that came before it.
+Protocols it has loaded are memory rather than conversation, so those survive.
 
 ## Why "Jeng"?
 

@@ -6,15 +6,29 @@ import { validateGadget, validateGadgetSyntax, validateProtocol } from "./valida
 
 export type ActionResult = { ok: boolean; content: string };
 
-export const ACTIONS = ["run_gadget", "load_protocol", "create_protocol", "create_gadget"];
+export const ACTIONS = [
+    "run_gadget",
+    "load_protocol",
+    "create_protocol",
+    "create_gadget",
+    "end",
+    "compact",
+];
 
 export const JENG_TOOL = {
     name: "jeng",
     description: [
         "Do one thing. This is your only tool.",
         "",
-        "Reply with either one jeng call or a final answer in plain text, never both.",
+        "Every message you send is exactly one call to this tool. Your answer is a call too.",
         "",
+        'action="end", content=<the answer the user reads>',
+        "  Hand control back to the user. This is the only way a turn ever ends, so nothing you say",
+        "  in plain text will do it. Put the whole answer in content.",
+        '  e.g. {"action":"end","content":"Tokyo is the capital of Japan."}',
+        'action="compact", summary=<everything worth keeping from this conversation>',
+        "  Throw the transcript away and continue from your summary alone. When the context line at",
+        "  the top of your context is near its limit, summarize and call this.",
         'action="run_gadget", name=<existing gadget>, input=<object>',
         "  Run a gadget. `name` must be a gadget listed under Gadgets in your context.",
         'action="create_gadget", name=<new kebab-case name>, description=<one line>, source=<TypeScript>',
@@ -37,8 +51,9 @@ export const JENG_TOOL = {
         "  Save knowledge worth keeping. Never save a guess: only what you actually learned.",
         "",
         "After every call you get a result. Read it before deciding what to do next.",
-        "If a result is an error, do not repeat that same call. Change the arguments, or answer without it.",
-        "If you cannot do something, say so in one line instead of calling a tool.",
+        "If a result is an error, do not repeat that same call. Change the arguments, or end without it.",
+        "Keep going until you call end. There is no turn limit, so nothing stops you but your own judgement.",
+        "If you cannot do something, end with that in one line instead of calling a tool.",
     ].join("\n"),
     parameters: {
         type: "object",
@@ -54,7 +69,15 @@ export const JENG_TOOL = {
                 description: "for create_protocol: when to load this protocol",
             },
             description: { type: "string" },
-            content: { type: "string", description: "for create_protocol: the markdown body" },
+            content: {
+                type: "string",
+                description:
+                    "for create_protocol: the markdown body. for end: the answer the user reads",
+            },
+            summary: {
+                type: "string",
+                description: "for compact: what is worth keeping from this conversation",
+            },
             source: {
                 type: "string",
                 description: "for create_gadget: the complete TypeScript file, header first",

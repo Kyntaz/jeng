@@ -115,10 +115,15 @@ function App({ agent, onExit }: { agent: Agent; onExit: () => void }) {
     const [tokens, setTokens] = useState(0);
     const [showThinking, setShowThinking] = useState(false);
     const input = useRef<InputRenderable>(null);
+    const running = useRef<AbortController | undefined>(undefined);
     const spinner = useSpinner(busy);
 
     useKeyboard((key) => {
         if (key.ctrl && key.name === "escape") onExit();
+        // Focus is set declaratively from the `focused` prop and stays true, so
+        // nothing can pull the cursor out of the line. Escape means nothing when
+        // idle, which keeps it from eating a keystroke the user meant to type.
+        if (!key.ctrl && key.name === "escape" && busy) running.current?.abort();
         if (key.ctrl && key.name === "l") {
             agent.clear();
             setEntries([]);
@@ -130,31 +135,43 @@ function App({ agent, onExit }: { agent: Agent; onExit: () => void }) {
     const submit = useCallback(
         async (value: string) => {
             const prompt = value.trim();
-            if (!prompt || busy) return;
+            if (!prompt) return;
             if (input.current) input.current.value = "";
-            setBusy(true);
             setEntries((current) => [...current, { kind: "user", text: prompt }]);
+
+            // The line stays focused while jeng works, so a message typed here
+            // reaches it between its calls rather than interrupting one.
+            if (busy) {
+                agent.inject(prompt);
+                return;
+            }
+
+            setBusy(true);
+            running.current = new AbortController();
             try {
-                // A turn answered from reasoning alone streams no text, so add
-                // the reply when nothing was shown for it.
-                let answered = false;
+                let streamed = "";
                 const reply = await agent.send(prompt, {
+                    signal: running.current.signal,
                     onEvent: (event) => {
                         if (event.type === "usage") setTokens(event.promptTokens);
                         else {
-                            if (event.type === "text" && event.text.trim()) answered = true;
+                            if (event.type === "text") streamed += event.text;
                             setEntries((current) => append(current, event));
                         }
                     },
                 });
-                if (!answered && reply.trim())
+                if (reply.trim() && reply.trim() !== streamed.trim())
                     setEntries((current) => [...current, { kind: "jeng", text: reply }]);
             } catch (error) {
-                setEntries((current) => [
-                    ...current,
-                    { kind: "error", text: (error as Error).message },
-                ]);
+                if (running.current.signal.aborted)
+                    setEntries((current) => [...current, { kind: "error", text: "interrupted" }]);
+                else
+                    setEntries((current) => [
+                        ...current,
+                        { kind: "error", text: (error as Error).message },
+                    ]);
             } finally {
+                running.current = undefined;
                 setBusy(false);
             }
         },
@@ -171,13 +188,7 @@ function App({ agent, onExit }: { agent: Agent; onExit: () => void }) {
                 <text fg="#606070" content={`ctx ${compact(tokens)}`} />
             </box>
 
-            <scrollbox
-                focused={busy}
-                stickyScroll
-                stickyStart="bottom"
-                flexGrow={1}
-                style={{ width: "100%" }}
-            >
+            <scrollbox stickyScroll stickyStart="bottom" flexGrow={1} style={{ width: "100%" }}>
                 {blocks(visible).map((block, index) =>
                     block.border ? (
                         <box
@@ -202,15 +213,12 @@ function App({ agent, onExit }: { agent: Agent; onExit: () => void }) {
             </scrollbox>
 
             <box border paddingLeft={1}>
-                <input
-                    ref={input}
-                    focused={!busy}
-                    onSubmit={(value) => void submit(String(value))}
-                />
+                <input ref={input} focused onSubmit={(value) => void submit(String(value))} />
             </box>
             <box flexDirection="row" gap={2} paddingLeft={1}>
                 <text fg="#606070" content="ctrl+esc quit" />
                 <text fg="#606070" content="ctrl+l clear" />
+                <text fg="#606070" content="esc interrupt" />
                 <text fg={showThinking ? "#d9a441" : "#606070"} content="ctrl+r thinking" />
                 {busy && <text fg={BORDER.jeng} content={`${spinner} thinking`} />}
             </box>

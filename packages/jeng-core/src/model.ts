@@ -2,6 +2,7 @@ export interface ModelConfig {
     baseUrl: string;
     apiKey: string | undefined;
     model: string;
+    contextWindow: number;
 }
 
 export interface Message {

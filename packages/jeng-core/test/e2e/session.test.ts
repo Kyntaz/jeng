@@ -4,10 +4,11 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { type AgentEvent, createAgent } from "../../src";
 
-function fakeModel(scripted: { delta?: Record<string, unknown>; call?: string }[]): {
+function fakeModel(scripted: Step[]): {
     url: string;
     stop: () => void;
     requests: () => string[];
+    arrived: (n: number) => Promise<void>;
 } {
     const requests: string[] = [];
     let turn = 0;
@@ -17,6 +18,7 @@ function fakeModel(scripted: { delta?: Record<string, unknown>; call?: string }[
         async fetch(request) {
             requests.push(await request.text());
             const step = scripted[turn++] ?? {};
+            if (step.delay) await Bun.sleep(step.delay);
             const delta = step.call
                 ? {
                       tool_calls: [
@@ -24,17 +26,46 @@ function fakeModel(scripted: { delta?: Record<string, unknown>; call?: string }[
                       ],
                   }
                 : { content: step.delta?.content ?? "" };
-            const body = `data: ${JSON.stringify({ choices: [{ delta }] })}\n\ndata: [DONE]\n\n`;
-            return new Response(body, { headers: { "content-type": "text/event-stream" } });
+            const usage = step.tokens ? { usage: { prompt_tokens: step.tokens } } : {};
+            const frames = [
+                `data: ${JSON.stringify({ choices: [{ delta }] })}\n\n`,
+                step.tokens ? `data: ${JSON.stringify(usage)}\n\n` : "",
+                "data: [DONE]\n\n",
+            ];
+            return new Response(frames.join(""), {
+                headers: { "content-type": "text/event-stream" },
+            });
         },
     });
+
+    const arrived = async (n: number) => {
+        while (requests.length < n) await Bun.sleep(1);
+    };
 
     return {
         url: `http://localhost:${server.port}/v1`,
         stop: () => server.stop(true),
         requests: () => requests,
+        arrived,
     };
 }
+
+interface Step {
+    delta?: Record<string, unknown>;
+    call?: string;
+    delay?: number;
+    tokens?: number;
+}
+
+const end = (content: string) => ({ call: JSON.stringify({ action: "end", content }) });
+const act = (args: Record<string, unknown>) => ({ call: JSON.stringify(args) });
+
+const CONFIG = (url: string) => ({
+    baseUrl: url,
+    apiKey: undefined,
+    model: "fake",
+    contextWindow: 8192,
+});
 
 const GADGET =
     // biome-ignore lint/suspicious/noTemplateCurlyInString: gadget source, not a template
@@ -71,13 +102,13 @@ describe("a jeng session", () => {
                     input: { who: "world" },
                 }),
             },
-            { delta: { content: "hi world" } },
+            end("hi world"),
         ]);
 
         const agent = await createAgent({
             cwd,
             homes: [home],
-            config: { baseUrl: model.url, apiKey: undefined, model: "fake" },
+            config: CONFIG(model.url),
         });
 
         const events: AgentEvent[] = [];
@@ -111,13 +142,13 @@ describe("a jeng session", () => {
 
         const model = fakeModel([
             { call: JSON.stringify({ action: "load_protocol", name: "deploy" }) },
-            { delta: { content: "ship it" } },
+            end("ship it"),
         ]);
 
         const agent = await createAgent({
             cwd: home,
             homes: [home],
-            config: { baseUrl: model.url, apiKey: undefined, model: "fake" },
+            config: CONFIG(model.url),
         });
         await agent.send("how do we deploy?");
 
@@ -138,7 +169,7 @@ describe("a jeng session", () => {
         const agent = await createAgent({
             cwd: home,
             homes: [home],
-            config: { baseUrl: model.url, apiKey: undefined, model: "fake" },
+            config: CONFIG(model.url),
         });
         const reply = await agent.send("deploy the thing");
 
@@ -155,13 +186,13 @@ describe("a jeng session", () => {
             { call: run },
             { call: JSON.stringify({ action: "load_protocol", name: "greet" }) },
             { call: run },
-            { delta: { content: "done" } },
+            end("done"),
         ]);
 
         const agent = await createAgent({
             cwd: home,
             homes: [home],
-            config: { baseUrl: model.url, apiKey: undefined, model: "fake" },
+            config: CONFIG(model.url),
         });
 
         expect(await agent.send("count the lines")).toBe("done");
@@ -178,14 +209,14 @@ describe("a jeng session", () => {
 
         const model = fakeModel([
             { call: JSON.stringify({ action: "load_protocol", name: "deploy" }) },
-            { delta: { content: "ship it" } },
-            { delta: { content: "and again" } },
+            end("ship it"),
+            end("and again"),
         ]);
 
         const agent = await createAgent({
             cwd: home,
             homes: [home],
-            config: { baseUrl: model.url, apiKey: undefined, model: "fake" },
+            config: CONFIG(model.url),
         });
         await agent.send("how do we deploy?");
         await agent.send("say it again");
@@ -211,13 +242,13 @@ describe("a jeng session", () => {
 
         const model = fakeModel([
             { call: JSON.stringify({ action: "load_protocol", name: "deploy" }) },
-            { delta: { content: "ship it" } },
+            end("ship it"),
         ]);
 
         const agent = await createAgent({
             cwd: home,
             homes: [home],
-            config: { baseUrl: model.url, apiKey: undefined, model: "fake" },
+            config: CONFIG(model.url),
         });
         await agent.send("how do we deploy?");
         agent.clear();
@@ -226,6 +257,190 @@ describe("a jeng session", () => {
             history: 0,
             memory: 0,
         });
+        model.stop();
+        await rm(home, { recursive: true, force: true });
+    });
+
+    test("does not hand control back when the model only talks", async () => {
+        const home = await mkdtemp(join(tmpdir(), "jeng-e2e-"));
+        const model = fakeModel([
+            { delta: { content: "let me look that up" } },
+            { delta: { content: "one moment" } },
+            end("4"),
+        ]);
+
+        const agent = await createAgent({
+            cwd: home,
+            homes: [home],
+            config: CONFIG(model.url),
+        });
+
+        expect(await agent.send("what is 2+2?")).toBe("4");
+        expect(model.requests()).toHaveLength(3);
+        model.stop();
+        await rm(home, { recursive: true, force: true });
+    });
+
+    test("nudges the model back to work when it talks instead of calling end", async () => {
+        const home = await mkdtemp(join(tmpdir(), "jeng-e2e-"));
+        const model = fakeModel([{ delta: { content: "hmm" } }, end("4")]);
+
+        const agent = await createAgent({
+            cwd: home,
+            homes: [home],
+            config: CONFIG(model.url),
+        });
+        await agent.send("what is 2+2?");
+
+        expect(model.requests()[1]).toContain("with that answer now");
+        model.stop();
+        await rm(home, { recursive: true, force: true });
+    });
+
+    test("compacts the transcript down to the model's own summary", async () => {
+        const home = await mkdtemp(join(tmpdir(), "jeng-e2e-"));
+        const model = fakeModel([
+            act({ action: "compact", summary: "we were counting lines in src" }),
+            end("12 lines"),
+        ]);
+
+        const agent = await createAgent({
+            cwd: home,
+            homes: [home],
+            config: CONFIG(model.url),
+        });
+        await agent.send("count the lines in src, and keep going");
+
+        expect(agent.history.map((message) => message.role)).toEqual(["user", "assistant", "tool"]);
+        expect(agent.history[0].content).toBe(
+            "[earlier conversation, compacted]\n\nwe were counting lines in src",
+        );
+        model.stop();
+        await rm(home, { recursive: true, force: true });
+    });
+
+    test("keeps loaded protocols across a compact, since memory is not the transcript", async () => {
+        const home = await mkdtemp(join(tmpdir(), "jeng-e2e-"));
+        await Bun.write(
+            join(home, "protocols", "deploy.md"),
+            "---\nname: deploy\ndescription: how we ship\nwhen: deploying\n---\n\nrun make\n",
+        );
+        const model = fakeModel([
+            act({ action: "load_protocol", name: "deploy" }),
+            act({ action: "compact", summary: "we were deploying" }),
+            end("ship it"),
+        ]);
+
+        const agent = await createAgent({
+            cwd: home,
+            homes: [home],
+            config: CONFIG(model.url),
+        });
+        await agent.send("deploy it");
+
+        expect(agent.memory.map((item) => item.name)).toEqual(["deploy"]);
+        model.stop();
+        await rm(home, { recursive: true, force: true });
+    });
+
+    test("tells the model how full its context is", async () => {
+        const home = await mkdtemp(join(tmpdir(), "jeng-e2e-"));
+        const model = fakeModel([
+            { ...act({ action: "load_protocol", name: "deploy" }), tokens: 1200 },
+            end("done"),
+        ]);
+
+        const agent = await createAgent({
+            cwd: home,
+            homes: [home],
+            config: CONFIG(model.url),
+        });
+        await agent.send("deploy it");
+
+        expect(model.requests()[1]).toContain("Context: 1200/8192 tokens.");
+        model.stop();
+        await rm(home, { recursive: true, force: true });
+    });
+
+    test("delivers an injected message between two of the model's own calls", async () => {
+        const home = await mkdtemp(join(tmpdir(), "jeng-e2e-"));
+        const model = fakeModel([
+            { ...act({ action: "load_protocol", name: "deploy" }), delay: 20 },
+            end("ship it"),
+        ]);
+
+        const agent = await createAgent({
+            cwd: home,
+            homes: [home],
+            config: CONFIG(model.url),
+        });
+        const sending = agent.send("how do we deploy?");
+        await model.arrived(1);
+        agent.inject("actually, check the logs too");
+
+        expect(await sending).toBe("ship it");
+        expect(model.requests()[1]).toContain("actually, check the logs too");
+        model.stop();
+        await rm(home, { recursive: true, force: true });
+    });
+
+    test("carries an injection the model never read into the next turn", async () => {
+        const home = await mkdtemp(join(tmpdir(), "jeng-e2e-"));
+        const model = fakeModel([end("all done"), end("ok")]);
+
+        const agent = await createAgent({
+            cwd: home,
+            homes: [home],
+            config: CONFIG(model.url),
+        });
+        await agent.send("deploy it");
+        agent.inject("one more thing");
+        await agent.send("never mind that");
+
+        const next = JSON.parse(model.requests()[1]).messages;
+        expect(
+            next
+                .filter((message: { role: string }) => message.role === "user")
+                .map((message: { content: string }) => message.content),
+        ).toEqual(["deploy it", "one more thing", "never mind that"]);
+        model.stop();
+        await rm(home, { recursive: true, force: true });
+    });
+
+    test("leaves nothing half-finished when a turn is interrupted", async () => {
+        const home = await mkdtemp(join(tmpdir(), "jeng-e2e-"));
+        const model = fakeModel([
+            { ...act({ action: "load_protocol", name: "deploy" }), delay: 20 },
+        ]);
+
+        const agent = await createAgent({
+            cwd: home,
+            homes: [home],
+            config: CONFIG(model.url),
+        });
+        const controller = new AbortController();
+        const sending = agent.send("how do we deploy?", { signal: controller.signal });
+        await model.arrived(1);
+        controller.abort();
+
+        expect(sending).rejects.toThrow();
+        expect(agent.history).toEqual([{ role: "user", content: "how do we deploy?" }]);
+        model.stop();
+        await rm(home, { recursive: true, force: true });
+    });
+
+    test("stops a model that never ends when a turn limit is set", async () => {
+        const home = await mkdtemp(join(tmpdir(), "jeng-e2e-"));
+        const model = fakeModel([{ delta: { content: "thinking" } }]);
+
+        const agent = await createAgent({
+            cwd: home,
+            homes: [home],
+            config: CONFIG(model.url),
+            maxTurns: 2,
+        });
+
+        expect(await agent.send("what is 2+2?")).toBe("stopped after 2 turns without ending.");
         model.stop();
         await rm(home, { recursive: true, force: true });
     });

@@ -214,7 +214,7 @@ describe("actions", () => {
         expect(await runAction("teleport", {}, ctx)).toEqual({
             ok: false,
             content:
-                'unknown action "teleport". Available: run_gadget, load_protocol, create_protocol, create_gadget',
+                'unknown action "teleport". Available: run_gadget, load_protocol, create_protocol, create_gadget, end, compact',
         });
         await cleanup();
     });
