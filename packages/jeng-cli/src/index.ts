@@ -5,6 +5,13 @@ import { renderTui } from "./tui";
 
 const collect = (value: string, previous: string[]) => [...previous, value];
 
+// A piped prompt is only read when no argument was given, because reading stdin
+// blocks until whoever holds the pipe closes it.
+async function piped(): Promise<string> {
+    if (process.stdin.isTTY) return "";
+    return await Bun.stdin.text();
+}
+
 async function once(agent: Agent, prompt: string): Promise<void> {
     // Text streamed before `end` is progress, not the answer, so it goes out as
     // it arrives and the answer is only appended when it is not already there.
@@ -24,10 +31,13 @@ async function once(agent: Agent, prompt: string): Promise<void> {
     process.stdout.write("\n");
 }
 
-new Command()
+await new Command()
     .name("jeng")
     .description("An agent for you.")
-    .argument("[prompt...]", "run a single prompt and exit instead of opening the TUI")
+    .argument(
+        "[prompt...]",
+        "run a single prompt and exit instead of opening the TUI; read from stdin when piped in",
+    )
     .option("--home <dir>", "home folder; repeat for multiple agents", collect, [])
     .option(
         "-c, --config <file>",
@@ -44,8 +54,12 @@ new Command()
         }
 
         const agent = await createAgent({ homes: config.homes, config: config.model });
-        const text = prompt.join(" ");
-        if (text) await once(agent, text);
-        else await renderTui(agent);
+        const text = prompt.length ? prompt.join(" ") : await piped();
+        if (text.trim()) await once(agent, text);
+        else if (process.stdin.isTTY) await renderTui(agent);
+        else {
+            process.stderr.write("no prompt given, on the argument or on stdin\n");
+            process.exit(1);
+        }
     })
-    .parse();
+    .parseAsync();

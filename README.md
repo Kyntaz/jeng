@@ -70,16 +70,25 @@ Run `jeng` on its own for the TUI, or pass a prompt to run once and exit:
 jeng "what files are in src?"
 ```
 
+A prompt can also be piped in, which is how you hand Jeng a whole file:
+
+```sh
+cat src/index.ts | jeng "what does this do?"
+```
+
 The TUI shows the context size the model is actually working with, and has a few keys of its own:
 
-| Key         | Does                                        |
-| ----------- | ------------------------------------------- |
-| `ctrl+esc`  | quit                                        |
-| `ctrl+l`    | clear the conversation and loaded protocols  |
-| `esc`       | interrupt what Jeng is doing right now      |
-| `ctrl+r`    | show or hide what the model is thinking      |
+| Key           | Does                                        |
+| ------------- | ------------------------------------------- |
+| `enter`       | send the prompt                             |
+| `shift+enter` | start a new line in the prompt              |
+| `ctrl+esc`    | quit                                        |
+| `ctrl+l`      | clear the conversation and loaded protocols  |
+| `esc`         | interrupt what Jeng is doing right now      |
+| `ctrl+r`      | show or hide what the model is thinking      |
 
-The line stays focused while Jeng works, so you can keep typing.
+`shift+enter` needs a terminal that reports modified keys, such as any with the kitty keyboard protocol.
+The prompt box stays focused while Jeng works, so you can keep typing.
 Anything you send mid-turn reaches the model between two of its calls instead of cutting the current one short, and `esc` is what cuts it short.
 
 ## How it works?

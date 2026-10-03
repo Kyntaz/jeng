@@ -32,6 +32,50 @@ function fakeModel(scripted: Step[], reasoning = ""): { url: string; stop: () =>
     return { url: `http://localhost:${server.port}/v1`, stop: () => server.stop(true) };
 }
 
+// A model that ends its turn by handing back exactly the prompt it was given,
+// so a test can assert what the user actually wrote reached it.
+function echoModel(): { url: string; stop: () => void } {
+    const server = Bun.serve({
+        port: 0,
+        async fetch(request) {
+            const body = (await request.json()) as { messages: { content: string }[] };
+            const step = {
+                call: JSON.stringify({
+                    action: "end",
+                    content: body.messages.at(-1)?.content ?? "",
+                }),
+            };
+            return new Response(
+                [
+                    `data: ${JSON.stringify({ choices: [{ delta: { tool_calls: [{ id: "call_1", function: { name: "jeng", arguments: step.call } }] } }] })}\n\n`,
+                    "data: [DONE]\n\n",
+                ].join(""),
+                { headers: { "content-type": "text/event-stream" } },
+            );
+        },
+    });
+    return { url: `http://localhost:${server.port}/v1`, stop: () => server.stop(true) };
+}
+
+function runPiped(home: string, prompt: string, model: string) {
+    const proc = Bun.spawn(
+        ["bun", "run", resolve("packages/jeng-cli/src/index.ts"), "--home", home],
+        {
+            cwd: resolve("."),
+            env: {
+                ...process.env,
+                JENG_BASE_URL: model,
+                JENG_MODEL: "fake",
+                JENG_API_KEY: "",
+            },
+            stdin: new Blob([prompt]),
+            stdout: "pipe",
+            stderr: "pipe",
+        },
+    );
+    return proc;
+}
+
 interface Step {
     delta?: string;
     call?: string;
@@ -154,6 +198,38 @@ describe("jeng", () => {
             code: 1,
             message: "config file not found: missing.json",
         });
+    });
+
+    test("takes a prompt piped in on stdin", async () => {
+        const home = await mkdtemp(join(tmpdir(), "jeng-cli-"));
+        const model = echoModel();
+
+        const proc = runPiped(home, "say hi\nfrom a pipe\n", model.url);
+
+        const [stdout, code] = await Promise.all([new Response(proc.stdout).text(), proc.exited]);
+
+        expect({ code, answer: stdout.trim() }).toEqual({
+            code: 0,
+            answer: "say hi\nfrom a pipe",
+        });
+        model.stop();
+        await rm(home, { recursive: true, force: true });
+    });
+
+    test("refuses to start when stdin is piped in but empty", async () => {
+        const home = await mkdtemp(join(tmpdir(), "jeng-cli-"));
+        const model = echoModel();
+
+        const proc = runPiped(home, "\n", model.url);
+
+        const [stderr, code] = await Promise.all([new Response(proc.stderr).text(), proc.exited]);
+
+        expect({ code, message: stderr.trim() }).toEqual({
+            code: 1,
+            message: "no prompt given, on the argument or on stdin",
+        });
+        model.stop();
+        await rm(home, { recursive: true, force: true });
     });
 
     test("prints what --help says it can do", async () => {

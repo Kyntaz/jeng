@@ -1,0 +1,42 @@
+import { BORDER } from "./theme";
+
+const MUTED = "#606070";
+
+export const compact = (tokens: number) =>
+    tokens >= 1000 ? `${(tokens / 1000).toFixed(1)}k` : String(tokens);
+
+export function Header({ homes, tokens }: { homes: string[]; tokens: number }) {
+    // The header and footer stay on one line however narrow the terminal gets,
+    // so the scroll region is the only one that gives up rows.
+    return (
+        <box flexDirection="row" flexWrap="no-wrap" gap={2} paddingLeft={1}>
+            <text fg={BORDER.jeng} wrapMode="none" content="jeng" />
+            <text fg={MUTED} wrapMode="none" content={homes.join(", ")} />
+            <text fg={MUTED} wrapMode="none" content={`ctx ${compact(tokens)}`} />
+        </box>
+    );
+}
+
+export function Footer({
+    busy,
+    showThinking,
+    spinner,
+}: {
+    busy: boolean;
+    showThinking: boolean;
+    spinner: string;
+}) {
+    return (
+        <box flexDirection="row" flexWrap="no-wrap" gap={2} paddingLeft={1}>
+            <text fg={MUTED} wrapMode="none" content="ctrl+esc quit" />
+            <text fg={MUTED} wrapMode="none" content="ctrl+l clear" />
+            <text fg={MUTED} wrapMode="none" content="esc interrupt" />
+            <text
+                fg={showThinking ? BORDER.jeng : MUTED}
+                wrapMode="none"
+                content="ctrl+r thinking"
+            />
+            {busy && <text fg={BORDER.jeng} wrapMode="none" content={`${spinner} thinking`} />}
+        </box>
+    );
+}
