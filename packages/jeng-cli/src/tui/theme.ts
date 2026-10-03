@@ -8,6 +8,7 @@ export const OWNER: Record<Entry["kind"], keyof typeof BORDER | undefined> = {
     jeng: "jeng",
     think: "jeng",
     tool: "jeng",
+    approval: "jeng",
     error: undefined,
 };
 
@@ -16,6 +17,7 @@ export const COLORS: Record<Entry["kind"], string | undefined> = {
     jeng: undefined,
     think: "#6c6c80",
     tool: "#d9a441",
+    approval: "#d19a66",
     error: "#e06c75",
 };
 

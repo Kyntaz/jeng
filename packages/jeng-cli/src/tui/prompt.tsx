@@ -15,9 +15,11 @@ export const PROMPT_KEYS: KeyBinding[] = [
 export function PromptInput({
     input,
     onSubmit,
+    placeholder = "enter to send, shift+enter for a new line",
 }: {
     input: RefObject<TextareaRenderable | null>;
     onSubmit: () => void;
+    placeholder?: string;
 }) {
     return (
         <box border paddingLeft={1} flexShrink={0}>
@@ -29,7 +31,7 @@ export function PromptInput({
                 wrapMode="word"
                 height={4}
                 keyBindings={PROMPT_KEYS}
-                placeholder="enter to send, shift+enter for a new line"
+                placeholder={placeholder}
                 onSubmit={onSubmit}
             />
         </box>

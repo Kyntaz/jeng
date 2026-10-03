@@ -1,5 +1,13 @@
 import { describe, expect, test } from "bun:test";
-import { append, type Entry } from "../../../src/tui/entries";
+import { append, approvalText, type Entry } from "../../../src/tui/entries";
+
+const GADGET = {
+    kind: "gadget",
+    name: "greet",
+    source: "/**\n * name: greet\n */\n\nexport default async () => 'hi'\n",
+    reason: "so i can say hi",
+    replacing: false,
+} as const;
 
 describe("entries", () => {
     test("keeps a run of streamed text as one jeng entry", () => {
@@ -64,5 +72,27 @@ describe("entries", () => {
         const entries: Entry[] = [{ kind: "jeng", text: "hi" }];
 
         expect(append(entries, { type: "usage", promptTokens: 12 })).toEqual(entries);
+    });
+
+    test("shows the user the whole source they are being asked to allow", () => {
+        expect(approvalText(GADGET)).toContain("export default async () => 'hi'");
+    });
+
+    test("names the gadget and the reason it is wanted", () => {
+        const text = approvalText(GADGET);
+
+        expect(text).toContain("create gadget `greet`");
+        expect(text).toContain("why: so i can say hi");
+    });
+
+    test("says so when a gadget is being rewritten rather than created", () => {
+        expect(approvalText({ ...GADGET, replacing: true })).toContain("rewrite gadget `greet`");
+    });
+
+    test("leaves out a reason a protocol does not need", () => {
+        const text = approvalText({ ...GADGET, kind: "protocol", reason: "" });
+
+        expect(text).toContain("create protocol `greet`");
+        expect(text).not.toContain("why:");
     });
 });

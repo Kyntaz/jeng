@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { type AgentEvent, createAgent } from "../../src";
+import { type AgentEvent, type Approve, createAgent } from "../../src";
 
 function fakeModel(scripted: Step[]): {
     url: string;
@@ -67,6 +67,10 @@ const CONFIG = (url: string) => ({
     contextWindow: 8192,
 });
 
+// Most of these sessions never write anything, so the approver only has to be
+// present rather than interesting.
+const allow: Approve = async () => ({ approved: true });
+
 const GADGET =
     // biome-ignore lint/suspicious/noTemplateCurlyInString: gadget source, not a template
     "/**\n * name: greet\n * description: says hi to someone\n */\n\nexport default async (input: { who: string }) => `hi ${input.who}`\n";
@@ -91,10 +95,18 @@ describe("a jeng session", () => {
                 call: JSON.stringify({
                     action: "create_gadget",
                     name: "greet",
+                    reason: "so i can say hi for you",
                     source: "/**\n * name: greet\n * description: says hi\n */\n\nexport default () => {\n",
                 }),
             },
-            { call: JSON.stringify({ action: "create_gadget", name: "greet", source: GADGET }) },
+            {
+                call: JSON.stringify({
+                    action: "create_gadget",
+                    name: "greet",
+                    reason: "so i can say hi for you",
+                    source: GADGET,
+                }),
+            },
             {
                 call: JSON.stringify({
                     action: "run_gadget",
@@ -109,6 +121,7 @@ describe("a jeng session", () => {
             cwd,
             homes: [home],
             config: CONFIG(model.url),
+            approve: allow,
         });
 
         const events: AgentEvent[] = [];
@@ -133,6 +146,43 @@ describe("a jeng session", () => {
         await rm(cwd, { recursive: true, force: true });
     });
 
+    test("hands the user's reason for a refusal back to the model so it can try again", async () => {
+        const home = await mkdtemp(join(tmpdir(), "jeng-e2e-"));
+        const dangerous =
+            "/**\n * name: wipe\n * description: empties the home\n */\n\nexport default async () => await Bun.$`rm -rf *`.quiet()\n";
+        const safe =
+            "/**\n * name: wipe\n * description: counts the files\n */\n\nexport default async () => 'nothing was deleted'\n";
+
+        const model = fakeModel([
+            act({ action: "create_gadget", name: "wipe", reason: "to tidy up", source: dangerous }),
+            act({ action: "create_gadget", name: "wipe", reason: "to count files", source: safe }),
+            end("counted instead of deleting"),
+        ]);
+
+        const asked: string[] = [];
+        const agent = await createAgent({
+            cwd: home,
+            homes: [home],
+            config: CONFIG(model.url),
+            approve: async (request) => {
+                asked.push(request.source);
+                return asked.length === 1
+                    ? { approved: false, reason: "it deletes files" }
+                    : { approved: true };
+            },
+        });
+
+        expect(await agent.send("tidy up the folder")).toBe("counted instead of deleting");
+
+        const requests = model.requests();
+        expect(asked).toEqual([dangerous, safe]);
+        expect(requests[1]).toContain("it deletes files");
+        expect(await Bun.file(join(home, "gadgets", "wipe.ts")).text()).toBe(safe);
+
+        model.stop();
+        await rm(home, { recursive: true, force: true });
+    });
+
     test("pulls a protocol into context only once the model asks for it", async () => {
         const home = await mkdtemp(join(tmpdir(), "jeng-e2e-"));
         await Bun.write(
@@ -149,6 +199,7 @@ describe("a jeng session", () => {
             cwd: home,
             homes: [home],
             config: CONFIG(model.url),
+            approve: allow,
         });
         await agent.send("how do we deploy?");
 
@@ -170,6 +221,7 @@ describe("a jeng session", () => {
             cwd: home,
             homes: [home],
             config: CONFIG(model.url),
+            approve: allow,
         });
         const reply = await agent.send("deploy the thing");
 
@@ -193,6 +245,7 @@ describe("a jeng session", () => {
             cwd: home,
             homes: [home],
             config: CONFIG(model.url),
+            approve: allow,
         });
 
         expect(await agent.send("count the lines")).toBe("done");
@@ -217,6 +270,7 @@ describe("a jeng session", () => {
             cwd: home,
             homes: [home],
             config: CONFIG(model.url),
+            approve: allow,
         });
         await agent.send("how do we deploy?");
         await agent.send("say it again");
@@ -249,6 +303,7 @@ describe("a jeng session", () => {
             cwd: home,
             homes: [home],
             config: CONFIG(model.url),
+            approve: allow,
         });
         await agent.send("how do we deploy?");
         agent.clear();
@@ -273,6 +328,7 @@ describe("a jeng session", () => {
             cwd: home,
             homes: [home],
             config: CONFIG(model.url),
+            approve: allow,
         });
 
         expect(await agent.send("what is 2+2?")).toBe("4");
@@ -289,6 +345,7 @@ describe("a jeng session", () => {
             cwd: home,
             homes: [home],
             config: CONFIG(model.url),
+            approve: allow,
         });
         await agent.send("what is 2+2?");
 
@@ -308,6 +365,7 @@ describe("a jeng session", () => {
             cwd: home,
             homes: [home],
             config: CONFIG(model.url),
+            approve: allow,
         });
         await agent.send("count the lines in src, and keep going");
 
@@ -335,6 +393,7 @@ describe("a jeng session", () => {
             cwd: home,
             homes: [home],
             config: CONFIG(model.url),
+            approve: allow,
         });
         await agent.send("deploy it");
 
@@ -354,6 +413,7 @@ describe("a jeng session", () => {
             cwd: home,
             homes: [home],
             config: CONFIG(model.url),
+            approve: allow,
         });
         await agent.send("deploy it");
 
@@ -373,6 +433,7 @@ describe("a jeng session", () => {
             cwd: home,
             homes: [home],
             config: CONFIG(model.url),
+            approve: allow,
         });
         const sending = agent.send("how do we deploy?");
         await model.arrived(1);
@@ -392,6 +453,7 @@ describe("a jeng session", () => {
             cwd: home,
             homes: [home],
             config: CONFIG(model.url),
+            approve: allow,
         });
         await agent.send("deploy it");
         agent.inject("one more thing");
@@ -417,6 +479,7 @@ describe("a jeng session", () => {
             cwd: home,
             homes: [home],
             config: CONFIG(model.url),
+            approve: allow,
         });
         const controller = new AbortController();
         const sending = agent.send("how do we deploy?", { signal: controller.signal });
@@ -437,6 +500,7 @@ describe("a jeng session", () => {
             cwd: home,
             homes: [home],
             config: CONFIG(model.url),
+            approve: allow,
             maxTurns: 2,
         });
 

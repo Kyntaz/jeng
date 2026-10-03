@@ -13,8 +13,8 @@ This should make Jeng particularly well suited to work with local or weaker mode
 - **Gadget** is a bun script, written in TypeScript, with a special header with information describing how to use the gadget that is added to Jeng's context.
 - **Protocol** is a Markdown file with information committed by Jeng, including a special header that gives Jeng information about when it should load the protocol.
 - **Action** is something that Jeng can do out-of-the-box.
-    - **Create Gadget** creates a new Gadget that can be used later. This checks the Gadget to make sure it is valid and rejects it otherwise.
-    - **Create Protocol** creates a new Protocol that can be referenced later. This checks the structure of the protocol to make sure it is valid and rejects it otherwise.
+    - **Create Gadget** creates a new Gadget that can be used later. This checks the Gadget to make sure it is valid and rejects it otherwise, then puts it to the user to approve.
+    - **Create Protocol** creates a new Protocol that can be referenced later. This checks the structure of the protocol to make sure it is valid and rejects it otherwise, then puts it to the user to approve.
     - **End** hands control back to the user. It is the only way a turn finishes, so an answer is a call rather than text.
     - **Compact** replaces the transcript with a summary the model writes, so a long turn can keep going instead of running out of context.
 - **Config file** is a JSON file named through `-c`/`--config`, holding the homes to load and the model to talk to.
@@ -94,8 +94,8 @@ A gadget's default export takes the action's `input` and its return value become
 
 - Rejections are phrased as one sentence naming the offending field, because that sentence is read by the model, who then gets to fix its own attempt.
 - Nothing is written until validation passes, so a rejected creation leaves the home exactly as it was.
-- A gadget is compiled but never executed at creation time, so writing a gadget cannot run arbitrary code before you have looked at it.
-- A gadget whose name already exists is overwritten rather than rejected, because the model has no way to edit a file it is unhappy with. It is still validated first, so a rewrite cannot be a way in either.
+- A gadget is compiled but never executed at creation time, so writing a gadget cannot run arbitrary code before anyone has looked at it.
+- A gadget whose name already exists is overwritten rather than rejected, because the model has no way to edit a file it is unhappy with. It is still validated first, so a rewrite cannot be a way in either, and it is still approved, so a rewrite cannot be a way around being read.
 
 ## Stack
 

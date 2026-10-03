@@ -21,11 +21,23 @@ export function Footer({
     busy,
     showThinking,
     spinner,
+    approving,
 }: {
     busy: boolean;
     showThinking: boolean;
     spinner: string;
+    approving?: string;
 }) {
+    // A pending request replaces the keys rather than joining them, because it is
+    // the only thing the user can act on until they answer it.
+    if (approving)
+        return (
+            <box flexDirection="row" flexWrap="no-wrap" gap={2} paddingLeft={1}>
+                <text fg={BORDER.jeng} wrapMode="none" content={`enter approve ${approving}`} />
+                <text fg={MUTED} wrapMode="none" content="type why to reject" />
+            </box>
+        );
+
     return (
         <box flexDirection="row" flexWrap="no-wrap" gap={2} paddingLeft={1}>
             <text fg={MUTED} wrapMode="none" content="ctrl+esc quit" />

@@ -57,9 +57,9 @@ function echoModel(): { url: string; stop: () => void } {
     return { url: `http://localhost:${server.port}/v1`, stop: () => server.stop(true) };
 }
 
-function runPiped(home: string, prompt: string, model: string) {
+function runPiped(home: string, prompt: string, model: string, args: string[] = []) {
     const proc = Bun.spawn(
-        ["bun", "run", resolve("packages/jeng-cli/src/index.ts"), "--home", home],
+        ["bun", "run", resolve("packages/jeng-cli/src/index.ts"), "--home", home, ...args],
         {
             cwd: resolve("."),
             env: {
@@ -82,6 +82,26 @@ interface Step {
 }
 
 const end = (content: string) => ({ call: JSON.stringify({ action: "end", content }) });
+
+// A model that tries to build a gadget and then answers, so a test can see
+// whether the home grew.
+function buildingModel(): { url: string; stop: () => void } {
+    const source =
+        "/**\n * name: shout\n * description: upper cases the text\n */\n\nexport default async (input: { text: string }) => input.text.toUpperCase()\n";
+    return fakeModel([
+        {
+            call: JSON.stringify({
+                action: "create_gadget",
+                name: "shout",
+                reason: "to shout what you tell me",
+                source,
+            }),
+        },
+        end("built it"),
+    ]);
+}
+
+const gadget = (home: string) => join(home, "gadgets", "shout.ts");
 
 function run(home: string, prompt: string, model: string, args: string[] = []) {
     return Bun.spawn(
@@ -241,6 +261,36 @@ describe("jeng", () => {
 
         expect(help).toContain("--home");
         expect(help).toContain("-c, --config");
+        expect(help).toContain("-y, --yes");
         expect(help).toContain("run a single prompt and exit");
+    });
+
+    test("writes no gadget when a piped run has nobody to approve it", async () => {
+        const home = await mkdtemp(join(tmpdir(), "jeng-cli-"));
+        const model = buildingModel();
+
+        const proc = runPiped(home, "make me a gadget that shouts\n", model.url);
+
+        const [stderr, code] = await Promise.all([new Response(proc.stderr).text(), proc.exited]);
+
+        expect(code).toBe(0);
+        expect(stderr).toContain("there is no terminal to approve on");
+        expect(await Bun.file(gadget(home)).exists()).toBe(false);
+        model.stop();
+        await rm(home, { recursive: true, force: true });
+    });
+
+    test("writes the gadget when --yes says to stop asking", async () => {
+        const home = await mkdtemp(join(tmpdir(), "jeng-cli-"));
+        const model = buildingModel();
+
+        const proc = runPiped(home, "make me a gadget that shouts\n", model.url, ["--yes"]);
+
+        const [code] = await Promise.all([proc.exited]);
+
+        expect(code).toBe(0);
+        expect(await Bun.file(gadget(home)).exists()).toBe(true);
+        model.stop();
+        await rm(home, { recursive: true, force: true });
     });
 });

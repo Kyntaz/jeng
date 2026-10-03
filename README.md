@@ -76,11 +76,14 @@ A prompt can also be piped in, which is how you hand Jeng a whole file:
 cat src/index.ts | jeng "what does this do?"
 ```
 
+A piped run has no terminal to ask on, so it cannot create anything: pass `-y`/`--yes` if the
+run is yours and you trust it to write to the home folder.
+
 The TUI shows the context size the model is actually working with, and has a few keys of its own:
 
 | Key           | Does                                        |
 | ------------- | ------------------------------------------- |
-| `enter`       | send the prompt                             |
+| `enter`       | send the prompt, or approve what Jeng asks  |
 | `shift+enter` | start a new line in the prompt              |
 | `ctrl+esc`    | quit                                        |
 | `ctrl+l`      | clear the conversation and loaded protocols  |
@@ -144,13 +147,6 @@ run `make deploy`, then watch the logs for five minutes before walking away.
 
 Both a gadget and a protocol are validated before they are written to disk.
 A gadget that doesn't compile or is missing its header is rejected with the reason, and Jeng gets to try again.
-
-## Context
-
-The first line of Jeng's context is how much of it is gone, because a model cannot work that out for itself.
-Tell it the size of the window with `contextWindow` or `JENG_CONTEXT`, and once it gets near that line Jeng summarizes the conversation so far and carries on from the summary instead of stopping.
-Jeng writes that summary itself, and forgets the transcript that came before it.
-Protocols it has loaded are memory rather than conversation, so those survive.
 
 ## Why "Jeng"?
 

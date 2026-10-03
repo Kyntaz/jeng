@@ -12,6 +12,7 @@ function stubAgent(sent: string[], answer = "done"): Agent {
         memory: [],
         clear: () => {},
         inject: (text) => sent.push(text),
+        setApprove: () => {},
         send: async (prompt) => {
             sent.push(prompt);
             return answer;

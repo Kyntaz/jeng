@@ -1,7 +1,7 @@
-import type { AgentEvent } from "@jeng/core";
+import type { AgentEvent, Approval } from "@jeng/core";
 
 export interface Entry {
-    kind: "user" | "jeng" | "think" | "tool" | "error";
+    kind: "user" | "jeng" | "think" | "tool" | "error" | "approval";
     text: string;
 }
 
@@ -29,6 +29,17 @@ export function append(entries: Entry[], event: AgentEvent): Entry[] {
         case "usage":
             return entries;
     }
+}
+
+// The whole source goes in, because the point of the request is that the user
+// reads what they are being asked to allow rather than a summary of it.
+export function approvalText(request: Approval): string {
+    return [
+        `⚑ ${request.replacing ? "rewrite" : "create"} ${request.kind} \`${request.name}\``,
+        ...(request.reason ? [`why: ${request.reason}`] : []),
+        "",
+        request.source,
+    ].join("\n");
 }
 
 function describe(args: Record<string, unknown>): string {

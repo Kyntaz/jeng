@@ -1,5 +1,6 @@
 import { type ActionContext, JENG_TOOL, runAction } from "./actions";
 import { loadAgentsFiles } from "./agents";
+import type { Approve } from "./approve";
 import { defaultHome, defaultModel } from "./config";
 import { buildContext, type Memory } from "./context";
 import { type Home, loadHomes } from "./home";
@@ -22,6 +23,9 @@ export interface Agent {
     memory: Memory[];
     clear: () => void;
     inject: (text: string) => void;
+    // A UI has no approver until it has rendered, so this is how one takes over
+    // from the handler the agent was built with.
+    setApprove: (approve: Approve) => void;
     send(
         prompt: string,
         options?: { signal?: AbortSignal; onEvent?: (event: AgentEvent) => void },
@@ -34,14 +38,16 @@ export interface AgentOptions {
     config?: ModelConfig;
     history?: Message[];
     maxTurns?: number;
+    approve: Approve;
 }
 
-export async function createAgent(options: AgentOptions = {}): Promise<Agent> {
+export async function createAgent(options: AgentOptions): Promise<Agent> {
     const cwd = options.cwd ?? process.cwd();
     const config = options.config ?? defaultModel();
     const homes = await loadHomes(options.homes ?? [defaultHome()]);
     const agentsFiles = await loadAgentsFiles(cwd);
-    const ctx: ActionContext = { homes, cwd };
+    let approve = options.approve;
+    const ctx: ActionContext = { homes, cwd, approve: (request) => approve(request) };
     const history = options.history ?? [];
     const memory: Memory[] = [];
     const maxTurns = options.maxTurns ?? Infinity;
@@ -200,6 +206,9 @@ export async function createAgent(options: AgentOptions = {}): Promise<Agent> {
         history,
         memory,
         clear,
+        setApprove: (next) => {
+            approve = next;
+        },
         inject: (text: string) => {
             pending.push(text);
         },

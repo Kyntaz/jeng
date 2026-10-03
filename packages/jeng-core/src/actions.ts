@@ -1,4 +1,5 @@
 import { join } from "node:path";
+import { type Approve, type Review, review } from "./approve";
 import { runGadget } from "./gadget";
 import { parseGadget, writeProtocol } from "./header";
 import { type Home, loadHome } from "./home";
@@ -31,8 +32,11 @@ export const JENG_TOOL = {
         "  the top of your context is near its limit, summarize and call this.",
         'action="run_gadget", name=<existing gadget>, input=<object>',
         "  Run a gadget. `name` must be a gadget listed under Gadgets in your context.",
-        'action="create_gadget", name=<new kebab-case name>, description=<one line>, source=<TypeScript>',
+        'action="create_gadget", name=<new kebab-case name>, reason=<why you need it>, description=<one line>, source=<TypeScript>',
         "  Write a gadget you do not have yet.",
+        "  The user reads the whole file and decides, so reason is required and must be honest:",
+        "  they are about to let code run on their machine. If they say no you are told why, so",
+        "  change the gadget and ask again rather than repeating the call.",
         "  source must be a complete TypeScript file that starts with this exact 4-line comment",
         "  header, where the words `name:` and `description:` are literal and required:",
         "",
@@ -49,6 +53,8 @@ export const JENG_TOOL = {
         "  Pull a protocol's body into your context. Use it when the protocol's `when` matches the task.",
         'action="create_protocol", name=<new kebab-case name>, when=<when to load it>, description=<one line>, content=<knowledge>',
         "  Save knowledge worth keeping. Never save a guess: only what you actually learned.",
+        "  The user reads it before it is committed, to check the memory is right rather than the",
+        "  prose, so there is no reason to give.",
         "",
         "After every call you get a result. Read it before deciding what to do next.",
         "If a result is an error, do not repeat that same call. Change the arguments, or end without it.",
@@ -69,6 +75,11 @@ export const JENG_TOOL = {
                 description: "for create_protocol: when to load this protocol",
             },
             description: { type: "string" },
+            reason: {
+                type: "string",
+                description:
+                    "for create_gadget: why you need this gadget, in one line. the user reads it before deciding",
+            },
             content: {
                 type: "string",
                 description:
@@ -90,6 +101,7 @@ export const JENG_TOOL = {
 export interface ActionContext {
     homes: Home[];
     cwd: string;
+    approve: Approve;
 }
 
 const primaryHome = (ctx: ActionContext) => ctx.homes[0]?.dir ?? join(ctx.cwd, ".jeng");
@@ -162,6 +174,18 @@ async function createProtocolAction(
     if (!valid.ok) return { ok: false, content: valid.error };
 
     const dir = join(primaryHome(ctx), "protocols");
+
+    // A protocol is only text, so there is nothing to justify; the user is
+    // confirming the memory is right rather than judging how it worded itself.
+    const approved = await review(ctx.approve, {
+        kind: "protocol",
+        name,
+        source,
+        reason: "",
+        replacing: false,
+    });
+    if (!approved.ok) return { ok: false, content: approved.error };
+
     await Bun.$`mkdir -p ${dir}`.quiet();
     await Bun.write(join(dir, `${name}.md`), source);
     await refreshPrimary(ctx);
@@ -173,6 +197,16 @@ async function createGadgetAction(
     ctx: ActionContext,
     args: Record<string, unknown>,
 ): Promise<ActionResult> {
+    // The user is about to let code run on their machine, so a gadget that
+    // cannot say why it is wanted is refused before anyone is asked about it.
+    const reason = String(args.reason ?? "").trim();
+    if (!reason)
+        return {
+            ok: false,
+            content:
+                "create_gadget needs a `reason`: the user reads it to decide whether to allow the gadget",
+        };
+
     const source = String(args.source ?? "");
     const valid = validateGadget(source);
     if (!valid.ok) return { ok: false, content: valid.error };
@@ -188,16 +222,24 @@ async function createGadgetAction(
     const temp = join(dir, `.pending-${name}.ts`);
     await Bun.write(temp, source);
 
+    // Compiled but never run, so the source the user is shown is the source that
+    // lands, and they are never asked about a gadget that would not build.
     const compiles = await validateGadgetSyntax(temp);
-    if (!compiles.ok) {
-        await Bun.file(temp).delete();
-        return { ok: false, content: compiles.error };
-    }
+    const approved: Review = compiles.ok
+        ? await review(ctx.approve, {
+              kind: "gadget",
+              name,
+              source,
+              reason,
+              replacing: Boolean(existing),
+          })
+        : { ok: false, error: compiles.error };
+    await Bun.file(temp).delete();
+    if (!approved.ok) return { ok: false, content: approved.error };
 
     // The model cannot edit files, so rewriting a gadget it is unhappy with is
     // the only way it can fix one. Validation has already passed either way.
     await Bun.write(join(dir, `${name}.ts`), source);
-    await Bun.file(temp).delete();
     await refreshPrimary(ctx);
 
     return {

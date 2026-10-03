@@ -1,4 +1,4 @@
-import type { Agent } from "@jeng/core";
+import type { Agent, Approval, ApprovalDecision } from "@jeng/core";
 import {
     createCliRenderer,
     type ScrollBoxRenderable,
@@ -6,7 +6,7 @@ import {
 } from "@opentui/core";
 import { createRoot, useKeyboard } from "@opentui/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { append, type Entry } from "./entries";
+import { append, approvalText, type Entry } from "./entries";
 import { PromptInput } from "./prompt";
 import { useSpinner } from "./spinner";
 import { Footer, Header } from "./status";
@@ -30,13 +30,49 @@ export function App({ agent, onExit }: { agent: Agent; onExit: () => void }) {
     const [busy, setBusy] = useState(false);
     const [tokens, setTokens] = useState(0);
     const [showThinking, setShowThinking] = useState(false);
+    const [approval, setApproval] = useState<Approval | undefined>(undefined);
     const input = useRef<TextareaRenderable>(null);
     const scroller = useRef<ScrollBoxRenderable>(null);
     const running = useRef<AbortController | undefined>(undefined);
+    const deciding = useRef<((decision: ApprovalDecision) => void) | undefined>(undefined);
     const spinner = useSpinner(busy);
+
+    // The agent cannot have a UI approver until there is a UI, so it is handed one
+    // here rather than at construction.
+    useEffect(() => {
+        agent.setApprove(
+            (request) =>
+                new Promise<ApprovalDecision>((resolve) => {
+                    deciding.current = resolve;
+                    setEntries((current) => [
+                        ...current,
+                        { kind: "approval", text: approvalText(request) },
+                    ]);
+                    setApproval(request);
+                }),
+        );
+    }, [agent]);
+
+    const answer = useCallback((decision: ApprovalDecision) => {
+        setApproval(undefined);
+        setEntries((current) => [
+            ...current,
+            decision.approved
+                ? { kind: "tool", text: "↳ approved" }
+                : { kind: "error", text: `rejected: ${decision.reason}` },
+        ]);
+        deciding.current?.(decision);
+        deciding.current = undefined;
+    }, []);
 
     useKeyboard((key) => {
         if (key.ctrl && key.name === "escape") onExit();
+        // A pending request is the one place escape cannot mean abort, because the
+        // turn is waiting on a human rather than on the model.
+        if (!key.ctrl && key.name === "escape" && approval) {
+            answer({ approved: false, reason: "the user interrupted" });
+            return;
+        }
         // Focus is set declaratively from the `focused` prop and stays true, so
         // nothing can pull the cursor out of the line. Escape means nothing when
         // idle, which keeps it from eating a keystroke the user meant to type.
@@ -51,8 +87,16 @@ export function App({ agent, onExit }: { agent: Agent; onExit: () => void }) {
 
     const submit = useCallback(async () => {
         const prompt = input.current?.plainText.trim() ?? "";
-        if (!prompt) return;
         input.current?.clear();
+
+        // The box doubles as the answer to a request, so submitting while one is
+        // pending decides it rather than sending another prompt.
+        if (approval) {
+            answer(prompt ? { approved: false, reason: prompt } : { approved: true });
+            return;
+        }
+        if (!prompt) return;
+
         setEntries((current) => [...current, { kind: "user", text: prompt }]);
 
         // The prompt box stays focused while jeng works, so a message typed here
@@ -90,7 +134,7 @@ export function App({ agent, onExit }: { agent: Agent; onExit: () => void }) {
             running.current = undefined;
             setBusy(false);
         }
-    }, [agent, busy]);
+    }, [agent, approval, answer, busy]);
 
     const visible = useMemo(
         () => (showThinking ? entries : entries.filter((entry) => entry.kind !== "think")),
@@ -135,13 +179,22 @@ export function App({ agent, onExit }: { agent: Agent; onExit: () => void }) {
                 {busy && (
                     <box flexDirection="row" gap={1} paddingLeft={1}>
                         <text fg={BORDER.jeng} content={spinner} />
-                        <text fg="#606070" content="thinking" />
+                        <text fg="#606070" content={approval ? "waiting for you" : "thinking"} />
                     </box>
                 )}
             </scrollbox>
 
-            <PromptInput input={input} onSubmit={() => void submit()} />
-            <Footer busy={busy} showThinking={showThinking} spinner={spinner} />
+            <PromptInput
+                input={input}
+                onSubmit={() => void submit()}
+                placeholder={approval ? "enter to approve, or write why to reject" : undefined}
+            />
+            <Footer
+                busy={busy}
+                showThinking={showThinking}
+                spinner={spinner}
+                approving={approval?.name}
+            />
         </box>
     );
 }
