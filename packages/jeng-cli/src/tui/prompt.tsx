@@ -15,10 +15,14 @@ export const PROMPT_KEYS: KeyBinding[] = [
 export function PromptInput({
     input,
     onSubmit,
+    focused = true,
     placeholder = "enter to send, shift+enter for a new line",
 }: {
     input: RefObject<TextareaRenderable | null>;
     onSubmit: () => void;
+    // A gadget's interface holds the keys while it is up, so the prompt gives them
+    // up rather than competing for the same keystroke.
+    focused?: boolean;
     placeholder?: string;
 }) {
     return (
@@ -27,7 +31,7 @@ export function PromptInput({
                 only meaningful while the box is still empty. */}
             <textarea
                 ref={input}
-                focused
+                focused={focused}
                 wrapMode="word"
                 height={4}
                 keyBindings={PROMPT_KEYS}

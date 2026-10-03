@@ -7,6 +7,8 @@ export interface GadgetRef {
     description: string;
     when: string;
     file: string;
+    /** Whether the gadget draws its own interface, which is a claim about the user, not the code. */
+    ui: boolean;
 }
 
 export type ProtocolRef = GadgetRef;
@@ -37,6 +39,7 @@ async function describe(
         name: header?.name || fallback,
         description: header?.description ?? "",
         when: header?.when ?? "",
+        ui: header?.ui === "true",
     };
 }
 

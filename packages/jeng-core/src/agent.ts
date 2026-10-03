@@ -5,6 +5,7 @@ import { defaultHome, defaultModel } from "./config";
 import { buildContext, type Memory } from "./context";
 import { type Home, loadHomes } from "./home";
 import { chat, type Message, type ModelConfig } from "./model";
+import type { Ui, Widget } from "./ui";
 
 const NUDGE =
     'That was plain text, which does not reach the user. Call action="end" with that answer now, or call a tool if you still need one.';
@@ -13,6 +14,7 @@ export type AgentEvent =
     | { type: "text"; text: string }
     | { type: "reasoning"; text: string }
     | { type: "tool"; action: string; args: Record<string, unknown> }
+    | { type: "view"; widget: Widget }
     | { type: "result"; content: string; ok: boolean }
     | { type: "usage"; promptTokens: number };
 
@@ -26,6 +28,8 @@ export interface Agent {
     // A UI has no approver until it has rendered, so this is how one takes over
     // from the handler the agent was built with.
     setApprove: (approve: Approve) => void;
+    // Handing over an interface is what makes a run anything but headless.
+    setUi: (ui: Ui) => void;
     send(
         prompt: string,
         options?: { signal?: AbortSignal; onEvent?: (event: AgentEvent) => void },
@@ -47,7 +51,13 @@ export async function createAgent(options: AgentOptions): Promise<Agent> {
     const homes = await loadHomes(options.homes ?? [defaultHome()]);
     const agentsFiles = await loadAgentsFiles(cwd);
     let approve = options.approve;
-    const ctx: ActionContext = { homes, cwd, approve: (request) => approve(request) };
+    let hostUi: Ui | undefined;
+    const ctx: ActionContext = {
+        homes,
+        cwd,
+        approve: (request) => approve(request),
+        ui: undefined,
+    };
     const history = options.history ?? [];
     const memory: Memory[] = [];
     const maxTurns = options.maxTurns ?? Infinity;
@@ -59,6 +69,15 @@ export async function createAgent(options: AgentOptions): Promise<Agent> {
         sendOptions: { signal?: AbortSignal; onEvent?: (event: AgentEvent) => void } = {},
     ): Promise<string> {
         const { signal, onEvent } = sendOptions;
+        const owned = hostUi;
+        // The interface belongs to the host and outlives the turn, while the widgets
+        // it draws belong to this turn's stream, so the two are joined here.
+        ctx.ui = owned
+            ? async (widget) => {
+                  onEvent?.({ type: "view", widget });
+                  return await owned(widget);
+              }
+            : undefined;
         // Anything injected after the last turn ended never got read by the
         // model, so it becomes part of the conversation before this prompt
         // rather than an oddity trailing the next one.
@@ -76,6 +95,7 @@ export async function createAgent(options: AgentOptions): Promise<Agent> {
             messages[0].content = buildContext(ctx.homes, agentsFiles, memory, {
                 tokens: promptTokens,
                 contextWindow: config.contextWindow,
+                ui: Boolean(ctx.ui),
             });
 
             // The previous iteration always ended with a result rather than a
@@ -208,6 +228,9 @@ export async function createAgent(options: AgentOptions): Promise<Agent> {
         clear,
         setApprove: (next) => {
             approve = next;
+        },
+        setUi: (next) => {
+            hostUi = next;
         },
         inject: (text: string) => {
             pending.push(text);

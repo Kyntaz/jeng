@@ -86,9 +86,12 @@ The TUI shows the context size the model is actually working with, and has a few
 | `enter`       | send the prompt, or approve what Jeng asks  |
 | `shift+enter` | start a new line in the prompt              |
 | `ctrl+esc`    | quit                                        |
-| `ctrl+l`      | clear the conversation and loaded protocols  |
+| `ctrl+l`      | clear the conversation and loaded protocols |
 | `esc`         | interrupt what Jeng is doing right now      |
 | `ctrl+r`      | show or hide what the model is thinking      |
+
+When a gadget puts an interface in front of you, the prompt box gives up the keys until you have
+answered it and `tab` walks between its fields.
 
 `shift+enter` needs a terminal that reports modified keys, such as any with the kitty keyboard protocol.
 The prompt box stays focused while Jeng works, so you can keep typing.
@@ -129,6 +132,54 @@ export default async (input: { who: string }) => `hi ${input.who}`
 
 Jeng only ever sees the name and the description, so write the description for the model, not for yourself.
 Name the input fields in it: that description is all Jeng has to go on when it later calls the gadget.
+
+### Gadgets with an interface
+
+A gadget can take a second argument and put an interface of its own in front of the user:
+
+```ts
+/**
+ * name: pick-branch
+ * ui: true
+ * description: asks which branch to switch to. input: { repo: string }
+ */
+
+export default async (input: { repo: string }, ui: Ui) => {
+    ui({ kind: "text", content: `${input.repo} is on ${await branch(input.repo)}` });
+
+    const answers = await ui({
+        kind: "box",
+        direction: "col",
+        children: [
+            { kind: "select", name: "branch", question: "which branch?", options: branches(input.repo) },
+            { kind: "input", name: "why", question: "why that one?" },
+        ],
+    });
+
+    if (!answers.branch) return "the user changed their mind";
+    return await Bun.$`git -C ${input.repo} checkout ${answers.branch}`.text();
+}
+```
+
+`ui` draws a tree of widgets and waits, so one call is one round trip: everything in that tree is asked
+in one go, and what comes back is `{ name: answer }` for every field the user filled in. A field they
+walked away from is missing rather than empty. `tab` moves between fields, `enter` answers the focused
+one, the form is sent as soon as the last field has an answer, and `esc` abandons it.
+
+Ask Jeng for the language before writing one:
+
+```json
+{"action": "load_ui"}
+```
+
+A widget is `text`, `markdown`, `code`, `diff`, `box`, `select`, `input` or `textarea`, and only the
+last three ask the user anything. Markdown gives headings, lists and tables; `diff` wants a real
+unified diff, which is what `git diff` already hands you.
+
+> A gadget that draws needs `* ui: true` in its header, or Jeng will not offer it to itself later.
+> It can only run where there is a terminal to draw on, which is the TUI: a piped or one-shot run has
+> nowhere to show it, so those gadgets are left out of Jeng's list entirely and Jeng is told to say so
+> rather than to try.
 
 ## Protocols
 

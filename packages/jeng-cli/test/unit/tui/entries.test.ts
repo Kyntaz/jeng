@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import type { Widget } from "@jeng/core";
 import { append, approvalText, type Entry } from "../../../src/tui/entries";
 
 const GADGET = {
@@ -30,7 +31,7 @@ describe("entries", () => {
     test("serializes args that are not strings as json", () => {
         const entries = append([], { type: "tool", action: "run", args: { lines: [1, 2] } });
 
-        expect(entries.at(-1)?.text).toContain("lines=[1,2]");
+        expect(entries).toEqual([{ kind: "tool", text: "⚙ run lines=[1,2]" }]);
     });
 
     test("cuts the args off so a tool line stays one line", () => {
@@ -40,7 +41,13 @@ describe("entries", () => {
             args: { text: "x".repeat(200) },
         });
 
-        expect((entries.at(-1)?.text.length ?? 0) <= 86).toBe(true);
+        expect(entries).toEqual([{ kind: "tool", text: `⚙ run text=${"x".repeat(75)}` }]);
+    });
+
+    test("keeps a widget a gadget drew as an entry of its own", () => {
+        const widget: Widget = { kind: "select", name: "branch", question: "which?", options: [] };
+
+        expect(append([], { type: "view", widget })).toEqual([{ kind: "view", widget }]);
     });
 
     test("keeps a run of reasoning as one think entry", () => {

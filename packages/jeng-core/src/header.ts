@@ -2,9 +2,11 @@ export interface Header {
     name: string;
     description: string;
     when: string;
+    /** Whether a gadget draws and asks, which a run with no UI to draw on cannot do. */
+    ui: string;
 }
 
-export const EMPTY: Header = { name: "", description: "", when: "" };
+export const EMPTY: Header = { name: "", description: "", when: "", ui: "" };
 
 const FENCE = /^---\r?\n([\s\S]*?)\r?\n---[ \t]*\r?\n?/;
 const COMMENT = /^\s*\/\*\*([\s\S]*?)\*\//;
@@ -19,6 +21,7 @@ function fields(block: string): Header {
         name: values.name ?? "",
         description: values.description ?? "",
         when: values.when ?? "",
+        ui: values.ui ?? "",
     };
 }
 
@@ -32,7 +35,7 @@ export function parseGadget(source: string): Header | null {
     return match ? fields(match[1]) : null;
 }
 
-export function writeProtocol(header: Header, body: string): string {
+export function writeProtocol(header: Omit<Header, "ui">, body: string): string {
     const lines = Object.entries(header)
         .filter(([, value]) => value)
         .map(([key, value]) => `${key}: ${value}`);

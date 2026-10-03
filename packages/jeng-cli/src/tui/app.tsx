@@ -1,4 +1,11 @@
-import type { Agent, Approval, ApprovalDecision } from "@jeng/core";
+import {
+    type Agent,
+    type Answers,
+    type Approval,
+    type ApprovalDecision,
+    fields,
+    type Widget,
+} from "@jeng/core";
 import {
     createCliRenderer,
     type ScrollBoxRenderable,
@@ -7,11 +14,18 @@ import {
 import { createRoot, useKeyboard } from "@opentui/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { append, approvalText, type Entry } from "./entries";
+import { Panel } from "./panel";
 import { PromptInput } from "./prompt";
 import { useSpinner } from "./spinner";
 import { Footer, Header } from "./status";
 import { BORDER } from "./theme";
 import { BlockView, blocks } from "./transcript";
+
+/** A gadget's interface, waiting on a user who has not answered it yet. */
+interface Ask {
+    widget: Widget;
+    resolve: (answers: Answers) => void;
+}
 
 export async function renderTui(agent: Agent): Promise<void> {
     const renderer = await createCliRenderer({ exitOnCtrlC: true });
@@ -31,6 +45,7 @@ export function App({ agent, onExit }: { agent: Agent; onExit: () => void }) {
     const [tokens, setTokens] = useState(0);
     const [showThinking, setShowThinking] = useState(false);
     const [approval, setApproval] = useState<Approval | undefined>(undefined);
+    const [asking, setAsking] = useState<Ask[]>([]);
     const input = useRef<TextareaRenderable>(null);
     const scroller = useRef<ScrollBoxRenderable>(null);
     const running = useRef<AbortController | undefined>(undefined);
@@ -38,7 +53,9 @@ export function App({ agent, onExit }: { agent: Agent; onExit: () => void }) {
     const spinner = useSpinner(busy);
 
     // The agent cannot have a UI approver until there is a UI, so it is handed one
-    // here rather than at construction.
+    // here rather than at construction. The same goes for the interface a gadget
+    // draws on, which is why handing this over is what makes the run anything but
+    // headless.
     useEffect(() => {
         agent.setApprove(
             (request) =>
@@ -49,6 +66,15 @@ export function App({ agent, onExit }: { agent: Agent; onExit: () => void }) {
                         { kind: "approval", text: approvalText(request) },
                     ]);
                     setApproval(request);
+                }),
+        );
+        agent.setUi(
+            (widget) =>
+                new Promise<Answers>((resolve) => {
+                    // Nothing to ask is nothing to wait for, so a widget that only
+                    // draws goes straight to the transcript and out of the way.
+                    if (fields(widget).length === 0) resolve({});
+                    else setAsking((current) => [...current, { widget, resolve }]);
                 }),
         );
     }, [agent]);
@@ -65,19 +91,41 @@ export function App({ agent, onExit }: { agent: Agent; onExit: () => void }) {
         deciding.current = undefined;
     }, []);
 
+    // An answer belongs to the widget it came from, which is the same object the
+    // transcript entry was built from, so nothing has to be numbered to find it.
+    const settle = useCallback((ask: Ask, answers: Answers) => {
+        setAsking((current) => current.filter((it) => it !== ask));
+        setEntries((current) =>
+            current.map((entry) =>
+                entry.kind === "view" && entry.widget === ask.widget
+                    ? { ...entry, answers }
+                    : entry,
+            ),
+        );
+        ask.resolve(answers);
+    }, []);
+
     useKeyboard((key) => {
         if (key.ctrl && key.name === "escape") onExit();
-        // A pending request is the one place escape cannot mean abort, because the
+        // A pending ask is the one place escape cannot mean abort, because the
         // turn is waiting on a human rather than on the model.
+        if (!key.ctrl && key.name === "escape" && asking.length) {
+            settle(asking[0], {});
+            return;
+        }
         if (!key.ctrl && key.name === "escape" && approval) {
             answer({ approved: false, reason: "the user interrupted" });
             return;
         }
-        // Focus is set declaratively from the `focused` prop and stays true, so
-        // nothing can pull the cursor out of the line. Escape means nothing when
+        // Focus is set declaratively from the `focused` prop, which the prompt box
+        // gives up while a gadget's interface is up. Escape means nothing when
         // idle, which keeps it from eating a keystroke the user meant to type.
         if (!key.ctrl && key.name === "escape" && busy) running.current?.abort();
         if (key.ctrl && key.name === "l") {
+            // Anything still waiting on an answer would wait forever once the
+            // transcript it was drawn in is gone.
+            for (const ask of asking) ask.resolve({});
+            setAsking([]);
             agent.clear();
             setEntries([]);
             setTokens(0);
@@ -142,6 +190,18 @@ export function App({ agent, onExit }: { agent: Agent; onExit: () => void }) {
     );
     const groups = useMemo(() => blocks(visible), [visible]);
 
+    // An approval and a gadget's interface are the same thing to the user: Jeng has
+    // stopped to be answered. One flag is what lets the footer say so once.
+    const waiting = useMemo(
+        () =>
+            asking.length
+                ? { enter: "enter answer", other: "tab next, esc skip" }
+                : approval
+                  ? { enter: `enter approve ${approval.name}`, other: "type why to reject" }
+                  : undefined,
+        [asking, approval],
+    );
+
     // The bars only ever draw inside the viewport, so hiding them is what keeps
     // messages from being written over. Pin them shut because a bar re-shows
     // itself whenever the scroll range changes.
@@ -179,22 +239,28 @@ export function App({ agent, onExit }: { agent: Agent; onExit: () => void }) {
                 {busy && (
                     <box flexDirection="row" gap={1} paddingLeft={1}>
                         <text fg={BORDER.jeng} content={spinner} />
-                        <text fg="#606070" content={approval ? "waiting for you" : "thinking"} />
+                        <text fg="#606070" content={waiting ? "waiting for you" : "thinking"} />
                     </box>
                 )}
             </scrollbox>
 
+            {asking.length > 0 && (
+                <Panel widget={asking[0].widget} onDone={(answers) => settle(asking[0], answers)} />
+            )}
+
             <PromptInput
                 input={input}
                 onSubmit={() => void submit()}
-                placeholder={approval ? "enter to approve, or write why to reject" : undefined}
+                focused={asking.length === 0}
+                placeholder={
+                    approval
+                        ? "enter to approve, or write why to reject"
+                        : asking.length
+                          ? "esc to send nothing back"
+                          : undefined
+                }
             />
-            <Footer
-                busy={busy}
-                showThinking={showThinking}
-                spinner={spinner}
-                approving={approval?.name}
-            />
+            <Footer busy={busy} showThinking={showThinking} spinner={spinner} waiting={waiting} />
         </box>
     );
 }

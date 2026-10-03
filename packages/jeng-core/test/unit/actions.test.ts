@@ -5,10 +5,14 @@ import { join } from "node:path";
 import { type ActionContext, runAction } from "../../src/actions";
 import type { Approval, Approve } from "../../src/approve";
 import { loadHome } from "../../src/home";
+import type { Ui } from "../../src/ui";
 
 const allow: Approve = async () => ({ approved: true });
 
-async function context(approve: Approve = allow): Promise<{
+async function context(
+    approve: Approve = allow,
+    ui?: Ui,
+): Promise<{
     ctx: ActionContext;
     dir: string;
     cleanup: () => Promise<void>;
@@ -16,7 +20,7 @@ async function context(approve: Approve = allow): Promise<{
     const dir = await mkdtemp(join(tmpdir(), "jeng-actions-"));
     return {
         dir,
-        ctx: { homes: [await loadHome(dir)], cwd: dir, approve },
+        ctx: { homes: [await loadHome(dir)], cwd: dir, approve, ui },
         cleanup: () => rm(dir, { recursive: true, force: true }),
     };
 }
@@ -35,6 +39,9 @@ function turnsDownFirst(reason: string): { approve: Approve; asked: Approval[] }
 
 const GADGET =
     "/**\n * name: greet\n * description: says hi\n */\n\nexport default async () => 'hi'\n";
+
+const UI_GADGET =
+    '/**\n * name: pick\n * ui: true\n * description: asks which branch\n */\n\nexport default async (_input: unknown, ui: Ui) => {\n    const answers = await ui({ kind: "select", name: "branch", question: "which?", options: [] })\n    return "on " + (answers.branch ?? "nothing")\n}\n';
 
 const WHY = "so i can say hi for you";
 
@@ -242,7 +249,7 @@ describe("actions", () => {
         expect(await runAction("teleport", {}, ctx)).toEqual({
             ok: false,
             content:
-                'unknown action "teleport". Available: run_gadget, load_protocol, create_protocol, create_gadget, end, compact',
+                'unknown action "teleport". Available: run_gadget, load_protocol, load_ui, create_protocol, create_gadget, end, compact',
         });
         await cleanup();
     });
@@ -360,6 +367,71 @@ describe("actions", () => {
 
         expect(result.content).toContain("that is wrong, we use make ship");
         expect(ctx.homes[0].protocols).toEqual([]);
+        await cleanup();
+    });
+
+    test("hands over the ui language when the model asks for it", async () => {
+        const { ctx, cleanup } = await context();
+
+        const result = await runAction("load_ui", {}, ctx);
+
+        expect(result.ok).toBe(true);
+        expect(result.content).toContain('kind: "select"');
+        await cleanup();
+    });
+
+    test("refuses to create a gadget that draws without saying so in its header", async () => {
+        const { ctx, cleanup } = await context(allow, async () => ({}));
+        const undeclared =
+            '/**\n * name: pick\n * description: asks\n */\n\nexport default async (input: unknown, ui) => "hi"\n';
+
+        const result = await runAction("create_gadget", { reason: WHY, source: undeclared }, ctx);
+
+        expect(result).toEqual({
+            ok: false,
+            content:
+                'the export takes a second argument, so this gadget draws an interface: it needs `* ui: true` in its header, and action="load_ui" for the language',
+        });
+        await cleanup();
+    });
+
+    test("refuses to create a gadget that draws where there is nothing to draw on", async () => {
+        const asked: Approval[] = [];
+        const { ctx, cleanup } = await context(async (request) => {
+            asked.push(request);
+            return { approved: true };
+        });
+
+        const result = await runAction("create_gadget", { reason: WHY, source: UI_GADGET }, ctx);
+
+        expect(result.ok).toBe(false);
+        expect(asked).toEqual([]);
+        await cleanup();
+    });
+
+    test("runs a gadget that draws when there is a ui to draw it on", async () => {
+        const { ctx, cleanup } = await context(allow, async () => ({ branch: "main" }));
+
+        expect(
+            await runAction("create_gadget", { reason: WHY, source: UI_GADGET }, ctx),
+        ).toMatchObject({ ok: true });
+
+        expect(await runAction("run_gadget", { name: "pick" }, ctx)).toEqual({
+            ok: true,
+            content: "on main",
+        });
+        await cleanup();
+    });
+
+    test("refuses to run a gadget that draws where there is nothing to draw on", async () => {
+        const { ctx, dir, cleanup } = await context();
+        await Bun.write(join(dir, "gadgets", "pick.ts"), UI_GADGET);
+        ctx.homes = [await loadHome(dir)];
+
+        const result = await runAction("run_gadget", { name: "pick" }, ctx);
+
+        expect(result.ok).toBe(false);
+        expect(result.content).toContain("nowhere to show it");
         await cleanup();
     });
 });

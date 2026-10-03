@@ -75,6 +75,9 @@ const GADGET =
     // biome-ignore lint/suspicious/noTemplateCurlyInString: gadget source, not a template
     "/**\n * name: greet\n * description: says hi to someone\n */\n\nexport default async (input: { who: string }) => `hi ${input.who}`\n";
 
+const UI_GADGET =
+    '/**\n * name: pick\n * ui: true\n * description: asks which branch\n */\n\nexport default async (_input: unknown, ui) => {\n    const answers = await ui({ kind: "select", name: "branch", question: "which?", options: [] })\n    return "on " + (answers.branch ?? "nothing")\n}\n';
+
 describe("a jeng session", () => {
     test("grows a home folder: commits a protocol, learns from a rejected gadget, then answers", async () => {
         const home = await mkdtemp(join(tmpdir(), "jeng-e2e-"));
@@ -505,6 +508,32 @@ describe("a jeng session", () => {
         });
 
         expect(await agent.send("what is 2+2?")).toBe("stopped after 2 turns without ending.");
+        model.stop();
+        await rm(home, { recursive: true, force: true });
+    });
+
+    test("draws a gadget's interface and hands it what the user answered", async () => {
+        const home = await mkdtemp(join(tmpdir(), "jeng-e2e-"));
+        const model = fakeModel([
+            act({ action: "create_gadget", name: "pick", reason: "to ask", source: UI_GADGET }),
+            act({ action: "run_gadget", name: "pick" }),
+            end("on main"),
+        ]);
+
+        const agent = await createAgent({
+            cwd: home,
+            homes: [home],
+            config: CONFIG(model.url),
+            approve: allow,
+        });
+        const events: AgentEvent[] = [];
+        agent.setUi(async () => ({ branch: "main" }));
+
+        expect(await agent.send("which branch?", { onEvent: (event) => events.push(event) })).toBe(
+            "on main",
+        );
+        expect(events.filter((event) => event.type === "view")).toHaveLength(1);
+        expect(model.requests()[2]).toContain("on main");
         model.stop();
         await rm(home, { recursive: true, force: true });
     });

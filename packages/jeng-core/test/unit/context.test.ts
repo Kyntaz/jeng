@@ -6,7 +6,20 @@ const HOME: Home = {
     dir: "/home/jeng",
     agents: "speak plainly",
     gadgets: [
-        { name: "greet", description: "says hi", when: "", file: "/home/jeng/gadgets/greet.ts" },
+        {
+            name: "greet",
+            description: "says hi",
+            when: "",
+            file: "/home/jeng/gadgets/greet.ts",
+            ui: false,
+        },
+        {
+            name: "pick",
+            description: "asks which branch",
+            when: "",
+            file: "/home/jeng/gadgets/pick.ts",
+            ui: true,
+        },
     ],
     protocols: [
         {
@@ -14,6 +27,7 @@ const HOME: Home = {
             description: "shipping steps",
             when: "deploying",
             file: "/home/jeng/protocols/deploy.md",
+            ui: false,
         },
     ],
 };
@@ -56,5 +70,15 @@ describe("context", () => {
 
     test("leaves the context line out when nothing is known yet", () => {
         expect(buildContext([HOME], [])).not.toContain("Context:");
+    });
+
+    test("lists a gadget that draws when there is a ui to draw it on", () => {
+        expect(
+            buildContext([HOME], [], [], { tokens: 0, contextWindow: 8192, ui: true }),
+        ).toContain("- `pick`: asks which branch");
+    });
+
+    test("leaves out a gadget that draws when there is nowhere to draw it", () => {
+        expect(buildContext([HOME], [])).not.toContain("`pick`");
     });
 });

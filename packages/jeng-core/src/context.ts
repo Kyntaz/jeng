@@ -46,7 +46,7 @@ export function buildContext(
     homes: Home[],
     agentsFiles: AgentsFile[],
     memory: Memory[] = [],
-    usage?: { tokens: number; contextWindow: number },
+    session?: { tokens: number; contextWindow: number; ui?: boolean },
 ): string {
     const agents = section(
         "Always loaded instructions",
@@ -60,7 +60,11 @@ export function buildContext(
     const gadgets = section(
         "Gadgets",
         homes.flatMap((home) =>
-            home.gadgets.map((gadget) => `- \`${gadget.name}\`: ${gadget.description}`),
+            // A gadget that draws has nowhere to draw without a UI, so it is left
+            // out rather than offered and then refused.
+            home.gadgets
+                .filter((gadget) => session?.ui || !gadget.ui)
+                .map((gadget) => `- \`${gadget.name}\`: ${gadget.description}`),
         ),
     );
 
@@ -79,7 +83,7 @@ export function buildContext(
         memory.map((item) => `### ${item.name}\n\n${item.body.trim()}`),
     );
 
-    return [usageLine(usage), IDENTITY, memorySection, agents, gadgets, protocols]
+    return [usageLine(session), IDENTITY, memorySection, agents, gadgets, protocols]
         .filter(Boolean)
         .join("\n\n");
 }

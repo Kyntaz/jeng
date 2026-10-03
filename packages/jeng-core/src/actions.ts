@@ -3,6 +3,7 @@ import { type Approve, type Review, review } from "./approve";
 import { runGadget } from "./gadget";
 import { parseGadget, writeProtocol } from "./header";
 import { type Home, loadHome } from "./home";
+import { UI_LANGUAGE, type Ui } from "./ui";
 import { validateGadget, validateGadgetSyntax, validateProtocol } from "./validate";
 
 export type ActionResult = { ok: boolean; content: string };
@@ -10,6 +11,7 @@ export type ActionResult = { ok: boolean; content: string };
 export const ACTIONS = [
     "run_gadget",
     "load_protocol",
+    "load_ui",
     "create_protocol",
     "create_gadget",
     "end",
@@ -49,8 +51,14 @@ export const JENG_TOOL = {
         "  export default async (input: { path: string }) => string",
         "  Only `node:*` builtins and the `Bun` global are available. No other package can be imported.",
         "  The description is all you will see about this gadget later, so name its input fields.",
+        "  A gadget may take a second argument, `ui`, to put an interface in front of the user. That",
+        '  has a language of its own: call action="load_ui" for it, and add the line `* ui: true` to',
+        "  the header. Without a UI to draw on such a gadget cannot run, and is not listed either.",
         'action="load_protocol", name=<existing protocol>',
         "  Pull a protocol's body into your context. Use it when the protocol's `when` matches the task.",
+        'action="load_ui"',
+        "  The language for a gadget's `ui` argument. You cannot guess it: call this before writing",
+        "  a gadget that takes a second argument.",
         'action="create_protocol", name=<new kebab-case name>, when=<when to load it>, description=<one line>, content=<knowledge>',
         "  Save knowledge worth keeping. Never save a guess: only what you actually learned.",
         "  The user reads it before it is committed, to check the memory is right rather than the",
@@ -102,6 +110,8 @@ export interface ActionContext {
     homes: Home[];
     cwd: string;
     approve: Approve;
+    /** Absent wherever there is no interface to draw on, which is what makes a run headless. */
+    ui?: Ui;
 }
 
 const primaryHome = (ctx: ActionContext) => ctx.homes[0]?.dir ?? join(ctx.cwd, ".jeng");
@@ -117,6 +127,16 @@ function coerceInput(input: unknown): { bad: string } | { bad: undefined; value:
     } catch {
         return { bad: "input must be a json object, not a string" };
     }
+}
+
+const EXPORT_ARGUMENTS = /export\s+default\s+(?:async\s+)?(?:function\s*\w*\s*)?\(([^)]*)\)/;
+
+// A second parameter is the interface argument, and the header is the only place
+// Jeng looks to learn that, so a gadget drawing without saying so is a gadget that
+// would be offered to a run with no way to show it.
+function drawsUndeclared(source: string): boolean {
+    const args = EXPORT_ARGUMENTS.exec(source)?.[1];
+    return (args?.split(",").filter((arg) => arg.trim()).length ?? 0) > 1;
 }
 
 const findGadget = (ctx: ActionContext, name: string) =>
@@ -141,10 +161,18 @@ async function runGadgetAction(
     const found = findGadget(ctx, name);
     if (!found) return { ok: false, content: `no gadget named "${name}"` };
 
+    // Offering a gadget that draws and then refusing it to run would be a waste of
+    // a turn, so the run without a UI says so rather than pretending the call can work.
+    if (found.ui && !ctx.ui)
+        return {
+            ok: false,
+            content: `gadget "${name}" draws its own interface, which this run has nowhere to show it. Say so with end instead.`,
+        };
+
     const input = coerceInput(args.input);
     if (input.bad !== undefined) return { ok: false, content: input.bad };
 
-    const result = await runGadget(found.file, input.value);
+    const result = await runGadget(found.file, input.value, ctx.ui);
     return { ok: result.ok, content: result.ok ? result.output : result.error };
 }
 
@@ -213,7 +241,25 @@ async function createGadgetAction(
 
     // The header is what every later read sees, so the file is named after it
     // rather than after whatever the model passed as `name`.
-    const name = parseGadget(source)?.name ?? "";
+    const header = parseGadget(source);
+    const name = header?.name ?? "";
+
+    if (header?.ui !== "true" && drawsUndeclared(source))
+        return {
+            ok: false,
+            content:
+                'the export takes a second argument, so this gadget draws an interface: it needs `* ui: true` in its header, and action="load_ui" for the language',
+        };
+
+    // A gadget that draws would be dead code here, so it is refused before anyone
+    // is asked about it rather than approved and then never offered again.
+    if (header?.ui === "true" && !ctx.ui)
+        return {
+            ok: false,
+            content:
+                "this run has no interface to draw a gadget in, so one that draws would never be seen",
+        };
+
     const existing = findGadget(ctx, name);
 
     const dir = join(primaryHome(ctx), "gadgets");
@@ -260,6 +306,8 @@ export async function runAction(
             return await runGadgetAction(ctx, args);
         case "load_protocol":
             return await loadProtocolAction(ctx, args);
+        case "load_ui":
+            return { ok: true, content: UI_LANGUAGE };
         case "create_protocol":
             return await createProtocolAction(ctx, args);
         case "create_gadget":

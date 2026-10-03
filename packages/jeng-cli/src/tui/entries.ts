@@ -1,9 +1,8 @@
-import type { AgentEvent, Approval } from "@jeng/core";
+import type { AgentEvent, Answers, Approval, Widget } from "@jeng/core";
 
-export interface Entry {
-    kind: "user" | "jeng" | "think" | "tool" | "error" | "approval";
-    text: string;
-}
+export type Entry =
+    | { kind: "user" | "jeng" | "think" | "tool" | "error" | "approval"; text: string }
+    | { kind: "view"; widget: Widget; answers?: Answers };
 
 export function append(entries: Entry[], event: AgentEvent): Entry[] {
     switch (event.type) {
@@ -24,6 +23,8 @@ export function append(entries: Entry[], event: AgentEvent): Entry[] {
                 ...entries,
                 { kind: "tool", text: `⚙ ${event.action} ${describe(event.args)}` },
             ];
+        case "view":
+            return [...entries, { kind: "view", widget: event.widget }];
         case "result":
             return [...entries, { kind: "tool", text: `↳ ${event.content}` }];
         case "usage":

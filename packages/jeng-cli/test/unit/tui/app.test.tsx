@@ -13,6 +13,7 @@ function stubAgent(sent: string[], answer = "done"): Agent {
         clear: () => {},
         inject: (text) => sent.push(text),
         setApprove: () => {},
+        setUi: () => {},
         send: async (prompt) => {
             sent.push(prompt);
             return answer;

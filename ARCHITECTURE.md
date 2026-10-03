@@ -15,6 +15,8 @@ This should make Jeng particularly well suited to work with local or weaker mode
 - **Action** is something that Jeng can do out-of-the-box.
     - **Create Gadget** creates a new Gadget that can be used later. This checks the Gadget to make sure it is valid and rejects it otherwise, then puts it to the user to approve.
     - **Create Protocol** creates a new Protocol that can be referenced later. This checks the structure of the protocol to make sure it is valid and rejects it otherwise, then puts it to the user to approve.
+    - **Load Protocol** pulls a Protocol's body into context when its `when` matches the task.
+    - **Load UI** hands over the language a Gadget's `ui` argument is written in, and is the only description of an interface that costs nothing until it is asked for.
     - **End** hands control back to the user. It is the only way a turn finishes, so an answer is a call rather than text.
     - **Compact** replaces the transcript with a summary the model writes, so a long turn can keep going instead of running out of context.
 - **Config file** is a JSON file named through `-c`/`--config`, holding the homes to load and the model to talk to.
@@ -40,7 +42,52 @@ The user is not held back while Jeng works, in either direction.
 
 - The input box stays focused, so anything typed during a turn reaches the model between two of its calls rather than interrupting one. A tool call is only ever answered immediately, so that boundary is the one point where a new user message cannot break a call from its result.
 - Aborting throws out of the model request before the reply is recorded, so an interrupted turn leaves nothing half-finished in the history.
-- A gadget already running is not abortable, because a gadget is a function called in-process rather than a process of its own. Interrupting takes effect once it returns.
+- A gadget already running is not abortable, because a gadget is a function called in-process rather than a process of its own. Interrupting takes effect once it returns — except at an interface, which is a point where the turn is waiting on a human rather than on the model.
+
+## Gadget UI
+
+A gadget may take a second argument, `ui`, draw a tree of widgets with it and await what the user
+answers. It is how Jeng puts an interaction in front of someone that it could not have written as
+prose.
+
+- `ui` is a port, not an implementation. Core defines the vocabulary of widgets and the shape of an
+  answer, and the host that runs Jeng draws them and collects the answers, because core has no idea
+  what a terminal is. `setUi` is how a host takes over, for the same reason `setApprove` exists: a UI
+  cannot hand one over before it has rendered.
+- **One call is one round trip.** A tree of widgets is one thing to be asked, and it resolves to
+  `{ name: answer }` for every field filled in. Named fields are what make composition worth anything:
+  a gadget can ask three things at once instead of three times, which is the difference between an
+  interface shaped for the task and a questionnaire.
+- **A field the user walked away from is missing, not empty.** Absent rather than blank, because the
+  model has one check to write and it cannot get it wrong.
+- **No submit key.** `enter` answers the focused field, and the form is sent when the last one has an
+  answer, so no key has to outrank a control's own `enter`. `esc` abandons the form, which is the same
+  answer `esc` already gives an approval.
+- **The transcript is the record, a panel is the live form.** What was asked and what was answered
+  stays in the transcript, so scrolling back shows the decision the gadget went on to make. Only the
+  form being filled in sits above the prompt, which is what keeps the focus and the keystrokes out of
+  the scroll region entirely.
+- **A gadget that draws is declared in its header** with `ui: true`, because whether it has an
+  interface has to be known before it runs rather than discovered while it runs.
+- **No UI means no such gadget.** Absence of a `ui` is what makes a run headless, and a headless run
+  leaves those gadgets out of the context, refuses to create one and refuses to run one. Offering
+  something that cannot work would spend a turn to say so.
+- **The language is disclosed, not assumed.** It is fetched with `load_ui` and lives beside the types
+  it describes so the two cannot drift. Nothing else in the tool describes an interface, so a model
+  that never writes one never pays for the vocabulary.
+- **The vocabulary is what the runtime can actually draw**, and that is checked rather than assumed:
+  `text`, `markdown`, `code`, `diff`, `box`, `select`, `input` and `textarea` each have a test that waits
+  for the frame that proves they drew.
+    - Highlighting is a tree-sitter parser warming up in a worker, so the first markdown or diff takes a
+      moment to appear. The grammars are bundled, so nothing is downloaded, but a test that reads a frame
+      immediately proves nothing and has to wait for the draw it wants.
+    - A select is as tall as it is told and no taller, so its height and whether it spends a row on a
+      description are both worked out from the options it was given, and capped so a long list scrolls
+      inside the panel instead of pushing the prompt off the screen.
+    - A diff has to be a real unified diff, because a malformed one is reported in the frame rather than
+    - refused. `git diff` output is already one.
+    - `image` is left out because it fails the whole native frame render rather than drawing nothing,
+      which in a transcript means a corrupted screen rather than a missing picture.
 
 ## Configuration
 
@@ -87,6 +134,9 @@ export default async (input: { who: string }) => `hi ${input.who}`
 ```
 
 A gadget's default export takes the action's `input` and its return value becomes the action's result.
+A gadget may take a second argument, `ui`, which draws widgets and answers with what the user filled
+in; its return value is still the action's result, because what the user sees and what Jeng reads are
+two different things.
 
 ## Validation
 

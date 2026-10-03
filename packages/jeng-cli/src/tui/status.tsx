@@ -21,20 +21,21 @@ export function Footer({
     busy,
     showThinking,
     spinner,
-    approving,
+    waiting,
 }: {
     busy: boolean;
     showThinking: boolean;
     spinner: string;
-    approving?: string;
+    /** Something of Jeng's is waiting on a human, whatever asked and whatever for. */
+    waiting?: { enter: string; other: string };
 }) {
-    // A pending request replaces the keys rather than joining them, because it is
-    // the only thing the user can act on until they answer it.
-    if (approving)
+    // A waiting turn replaces the keys rather than joining them, because it is the
+    // only thing the user can act on until they answer it.
+    if (waiting)
         return (
             <box flexDirection="row" flexWrap="no-wrap" gap={2} paddingLeft={1}>
-                <text fg={BORDER.jeng} wrapMode="none" content={`enter approve ${approving}`} />
-                <text fg={MUTED} wrapMode="none" content="type why to reject" />
+                <text fg={BORDER.jeng} wrapMode="none" content={waiting.enter} />
+                <text fg={MUTED} wrapMode="none" content={waiting.other} />
             </box>
         );
 

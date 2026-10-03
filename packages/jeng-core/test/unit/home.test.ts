@@ -26,6 +26,7 @@ describe("home", () => {
                     description: "says hi",
                     when: "",
                     file: join(dir, "gadgets", "greet.ts"),
+                    ui: false,
                 },
             ],
             protocols: [
@@ -34,6 +35,7 @@ describe("home", () => {
                     description: "shipping steps",
                     when: "deploying",
                     file: join(dir, "protocols", "deploy.md"),
+                    ui: false,
                 },
             ],
         });
@@ -44,6 +46,17 @@ describe("home", () => {
         const dir = await mkdtemp(join(tmpdir(), "jeng-home-"));
 
         expect(await loadHome(dir)).toEqual({ dir, agents: undefined, gadgets: [], protocols: [] });
+        await rm(dir, { recursive: true, force: true });
+    });
+
+    test("marks a gadget that says it draws as one that draws", async () => {
+        const dir = await mkdtemp(join(tmpdir(), "jeng-home-"));
+        await Bun.write(
+            join(dir, "gadgets", "pick.ts"),
+            "/**\n * name: pick\n * ui: true\n * description: asks\n */\n\nexport default () => {}\n",
+        );
+
+        expect((await loadHome(dir)).gadgets[0].ui).toBe(true);
         await rm(dir, { recursive: true, force: true });
     });
 });

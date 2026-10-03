@@ -16,6 +16,14 @@ export {
     type Turn,
 } from "./model";
 export {
+    type Answers,
+    type Choice,
+    type Field,
+    fields,
+    type Ui,
+    type Widget,
+} from "./ui";
+export {
     type Validation,
     validateGadget,
     validateGadgetSyntax,

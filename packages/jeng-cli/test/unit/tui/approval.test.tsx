@@ -27,6 +27,7 @@ function stubAgent(decided: ApprovalDecision[]): Agent {
         setApprove: (next) => {
             approve = next;
         },
+        setUi: () => {},
         send: async () => {
             const decision = await approve(GADGET);
             decided.push(decision);
