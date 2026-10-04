@@ -15,7 +15,7 @@ import {
 import { createRoot, useKeyboard } from "@opentui/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ApprovalBar } from "./approval";
-import { append, approvalText, type Entry, QUIET } from "./entries";
+import { append, approvalText, blank, type Entry, QUIET } from "./entries";
 import { Panel } from "./panel";
 import { PromptInput } from "./prompt";
 import { useSpinner } from "./spinner";
@@ -198,7 +198,10 @@ export function App({ agent, onExit }: { agent: Agent; onExit: () => void }) {
     }, [agent, busy, fail, mode]);
 
     const visible = useMemo(
-        () => (showThinking ? entries : entries.filter((entry) => !QUIET.includes(entry.kind))),
+        () =>
+            showThinking
+                ? entries
+                : entries.filter((entry) => !QUIET.includes(entry.kind) && !blank(entry)),
         [entries, showThinking],
     );
     const groups = useMemo(() => blocks(visible), [visible]);
@@ -278,7 +281,12 @@ export function App({ agent, onExit }: { agent: Agent; onExit: () => void }) {
                 row is clipped against the top of the screen instead of against
                 itself, and the transcript lands on the header. */}
             <box position="absolute" top={0} left={0} width="100%" zIndex={1}>
-                <Header homes={agent.homes.map((home) => home.dir)} tokens={tokens} mode={mode} />
+                <Header
+                    homes={agent.homes.map((home) => home.dir)}
+                    model={agent.model}
+                    tokens={tokens}
+                    mode={mode}
+                />
             </box>
         </box>
     );

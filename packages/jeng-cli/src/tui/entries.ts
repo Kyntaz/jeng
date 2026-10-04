@@ -16,6 +16,27 @@ export type Entry =
 // it stays whatever the toggle says.
 export const QUIET: Entry["kind"][] = ["think", "output"];
 
+// A box drawn around nothing is just a border, so a message that carries no words is
+// not one. Left in, it also breaks the turn in two, since a box of its own is what a
+// box of its own means.
+export const blank = (entry: Entry): boolean =>
+    entry.kind === "view" ? blankWidget(entry.widget) : !entry.text.trim();
+
+const blankWidget = (widget: Widget): boolean => {
+    switch (widget.kind) {
+        case "box":
+            return widget.children.every(blankWidget);
+        case "select":
+        case "input":
+        case "textarea":
+            return false;
+        case "diff":
+            return !widget.diff.trim();
+        default:
+            return !widget.content.trim();
+    }
+};
+
 export function append(entries: Entry[], event: AgentEvent, mode: Mode): Entry[] {
     switch (event.type) {
         case "text": {

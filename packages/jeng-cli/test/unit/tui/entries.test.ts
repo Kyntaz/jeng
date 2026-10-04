@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { Widget } from "@jeng/core";
-import { append, approvalText, type Entry, QUIET } from "../../../src/tui/entries";
+import { append, approvalText, blank, type Entry, QUIET } from "../../../src/tui/entries";
 
 const GADGET = {
     kind: "create gadget",
@@ -160,5 +160,32 @@ describe("entries", () => {
 
         expect(text).toContain("create protocol `greet`");
         expect(text).not.toContain("why:");
+    });
+
+    test("reads a message that is nothing but spaces as no message", () => {
+        expect(blank({ kind: "jeng", text: " \n ", mode: "learn" })).toBe(true);
+    });
+
+    test("reads a message with words in it as a message", () => {
+        expect(blank({ kind: "jeng", text: "hi", mode: "learn" })).toBe(false);
+    });
+
+    test("reads a gadget that only draws blank content as nothing to draw", () => {
+        const widget: Widget = {
+            kind: "box",
+            direction: "col",
+            children: [
+                { kind: "markdown", content: "" },
+                { kind: "box", direction: "col", children: [{ kind: "code", content: "  " }] },
+            ],
+        };
+
+        expect(blank({ kind: "view", widget, mode: "learn" })).toBe(true);
+    });
+
+    test("reads a gadget that asks something as something to draw", () => {
+        const widget: Widget = { kind: "input", name: "message", question: "which?" };
+
+        expect(blank({ kind: "view", widget, mode: "learn" })).toBe(false);
     });
 });

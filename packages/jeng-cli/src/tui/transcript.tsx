@@ -73,7 +73,6 @@ export const BlockView = memo(function BlockView({ block }: { block: Block }) {
             borderColor={border}
             flexDirection="column"
             paddingX={1}
-            marginBottom={border ? 1 : 0}
             // A box that can be squashed is a box shorter than the text in it, which
             // draws the last line of that text over its own lower border.
             flexShrink={0}

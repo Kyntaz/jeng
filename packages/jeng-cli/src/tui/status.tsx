@@ -4,7 +4,17 @@ import { BORDER, MODE_COLOR, MUTED } from "./theme";
 export const compact = (tokens: number) =>
     tokens >= 1000 ? `${(tokens / 1000).toFixed(1)}k` : String(tokens);
 
-export function Header({ homes, tokens, mode }: { homes: string[]; tokens: number; mode: Mode }) {
+export function Header({
+    homes,
+    model,
+    tokens,
+    mode,
+}: {
+    homes: string[];
+    model: string;
+    tokens: number;
+    mode: Mode;
+}) {
     // The header and footer stay on one line however narrow the terminal gets,
     // so the scroll region is the only one that gives up rows. The bar wears the
     // mode rather than the word naming it, because the bar is also what has to
@@ -17,7 +27,7 @@ export function Header({ homes, tokens, mode }: { homes: string[]; tokens: numbe
             paddingLeft={1}
             backgroundColor={MODE_COLOR[mode]}
         >
-            <text fg={MUTED} wrapMode="none" content="jeng" />
+            <text fg={MUTED} wrapMode="none" content={`jeng ${model}`} />
             <text fg={MUTED} wrapMode="none" content={mode} />
             <text fg={MUTED} wrapMode="none" content={homes.join(", ")} />
             <text fg={MUTED} wrapMode="none" content={`ctx ${compact(tokens)}`} />

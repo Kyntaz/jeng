@@ -12,6 +12,7 @@ function stubAgent(widgets: Widget[]): { agent: Agent; answered: Answers[] } {
     const agent: Agent = {
         homes: [],
         cwd: process.cwd(),
+        model: "test-model",
         history: [],
         memory: [],
         mode: "learn",

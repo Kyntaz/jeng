@@ -19,6 +19,7 @@ function stubAgent(decided: ApprovalDecision[]): Agent {
     return {
         homes: [],
         cwd: process.cwd(),
+        model: "test-model",
         history: [],
         memory: [],
         mode: "learn",
@@ -124,6 +125,7 @@ describe("approving a gadget", () => {
         const agent: Agent = {
             homes: [],
             cwd: process.cwd(),
+            model: "test-model",
             history: [],
             memory: [],
             mode: "learn",

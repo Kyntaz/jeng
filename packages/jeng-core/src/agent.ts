@@ -23,6 +23,7 @@ export type AgentEvent =
 export interface Agent {
     homes: Home[];
     cwd: string;
+    model: string;
     history: Message[];
     memory: Memory[];
     mode: Mode;
@@ -249,6 +250,7 @@ export async function createAgent(options: AgentOptions): Promise<Agent> {
     return {
         homes: ctx.homes,
         cwd,
+        model: config.model,
         history,
         memory,
         get mode() {

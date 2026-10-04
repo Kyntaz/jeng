@@ -14,6 +14,7 @@ function stubAgent(
     return {
         homes: [],
         cwd: process.cwd(),
+        model: "test-model",
         history: [],
         memory: [],
         get mode() {
