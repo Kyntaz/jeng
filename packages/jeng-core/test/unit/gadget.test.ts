@@ -56,4 +56,31 @@ describe("gadget", () => {
         expect(await runGadget(file, {}, ui)).toEqual({ ok: true, output: "on main" });
         await rm(dir, { recursive: true, force: true });
     });
+
+    test("runs a rewritten file rather than the version it first loaded", async () => {
+        const dir = await mkdtemp(join(tmpdir(), "jeng-gadget-"));
+        const file = join(dir, "greet.ts");
+        const header = "/**\n * name: greet\n * description: greets\n */\n\n";
+        await Bun.write(file, `${header}export default () => "hi"\n`);
+        expect(await runGadget(file, null)).toEqual({ ok: true, output: "hi" });
+
+        await Bun.write(file, `${header}export default () => "hi there"\n`);
+        expect(await runGadget(file, null)).toEqual({ ok: true, output: "hi there" });
+
+        await rm(dir, { recursive: true, force: true });
+    });
+
+    test("starts a gadget over on every call", async () => {
+        const dir = await mkdtemp(join(tmpdir(), "jeng-gadget-"));
+        const file = join(dir, "count.ts");
+        await Bun.write(
+            file,
+            "/**\n * name: count\n * description: counts\n */\n\nlet n = 0\n\nexport default () => String(++n)\n",
+        );
+
+        expect(await runGadget(file, null)).toEqual({ ok: true, output: "1" });
+        expect(await runGadget(file, null)).toEqual({ ok: true, output: "1" });
+
+        await rm(dir, { recursive: true, force: true });
+    });
 });

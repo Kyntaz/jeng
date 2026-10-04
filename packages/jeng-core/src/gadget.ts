@@ -1,4 +1,3 @@
-import { pathToFileURL } from "node:url";
 import type { Ui } from "./ui";
 
 export type GadgetResult = { ok: true; output: string } | { ok: false; error: string };
@@ -13,7 +12,12 @@ export async function runGadget(
     ui: Ui = nowhere,
 ): Promise<GadgetResult> {
     try {
-        const gadget = (await import(pathToFileURL(file).href)) as {
+        // Bun caches a module by path, so a gadget rewritten in place would go on
+        // running the code it was first loaded with, and a model could never fix one by
+        // editing it. Dropping it from the cache is what makes every call run the file as
+        // it is now.
+        delete require.cache[file];
+        const gadget = require(file) as {
             default?: (input: unknown, ui: Ui) => unknown;
         };
         if (typeof gadget.default !== "function")

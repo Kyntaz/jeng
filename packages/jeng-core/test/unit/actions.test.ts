@@ -294,6 +294,21 @@ describe("actions", () => {
         await cleanup();
     });
 
+    test("runs the new behaviour of a gadget after rewriting it", async () => {
+        const { ctx, cleanup } = await context();
+        const fixed =
+            "/**\n * name: greet\n * description: says hi properly\n */\n\nexport default async () => 'hello'\n";
+
+        await runAction("create_gadget", { reason: WHY, source: GADGET }, ctx);
+        await runAction("create_gadget", { reason: WHY, source: fixed }, ctx);
+
+        expect(await runAction("run_gadget", { name: "greet" }, ctx)).toEqual({
+            ok: true,
+            content: "hello",
+        });
+        await cleanup();
+    });
+
     test("an unknown action lists the ones that do exist", async () => {
         const { ctx, cleanup } = await context();
 
