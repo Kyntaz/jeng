@@ -256,7 +256,40 @@ describe("jeng", () => {
         expect(help).toContain("-c, --config");
         expect(help).toContain("-y, --yes");
         expect(help).toContain("--mode");
+        expect(help).toContain("--max-turns");
         expect(help).toContain("run a single prompt and exit");
+    });
+
+    test("stops a model that never ends when --max-turns says to", async () => {
+        const home = await mkdtemp(join(tmpdir(), "jeng-cli-"));
+        const model = fakeModel([{ delta: "thinking" }]);
+
+        const proc = await run(home, "what is 2+2?", model.url, ["--max-turns", "2"]);
+
+        const [stdout, code] = await Promise.all([new Response(proc.stdout).text(), proc.exited]);
+
+        expect({ code, answer: stdout.trim() }).toEqual({
+            code: 0,
+            answer: "thinking\nstopped after 2 turns without ending.",
+        });
+        model.stop();
+        await rm(home, { recursive: true, force: true });
+    });
+
+    test("refuses a --max-turns that is not a whole number above zero", async () => {
+        const home = await mkdtemp(join(tmpdir(), "jeng-cli-"));
+        const model = fakeModel([end("never reached")]);
+
+        const proc = await run(home, "say hi", model.url, ["--max-turns", "0"]);
+
+        const [stderr, code] = await Promise.all([new Response(proc.stderr).text(), proc.exited]);
+
+        expect({ code, message: stderr.trim() }).toEqual({
+            code: 1,
+            message: "max-turns must be a whole number above zero, not 0",
+        });
+        model.stop();
+        await rm(home, { recursive: true, force: true });
     });
 
     test("runs a --mode work prompt without telling it how to grow", async () => {

@@ -5,7 +5,7 @@ import { defaultHome, defaultModel } from "./config";
 import { buildContext, type Memory } from "./context";
 import { type Home, loadHomes } from "./home";
 import { DEFAULT_MODE, type Mode } from "./mode";
-import { chat, type Message, type ModelConfig } from "./model";
+import { chatWithRetry, type Message, type ModelConfig } from "./model";
 import { jengTool } from "./tool";
 import type { Ui, Widget } from "./ui";
 
@@ -101,6 +101,7 @@ export async function createAgent(options: AgentOptions): Promise<Agent> {
         history.push({ role: "user", content: prompt });
         let previous = "";
         let nudged = false;
+        let reported = false;
 
         for (let turn = 0; turn < maxTurns; turn++) {
             // Read once per iteration rather than per call, so a mode the user
@@ -126,7 +127,7 @@ export async function createAgent(options: AgentOptions): Promise<Agent> {
             }
             nudged = false;
 
-            const reply = await chat(messages, {
+            const reply = await chatWithRetry(messages, {
                 config,
                 tools: [jengTool(speaking)],
                 signal,
@@ -135,6 +136,14 @@ export async function createAgent(options: AgentOptions): Promise<Agent> {
                 onUsage: (tokens) => {
                     promptTokens = tokens;
                     onEvent?.({ type: "usage", promptTokens: tokens });
+                },
+                // An outage that lasts an hour is one thing to read about, however
+                // many requests it takes, so the reason is given once per turn.
+                onRetry: (reason, delay) => {
+                    if (reported) return;
+                    reported = true;
+                    const content = `${reason}. Retrying in ${Math.max(1, Math.round(delay / 1000))}s and backing off from there; esc stops the turn.`;
+                    onEvent?.({ type: "result", content, ok: false });
                 },
             });
 
@@ -203,15 +212,16 @@ export async function createAgent(options: AgentOptions): Promise<Agent> {
                 }
 
                 // A model that reissues the call it just made, having learned
-                // nothing in between, will never make progress; report the blocker
-                // instead of looping on it. A retry after some other call is
-                // legitimate, because the context has changed.
+                // nothing in between, will never make progress; refuse it and say
+                // what to do instead, which is a nudge rather than a stop because
+                // only the user or an end interrupts. A retry after some other
+                // call is legitimate, because the context has changed.
                 const signature = `${name}:${JSON.stringify(args)}`;
                 if (signature === previous) {
-                    const stopped = `stopped: "${name}" was called twice in a row with the same arguments. Say what you know instead of calling it again.`;
-                    onEvent?.({ type: "result", content: stopped, ok: false });
-                    close(stopped);
-                    return stopped;
+                    const refusal = `"${name}" was just called with the same arguments, so it changed nothing and was not run again. Say what you already know with action="end", or call something that changes things.`;
+                    onEvent?.({ type: "result", content: refusal, ok: false });
+                    close(refusal);
+                    continue;
                 }
                 previous = signature;
 

@@ -31,6 +31,47 @@ export interface ToolSpec {
     parameters: Record<string, unknown>;
 }
 
+const BACKOFF_BASE = 1000;
+const BACKOFF_CAP = 30000;
+
+export class RequestError extends Error {
+    constructor(
+        message: string,
+        readonly status: number,
+        /** How long the gateway said to wait, when it said. */
+        readonly retryAfter: number | undefined,
+    ) {
+        super(message);
+        this.name = "RequestError";
+    }
+}
+
+function retryAfter(response: Response): number | undefined {
+    const header = response.headers.get("retry-after");
+    if (!header) return undefined;
+    const seconds = Number(header);
+    if (Number.isFinite(seconds)) return Math.max(0, seconds * 1000);
+    const at = Date.parse(header);
+    return Number.isNaN(at) ? undefined : Math.max(0, at - Date.now());
+}
+
+// A backoff the user has to sit through has to be interruptible, so a wait ends
+// the moment the turn does.
+function sleep(ms: number, signal: AbortSignal | undefined): Promise<void> {
+    return new Promise((resolve, reject) => {
+        if (signal?.aborted) return reject(signal.reason);
+        const timer = setTimeout(() => {
+            signal?.removeEventListener("abort", abort);
+            resolve();
+        }, ms);
+        const abort = () => {
+            clearTimeout(timer);
+            reject(signal?.reason);
+        };
+        signal?.addEventListener("abort", abort, { once: true });
+    });
+}
+
 function firstToolCall(delta: Record<string, unknown>) {
     const calls = (delta.tool_calls ?? []) as Record<string, unknown>[];
     const call = calls[0];
@@ -90,17 +131,16 @@ function wire(message: Message): Record<string, unknown> {
     return { role: message.role, content: message.content };
 }
 
-export async function chat(
-    messages: Message[],
-    options: {
-        config: ModelConfig;
-        tools?: ToolSpec[];
-        onDelta?: (text: string) => void;
-        onReasoning?: (text: string) => void;
-        onUsage?: (promptTokens: number) => void;
-        signal?: AbortSignal;
-    },
-): Promise<Turn> {
+export interface ChatOptions {
+    config: ModelConfig;
+    tools?: ToolSpec[];
+    onDelta?: (text: string) => void;
+    onReasoning?: (text: string) => void;
+    onUsage?: (promptTokens: number) => void;
+    signal?: AbortSignal;
+}
+
+export async function chat(messages: Message[], options: ChatOptions): Promise<Turn> {
     const { config, tools, onDelta, onReasoning, onUsage, signal } = options;
     const headers: Record<string, string> = { "content-type": "application/json" };
     if (config.apiKey) headers.authorization = `Bearer ${config.apiKey}`;
@@ -120,8 +160,10 @@ export async function chat(
     });
 
     if (!response.ok || !response.body) {
-        throw new Error(
+        throw new RequestError(
             `model request failed: ${response.status} ${(await response.text()).trim()}`,
+            response.status,
+            retryAfter(response),
         );
     }
 
@@ -176,6 +218,33 @@ export async function chat(
             : undefined,
         promptTokens,
     };
+}
+
+// Nothing but the user interrupts a model, so a failed request is waited out
+// rather than given up on: a gateway that says how long to wait is believed, and
+// anything else backs off from a second up to half a minute and stays there.
+export async function chatWithRetry(
+    messages: Message[],
+    options: ChatOptions & { onRetry?: (reason: string, delay: number) => void },
+): Promise<Turn> {
+    const { onRetry, signal } = options;
+    let attempt = 0;
+
+    for (;;) {
+        try {
+            return await chat(messages, options);
+        } catch (error) {
+            if (signal?.aborted) throw error;
+            const asked = error instanceof RequestError ? error.retryAfter : undefined;
+            const delay = Math.min(
+                asked ?? Math.min(BACKOFF_BASE * 2 ** attempt, BACKOFF_CAP),
+                BACKOFF_CAP,
+            );
+            attempt += 1;
+            onRetry?.((error as Error).message, delay);
+            await sleep(delay, signal);
+        }
+    }
 }
 
 export function parseArgs(args: string): Record<string, unknown> {

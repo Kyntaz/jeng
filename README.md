@@ -79,6 +79,9 @@ cat src/index.ts | jeng "what does this do?"
 A piped run has no terminal to ask on, so it cannot create anything: pass `-y`/`--yes` if the
 run is yours and you trust it to write to the home folder.
 
+Jeng keeps going until it ends its turn with an answer or you interrupt it with `esc`. Pass
+`--max-turns <n>` if you would rather it gave up after that many calls.
+
 ## Modes
 
 Jeng has two modes, and which one it is in decides whether it may change its home.

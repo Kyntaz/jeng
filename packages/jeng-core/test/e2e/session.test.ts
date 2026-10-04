@@ -18,6 +18,11 @@ function fakeModel(scripted: Step[]): {
         async fetch(request) {
             requests.push(await request.text());
             const step = scripted[turn++] ?? {};
+            if (step.status)
+                return new Response("the gateway is busy", {
+                    status: step.status,
+                    headers: step.retryAfter ? { "retry-after": step.retryAfter } : {},
+                });
             if (step.delay) await Bun.sleep(step.delay);
             const delta = step.call
                 ? {
@@ -55,6 +60,9 @@ interface Step {
     call?: string;
     delay?: number;
     tokens?: number;
+    /** A gateway that will not answer, which a turn is meant to wait out. */
+    status?: number;
+    retryAfter?: string;
 }
 
 const end = (content: string) => ({ call: JSON.stringify({ action: "end", content }) });
@@ -215,10 +223,10 @@ describe("a jeng session", () => {
         await rm(home, { recursive: true, force: true });
     });
 
-    test("stops instead of repeating a call that just gave the same result", async () => {
+    test("nudges the model instead of repeating a call that just gave the same result", async () => {
         const home = await mkdtemp(join(tmpdir(), "jeng-e2e-"));
         const call = JSON.stringify({ action: "load_protocol", name: "missing" });
-        const model = fakeModel([{ call }, { call }, { call }, { call }]);
+        const model = fakeModel([{ call }, { call }, end("there is no such protocol")]);
 
         const agent = await createAgent({
             cwd: home,
@@ -226,10 +234,10 @@ describe("a jeng session", () => {
             config: CONFIG(model.url),
             approve: allow,
         });
-        const reply = await agent.send("deploy the thing");
 
-        expect(reply).toContain('"load_protocol" was called twice in a row');
-        expect(model.requests()).toHaveLength(2);
+        expect(await agent.send("deploy the thing")).toBe("there is no such protocol");
+        expect(model.requests()).toHaveLength(3);
+        expect(model.requests()[2]).toContain("was just called with the same arguments");
         model.stop();
         await rm(home, { recursive: true, force: true });
     });
@@ -353,6 +361,62 @@ describe("a jeng session", () => {
         await agent.send("what is 2+2?");
 
         expect(model.requests()[1]).toContain("with that answer now");
+        model.stop();
+        await rm(home, { recursive: true, force: true });
+    });
+
+    test("waits a failing model out for as long as the gateway asks", async () => {
+        const home = await mkdtemp(join(tmpdir(), "jeng-e2e-"));
+        const model = fakeModel([
+            { status: 503, retryAfter: "0.05" },
+            { status: 503, retryAfter: "0.05" },
+            end("4"),
+        ]);
+
+        const agent = await createAgent({
+            cwd: home,
+            homes: [home],
+            config: CONFIG(model.url),
+            approve: allow,
+        });
+        const events: AgentEvent[] = [];
+        const started = Date.now();
+        const reply = await agent.send("what is 2+2?", {
+            onEvent: (event) => events.push(event),
+        });
+
+        // Half the first backoff would be a second on its own, so three requests
+        // landing inside one says the header was the thing being waited for.
+        expect({ reply, requests: model.requests().length }).toEqual({
+            reply: "4",
+            requests: 3,
+        });
+        expect(Date.now() - started).toBeLessThan(1000);
+        model.stop();
+        await rm(home, { recursive: true, force: true });
+    });
+
+    test("says a model that keeps failing once rather than once per attempt", async () => {
+        const home = await mkdtemp(join(tmpdir(), "jeng-e2e-"));
+        const model = fakeModel([
+            { status: 500, retryAfter: "0" },
+            { status: 500, retryAfter: "0" },
+            { status: 500, retryAfter: "0" },
+            end("4"),
+        ]);
+
+        const agent = await createAgent({
+            cwd: home,
+            homes: [home],
+            config: CONFIG(model.url),
+            approve: allow,
+        });
+        const events: AgentEvent[] = [];
+        await agent.send("what is 2+2?", { onEvent: (event) => events.push(event) });
+
+        expect(
+            events.filter((event) => event.type === "result" && event.ok === false),
+        ).toHaveLength(1);
         model.stop();
         await rm(home, { recursive: true, force: true });
     });

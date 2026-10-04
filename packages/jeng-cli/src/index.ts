@@ -102,6 +102,11 @@ await new Command()
         "configuration file; defaults to ./jeng.json, then <home>/jeng.json",
     )
     .option(
+        "--max-turns <turns>",
+        "stop a turn after this many model calls; unbounded by default",
+        Number,
+    )
+    .option(
         "-y, --yes",
         "approve every gadget and protocol without asking; a deletion is always asked for",
     )
@@ -109,7 +114,13 @@ await new Command()
     .action(
         async (
             prompt: string[],
-            options: { home: string[]; config: string | undefined; yes: boolean; mode?: string },
+            options: {
+                home: string[];
+                config: string | undefined;
+                yes: boolean;
+                mode?: string;
+                maxTurns?: number;
+            },
         ) => {
             // A mode that is not one is a typo rather than a mode, and quietly
             // falling back to learn would hand the user an agent that writes.
@@ -118,6 +129,16 @@ await new Command()
                 process.exit(1);
             }
             const mode = options.mode as Mode | undefined;
+
+            // A limit is the user taking the ability to interrupt back, so a
+            // nonsense one has to be said rather than clamped.
+            const maxTurns = options.maxTurns;
+            if (maxTurns !== undefined && (!Number.isInteger(maxTurns) || maxTurns < 1)) {
+                process.stderr.write(
+                    `max-turns must be a whole number above zero, not ${maxTurns}\n`,
+                );
+                process.exit(1);
+            }
 
             let config: Awaited<ReturnType<typeof loadConfig>>;
             try {
@@ -131,6 +152,7 @@ await new Command()
                 homes: config.homes,
                 config: config.model,
                 mode,
+                maxTurns,
                 // --yes never installs the reader on its own, so a scripted run
                 // touches no stdin unless it has something to delete.
                 approve: options.yes ? yes : askOnStdin,
