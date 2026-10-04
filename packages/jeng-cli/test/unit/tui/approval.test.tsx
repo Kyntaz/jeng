@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import type { Agent, Approval, ApprovalDecision, Approve } from "@jeng/core";
+import type { Agent, Approval, ApprovalDecision, Approve, Mode } from "@jeng/core";
 import { testRender } from "@opentui/react/test-utils";
 import { act } from "react";
 import { App } from "../../../src/tui/app";
@@ -21,12 +21,14 @@ function stubAgent(decided: ApprovalDecision[]): Agent {
         cwd: process.cwd(),
         history: [],
         memory: [],
+        mode: "learn",
         clear: () => {},
         inject: () => {},
         setApprove: (next) => {
             approve = next;
         },
         setUi: () => {},
+        setMode: () => {},
         send: async () => {
             const decision = await approve(GADGET);
             decided.push(decision);
@@ -124,12 +126,14 @@ describe("approving a gadget", () => {
             cwd: process.cwd(),
             history: [],
             memory: [],
+            mode: "learn",
             clear: () => {},
             inject: (text) => prompts.push(text),
             setApprove: (next) => {
                 approve = next;
             },
             setUi: () => {},
+            setMode: () => {},
             send: async (prompt, options) => {
                 prompts.push(prompt);
                 options?.onEvent?.({ type: "tool", action: "list_gadgets", args: {} });
@@ -173,5 +177,26 @@ describe("approving a gadget", () => {
         act(() => renderer.destroy());
 
         expect(frame).toContain("export default async () => 'hi there'");
+    });
+
+    test("tab walks the bar instead of changing the mode", async () => {
+        const switched: Mode[] = [];
+        const agent = stubAgent([]);
+        agent.setMode = (next) => switched.push(next);
+        const { renderer, mockInput, flush, captureCharFrame, waitFor } = await render(agent);
+
+        await mockInput.typeText("say hi");
+        act(() => mockInput.pressEnter());
+        await act(async () => await flush());
+        await waitFor(() => captureCharFrame().includes("approve"));
+        act(() => mockInput.pressTab());
+        await act(async () => await flush());
+        const frame = captureCharFrame();
+        act(() => renderer.destroy());
+
+        expect({ switched, stillLearning: frame.includes("learn") }).toEqual({
+            switched: [],
+            stillLearning: true,
+        });
     });
 });

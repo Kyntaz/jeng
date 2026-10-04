@@ -28,7 +28,7 @@ export function ApprovalBar({ onDecide }: { onDecide: (decision: ApprovalDecisio
     return (
         <box
             border
-            borderColor={BORDER.jeng}
+            borderColor={BORDER}
             flexDirection="row"
             alignItems="center"
             gap={2}

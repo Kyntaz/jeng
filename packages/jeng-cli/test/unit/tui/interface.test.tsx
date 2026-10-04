@@ -14,12 +14,14 @@ function stubAgent(widgets: Widget[]): { agent: Agent; answered: Answers[] } {
         cwd: process.cwd(),
         history: [],
         memory: [],
+        mode: "learn",
         clear: () => {},
         inject: () => {},
         setApprove: () => {},
         setUi: (next) => {
             ui = next;
         },
+        setMode: () => {},
         send: async (_prompt, options) => {
             for (const widget of widgets) {
                 options?.onEvent?.({ type: "view", widget });

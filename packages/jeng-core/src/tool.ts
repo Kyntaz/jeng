@@ -1,3 +1,5 @@
+import { GROWS, type Mode } from "./mode";
+
 export const ACTIONS = [
     "run_gadget",
     "test_gadget",
@@ -11,106 +13,137 @@ export const ACTIONS = [
     "compact",
 ];
 
-export const JENG_TOOL = {
-    name: "jeng",
-    description: [
-        "Do one thing. This is your only tool.",
-        "",
-        "Every message you send is exactly one call to this tool. Your answer is a call too.",
-        "",
-        'action="end", content=<the answer the user reads>',
-        "  Hand control back to the user. This is the only way a turn ever ends, so nothing you say",
-        "  in plain text will do it. Put the whole answer in content.",
-        '  e.g. {"action":"end","content":"Tokyo is the capital of Japan."}',
-        'action="compact", summary=<everything worth keeping from this conversation>',
-        "  Throw the transcript away and continue from your summary alone. When the context line at",
-        "  the top of your context is near its limit, summarize and call this.",
-        'action="run_gadget", name=<existing gadget>, input=<object>',
-        "  Run a gadget. `name` must be a gadget listed under Gadgets in your context.",
-        'action="test_gadget", reason=<why you need it>, description=<one line>, source=<TypeScript>, input=<object>',
-        "  Run a gadget you wrote without committing it. Same file, same header, same rules and same",
-        "  approval as create_gadget, but nothing is written to the home and it does not outlive the",
-        "  call, so use it to get the source right and then commit exactly what you tested.",
-        'action="create_gadget", name=<new kebab-case name>, reason=<why you need it>, description=<one line>, source=<TypeScript>',
-        "  Write a gadget you do not have yet.",
-        "  The user reads the whole file and decides, so reason is required and must be honest:",
-        "  they are about to let code run on their machine. If they say no you are told why, so",
-        "  change the gadget and ask again rather than repeating the call.",
-        "  source must be a complete TypeScript file that starts with this exact 4-line comment",
-        "  header, where the words `name:` and `description:` are literal and required:",
-        "",
-        "  /**",
-        "   * name: count-lines",
-        "   * description: counts the lines of a file. input: { path: string }",
-        "   */",
-        "",
-        "  Then code that compiles with bun, ending in:",
-        "  export default async (input: { path: string }) => string",
-        "  Only `node:*` builtins and the `Bun` global are available. No other package can be imported.",
-        "  The description is all you will see about this gadget later, so name its input fields.",
-        "  A gadget may take a second argument, `ui`, to put an interface in front of the user. That",
-        '  has a language of its own: call action="load_ui" for it, and add the line `* ui: true` to',
-        "  the header. Without a UI to draw on such a gadget cannot run, and is not listed either.",
-        'action="load_protocol", name=<existing protocol>',
-        "  Pull a protocol's body into your context. Use it when the protocol's `when` matches the task.",
-        'action="load_ui"',
-        "  The language for a gadget's `ui` argument. You cannot guess it: call this before writing",
-        "  a gadget that takes a second argument.",
-        'action="create_protocol", name=<new kebab-case name>, when=<when to load it>, description=<one line>, content=<knowledge>',
-        "  Save knowledge worth keeping. Never save a guess: only what you actually learned.",
-        "  The user reads it before it is committed, to check the memory is right rather than the",
-        "  prose, so there is no reason to give.",
-        'action="delete_gadget", name=<existing gadget>, reason=<why it should go>',
-        "  Throw a gadget away for good. There is no undo and nothing reads it again, so reason is",
-        "  required and must be honest about what is wrong with it. The user reads the whole file",
-        "  before deciding, because that file is the only version of it there will ever be.",
-        'action="delete_protocol", name=<existing protocol>, reason=<why it should go>',
-        "  Throw a protocol away for good, which is how you correct memory you got wrong. reason is",
-        "  required for the same reason. The user reads the body before deciding.",
-        "",
-        "After every call you get a result. Read it before deciding what to do next.",
-        "If a result is an error, do not repeat that same call. Change the arguments, or end without it.",
-        "Keep going until you call end. There is no turn limit, so nothing stops you but your own judgement.",
-        "If you cannot do something, end with that in one line instead of calling a tool.",
-    ].join("\n"),
-    parameters: {
-        type: "object",
-        properties: {
-            action: { type: "string", enum: ACTIONS },
-            name: {
-                type: "string",
-                description:
-                    "gadget or protocol name, kebab-case; for create_gadget it is only a label, because a gadget is named after its own header",
+// Work mode is not offered the actions that change the home, so a model that only
+// reads the tool never learns the words for them.
+export function actionsFor(mode: Mode): string[] {
+    return mode === "work" ? ACTIONS.filter((action) => !GROWS.includes(action)) : ACTIONS;
+}
+
+const GROWS_DOC = [
+    'action="run_gadget", name=<existing gadget>, input=<object>',
+    "  Run a gadget. `name` must be a gadget listed under Gadgets in your context.",
+    'action="load_protocol", name=<existing protocol>',
+    "  Pull a protocol's body into your context. Use it when the protocol's `when` matches the task.",
+    "",
+];
+
+const GROW_DOC = [
+    'action="create_gadget", name=<new kebab-case name>, reason=<why you need it>, description=<one line>, source=<TypeScript>',
+    "  Write a gadget you do not have yet.",
+    "  The user reads the whole file and decides, so reason is required and must be honest:",
+    "  they are about to let code run on their machine. If they say no you are told why, so",
+    "  change the gadget and ask again rather than repeating the call.",
+    "  source must be a complete TypeScript file that starts with this exact 4-line comment",
+    "  header, where the words `name:` and `description:` are literal and required:",
+    "",
+    "  /**",
+    "   * name: count-lines",
+    "   * description: counts the lines of a file. input: { path: string }",
+    "   */",
+    "",
+    "  Then code that compiles with bun, ending in:",
+    "  export default async (input: { path: string }) => string",
+    "  Only `node:*` builtins and the `Bun` global are available. No other package can be imported.",
+    "  The description is all you will see about this gadget later, so name its input fields.",
+    "  A gadget may take a second argument, `ui`, to put an interface in front of the user. That",
+    '  has a language of its own: call action="load_ui" for it, and add the line `* ui: true` to',
+    "  the header. Without a UI to draw on such a gadget cannot run, and is not listed either.",
+    'action="test_gadget", reason=<why you need it>, description=<one line>, source=<TypeScript>, input=<object>',
+    "  Run a gadget you wrote without committing it. Same file, same header, same rules and same",
+    "  approval as create_gadget, but nothing is written to the home and it does not outlive the",
+    "  call, so use it to get the source right and then commit exactly what you tested.",
+    'action="create_protocol", name=<new kebab-case name>, when=<when to load it>, description=<one line>, content=<knowledge>',
+    "  Save knowledge worth keeping. Never save a guess: only what you actually learned.",
+    "  The user reads it before it is committed, to check the memory is right rather than the",
+    "  prose, so there is no reason to give.",
+    'action="delete_gadget", name=<existing gadget>, reason=<why it should go>',
+    "  Throw a gadget away for good. There is no undo and nothing reads it again, so reason is",
+    "  required and must be honest about what is wrong with it. The user reads the whole file",
+    "  before deciding, because that file is the only version of it there will ever be.",
+    'action="delete_protocol", name=<existing protocol>, reason=<why it should go>',
+    "  Throw a protocol away for good, which is how you correct memory you got wrong. reason is",
+    "  required for the same reason. The user reads the body before deciding.",
+    'action="load_ui"',
+    "  The language for a gadget's `ui` argument. You cannot guess it: call this before writing",
+    "  a gadget that takes a second argument.",
+    "",
+];
+
+export function jengTool(mode: Mode) {
+    return {
+        name: "jeng",
+        description: [
+            "Do one thing. This is your only tool.",
+            "",
+            "Every message you send is exactly one call to this tool. Your answer is a call too.",
+            "",
+            'action="end", content=<the answer the user reads>',
+            "  Hand control back to the user. This is the only way a turn ever ends, so nothing you say",
+            "  in plain text will do it. Put the whole answer in content.",
+            '  e.g. {"action":"end","content":"Tokyo is the capital of Japan."}',
+            'action="compact", summary=<everything worth keeping from this conversation>',
+            "  Throw the transcript away and continue from your summary alone. When the context line at",
+            "  the top of your context is near its limit, summarize and call this.",
+            ...GROWS_DOC,
+            ...(mode === "work"
+                ? [
+                      "You cannot create, test or delete anything in this run, so there is no action for",
+                      "it. Work with what is listed. If nothing fits the task, end and say what is missing.",
+                      "",
+                  ]
+                : GROW_DOC),
+            "After every call you get a result. Read it before deciding what to do next.",
+            "If a result is an error, do not repeat that same call. Change the arguments, or end without it.",
+            "Keep going until you call end. There is no turn limit, so nothing stops you but your own judgement.",
+            "If you cannot do something, end with that in one line instead of calling a tool.",
+        ].join("\n"),
+        parameters: {
+            type: "object",
+            properties: {
+                action: { type: "string", enum: actionsFor(mode) },
+                name: {
+                    type: "string",
+                    description: `gadget or protocol name, kebab-case${
+                        mode === "work"
+                            ? ""
+                            : "; for create_gadget it is only a label, because a gadget is named after its own header"
+                    }`,
+                },
+                input: {
+                    type: "object",
+                    description: `arguments for run_gadget${mode === "work" ? "" : " and test_gadget"}, as an object`,
+                },
+                ...(mode === "work"
+                    ? {}
+                    : {
+                          when: {
+                              type: "string",
+                              description: "for create_protocol: when to load this protocol",
+                          },
+                          description: { type: "string" },
+                          reason: {
+                              type: "string",
+                              description:
+                                  "for create_gadget, test_gadget, delete_gadget and delete_protocol: why, in one line. the user reads it before deciding",
+                          },
+                          source: {
+                              type: "string",
+                              description:
+                                  "for create_gadget and test_gadget: the complete TypeScript file, header first",
+                          },
+                      }),
+                content: {
+                    type: "string",
+                    description: `for end: the answer the user reads${
+                        mode === "work" ? "" : ". for create_protocol: the markdown body"
+                    }`,
+                },
+                summary: {
+                    type: "string",
+                    description: "for compact: what is worth keeping from this conversation",
+                },
             },
-            input: {
-                type: "object",
-                description: "arguments for run_gadget and test_gadget, as an object",
-            },
-            when: {
-                type: "string",
-                description: "for create_protocol: when to load this protocol",
-            },
-            description: { type: "string" },
-            reason: {
-                type: "string",
-                description:
-                    "for create_gadget, test_gadget, delete_gadget and delete_protocol: why, in one line. the user reads it before deciding",
-            },
-            content: {
-                type: "string",
-                description:
-                    "for create_protocol: the markdown body. for end: the answer the user reads",
-            },
-            summary: {
-                type: "string",
-                description: "for compact: what is worth keeping from this conversation",
-            },
-            source: {
-                type: "string",
-                description:
-                    "for create_gadget and test_gadget: the complete TypeScript file, header first",
-            },
+            required: ["action"],
         },
-        required: ["action"],
-    },
-};
+    };
+}

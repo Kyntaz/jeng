@@ -661,4 +661,85 @@ describe("actions", () => {
         expect(ctx.homes[0].protocols.map((protocol) => protocol.name)).toEqual(["deploy"]);
         await cleanup();
     });
+
+    test("a working run cannot create a gadget, however well it is written", async () => {
+        const { ctx, dir, cleanup } = await context();
+
+        const result = await runAction(
+            "create_gadget",
+            { name: "greet", reason: WHY, source: GADGET },
+            { ...ctx, mode: "work" },
+        );
+
+        expect(result.ok).toBe(false);
+        expect(await Bun.file(join(dir, "gadgets", "greet.ts")).exists()).toBe(false);
+        await cleanup();
+    });
+
+    test("a working run is told which mode would let it", async () => {
+        const { ctx, cleanup } = await context();
+
+        const result = await runAction(
+            "create_protocol",
+            { name: "deploy" },
+            {
+                ...ctx,
+                mode: "work",
+            },
+        );
+
+        expect(result.content).toContain("learn-mode action");
+        await cleanup();
+    });
+
+    test("a working run cannot throw away what it was given either", async () => {
+        const { ctx, dir, cleanup } = await context();
+        await runAction(
+            "create_protocol",
+            { name: "deploy", description: "how we ship", when: "deploying", content: "run make" },
+            ctx,
+        );
+
+        const result = await runAction(
+            "delete_protocol",
+            { name: "deploy", reason: "we use make ship now" },
+            { ...ctx, mode: "work" },
+        );
+
+        expect(result.ok).toBe(false);
+        expect(await Bun.file(join(dir, "protocols", "deploy.md")).exists()).toBe(true);
+        await cleanup();
+    });
+
+    test("a working run is never offered the ui language", async () => {
+        const { ctx, cleanup } = await context();
+
+        const result = await runAction("load_ui", {}, { ...ctx, mode: "work" });
+
+        expect(result.ok).toBe(false);
+        await cleanup();
+    });
+
+    test("a working run still uses what the home already holds", async () => {
+        const { ctx, dir, cleanup } = await context();
+        await Bun.write(
+            join(dir, "gadgets", "greet.ts"),
+            "/**\n * name: greet\n * description: says hi\n */\n\nexport default async () => 'hi'\n",
+        );
+        const working = { ...ctx, mode: "work" as const, homes: [await loadHome(dir)] };
+
+        const result = await runAction("run_gadget", { name: "greet" }, working);
+
+        expect(result).toEqual({ ok: true, content: "hi" });
+        await cleanup();
+    });
+
+    test("an unknown action lists only what this mode can do", async () => {
+        const { ctx, cleanup } = await context();
+
+        const result = await runAction("publish", {}, { ...ctx, mode: "work" });
+
+        expect(result.content).toContain("Available: run_gadget, load_protocol, end, compact");
+        await cleanup();
+    });
 });

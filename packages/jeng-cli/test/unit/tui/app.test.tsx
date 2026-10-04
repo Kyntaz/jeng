@@ -1,19 +1,27 @@
 import { describe, expect, test } from "bun:test";
-import type { Agent } from "@jeng/core";
+import type { Agent, Mode } from "@jeng/core";
 import { testRender } from "@opentui/react/test-utils";
 import { act } from "react";
 import { App } from "../../../src/tui/app";
 
-function stubAgent(sent: string[], answer = "done"): Agent {
+function stubAgent(sent: string[], switched: Mode[], answer = "done"): Agent {
+    let mode: Mode = "learn";
     return {
         homes: [],
         cwd: process.cwd(),
         history: [],
         memory: [],
+        get mode() {
+            return mode;
+        },
         clear: () => {},
         inject: (text) => sent.push(text),
         setApprove: () => {},
         setUi: () => {},
+        setMode: (next) => {
+            mode = next;
+            switched.push(next);
+        },
         send: async (prompt) => {
             sent.push(prompt);
             return answer;
@@ -21,10 +29,10 @@ function stubAgent(sent: string[], answer = "done"): Agent {
     };
 }
 
-async function render(sent: string[]) {
+async function render(sent: string[], switched: Mode[] = []) {
     // Shift+Enter only arrives as its own key when the terminal reports
     // modifiers, which is what the kitty keyboard protocol buys.
-    return testRender(<App agent={stubAgent(sent)} onExit={() => {}} />, {
+    return testRender(<App agent={stubAgent(sent, switched)} onExit={() => {}} />, {
         width: 80,
         height: 24,
         kittyKeyboard: true,
@@ -113,5 +121,56 @@ describe("prompt box", () => {
         act(() => renderer.destroy());
 
         expect(frame).not.toContain("done");
+    });
+});
+
+describe("modes", () => {
+    test("starts in the mode the agent was built with", async () => {
+        const { renderer, mockInput, flush, captureCharFrame } = await render([]);
+
+        await act(async () => await flush());
+        const frame = captureCharFrame();
+        act(() => mockInput.pressTab());
+        await act(async () => await flush());
+        const after = captureCharFrame();
+        act(() => renderer.destroy());
+
+        expect({ before: frame.includes("learn"), after: after.includes("work") }).toEqual({
+            before: true,
+            after: true,
+        });
+    });
+
+    test("tab moves from learn to work and back again", async () => {
+        const { renderer, mockInput, flush, captureCharFrame } = await render([]);
+
+        await act(async () => await flush());
+        act(() => mockInput.pressTab());
+        await act(async () => await flush());
+        const worked = captureCharFrame();
+        act(() => mockInput.pressTab());
+        await act(async () => await flush());
+        const learned = captureCharFrame();
+        act(() => renderer.destroy());
+
+        expect({ worked: worked.includes("work"), learned: learned.includes("learn") }).toEqual({
+            worked: true,
+            learned: true,
+        });
+    });
+
+    test("tells the agent about the switch so the next turn is the new mode", async () => {
+        const sent: string[] = [];
+        const modes: Mode[] = [];
+        const { renderer, mockInput, flush } = await render(sent, modes);
+
+        act(() => mockInput.pressTab());
+        await act(async () => await flush());
+        await mockInput.typeText("hello");
+        act(() => mockInput.pressEnter());
+        await act(async () => await flush());
+        act(() => renderer.destroy());
+
+        expect(modes).toEqual(["work"]);
     });
 });

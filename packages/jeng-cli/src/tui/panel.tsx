@@ -1,7 +1,7 @@
 import { type Answers, fields, type Widget } from "@jeng/core";
 import { useKeyboard } from "@opentui/react";
 import { useEffect, useMemo, useState } from "react";
-import { BORDER } from "./theme";
+import { USER } from "./theme";
 import { GadgetView } from "./view";
 
 export function Panel({ widget, onDone }: { widget: Widget; onDone: (answers: Answers) => void }) {
@@ -23,7 +23,7 @@ export function Panel({ widget, onDone }: { widget: Widget; onDone: (answers: An
     }, [answers, asked, onDone]);
 
     return (
-        <box border borderColor={BORDER.user} flexDirection="column" paddingLeft={1} flexShrink={0}>
+        <box border borderColor={USER} flexDirection="column" paddingLeft={1} flexShrink={0}>
             <GadgetView
                 widget={widget}
                 focused={focused}

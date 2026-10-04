@@ -7,7 +7,9 @@ import {
     type Approve,
     createAgent,
     isDelete,
+    isMode,
     loadConfig,
+    type Mode,
 } from "@jeng/core";
 import { Command } from "commander";
 import { approvalText, renderTui } from "./tui";
@@ -92,6 +94,10 @@ await new Command()
     )
     .option("--home <dir>", "home folder; repeat for multiple agents", collect, [])
     .option(
+        "--mode <mode>",
+        "learn to grow the home, work to use only what it already has; defaults to learn",
+    )
+    .option(
         "-c, --config <file>",
         "configuration file; defaults to ./jeng.json, then <home>/jeng.json",
     )
@@ -103,8 +109,16 @@ await new Command()
     .action(
         async (
             prompt: string[],
-            options: { home: string[]; config: string | undefined; yes: boolean },
+            options: { home: string[]; config: string | undefined; yes: boolean; mode?: string },
         ) => {
+            // A mode that is not one is a typo rather than a mode, and quietly
+            // falling back to learn would hand the user an agent that writes.
+            if (options.mode !== undefined && !isMode(options.mode)) {
+                process.stderr.write(`mode must be learn or work, not ${options.mode}\n`);
+                process.exit(1);
+            }
+            const mode = options.mode as Mode | undefined;
+
             let config: Awaited<ReturnType<typeof loadConfig>>;
             try {
                 config = await loadConfig({ path: options.config, homeArgs: options.home });
@@ -116,6 +130,7 @@ await new Command()
             const agent = await createAgent({
                 homes: config.homes,
                 config: config.model,
+                mode,
                 // --yes never installs the reader on its own, so a scripted run
                 // touches no stdin unless it has something to delete.
                 approve: options.yes ? yes : askOnStdin,

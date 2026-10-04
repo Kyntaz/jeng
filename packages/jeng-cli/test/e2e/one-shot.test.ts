@@ -255,7 +255,54 @@ describe("jeng", () => {
         expect(help).toContain("--home");
         expect(help).toContain("-c, --config");
         expect(help).toContain("-y, --yes");
+        expect(help).toContain("--mode");
         expect(help).toContain("run a single prompt and exit");
+    });
+
+    test("runs a --mode work prompt without telling it how to grow", async () => {
+        const home = await mkdtemp(join(tmpdir(), "jeng-cli-"));
+        const model = fakeModel([end("4")]);
+        const proc = await run(home, "what is 2+2?", model.url, ["--mode", "work"]);
+        const [stdout, code] = await Promise.all([new Response(proc.stdout).text(), proc.exited]);
+
+        expect({ code, answer: stdout.trim() }).toEqual({ code: 0, answer: "4" });
+        model.stop();
+        await rm(home, { recursive: true, force: true });
+    });
+
+    test("writes no gadget for a --mode work run that asks for one", async () => {
+        const home = await mkdtemp(join(tmpdir(), "jeng-cli-"));
+        const model = buildingModel();
+
+        const proc = await run(home, "make me a gadget that shouts\n", model.url, [
+            "--mode",
+            "work",
+            "--yes",
+        ]);
+
+        const [stderr, code] = await Promise.all([new Response(proc.stderr).text(), proc.exited]);
+
+        expect(code).toBe(0);
+        expect(stderr).toContain("learn-mode action");
+        expect(await Bun.file(gadget(home)).exists()).toBe(false);
+        model.stop();
+        await rm(home, { recursive: true, force: true });
+    });
+
+    test("refuses a --mode that is not one of the two it has", async () => {
+        const home = await mkdtemp(join(tmpdir(), "jeng-cli-"));
+        const model = fakeModel([end("never reached")]);
+
+        const proc = await run(home, "say hi", model.url, ["--mode", "explore"]);
+
+        const [stderr, code] = await Promise.all([new Response(proc.stderr).text(), proc.exited]);
+
+        expect({ code, message: stderr.trim() }).toEqual({
+            code: 1,
+            message: "mode must be learn or work, not explore",
+        });
+        model.stop();
+        await rm(home, { recursive: true, force: true });
     });
 
     test("writes no gadget when a piped run has nobody to approve it", async () => {

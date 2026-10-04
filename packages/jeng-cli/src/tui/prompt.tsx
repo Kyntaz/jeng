@@ -1,5 +1,7 @@
+import type { Mode } from "@jeng/core";
 import type { KeyBinding, TextareaRenderable } from "@opentui/core";
 import type { RefObject } from "react";
+import { MODE_COLOR } from "./theme";
 
 // Sending a prompt stays a single key, so Enter submits and Shift+Enter is what
 // breaks a line. Bindings merge over the defaults, so only the differences need
@@ -15,11 +17,14 @@ export const PROMPT_KEYS: KeyBinding[] = [
 export function PromptInput({
     input,
     onSubmit,
+    mode,
     focused = true,
     visible = true,
 }: {
     input: RefObject<TextareaRenderable | null>;
     onSubmit: () => void;
+    /** The box is the one thing on screen that always says which mode this is. */
+    mode: Mode;
     // A gadget's interface holds the keys while it is up, so the prompt gives them
     // up rather than competing for the same keystroke.
     focused?: boolean;
@@ -28,7 +33,14 @@ export function PromptInput({
     visible?: boolean;
 }) {
     return (
-        <box border visible={visible} paddingLeft={1} flexShrink={0}>
+        <box
+            border
+            borderStyle="heavy"
+            borderColor={MODE_COLOR[mode]}
+            visible={visible}
+            paddingLeft={1}
+            flexShrink={0}
+        >
             <textarea
                 ref={input}
                 focused={focused}

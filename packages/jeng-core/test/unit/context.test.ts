@@ -81,4 +81,19 @@ describe("context", () => {
     test("leaves out a gadget that draws when there is nowhere to draw it", () => {
         expect(buildContext([HOME], [])).not.toContain("`pick`");
     });
+
+    test("tells a learning jeng how to grow by default", () => {
+        expect(buildContext([HOME], [])).toContain("How you grow:");
+    });
+
+    test("tells a working jeng what it is working with instead", () => {
+        const context = buildContext([HOME], [], [], {
+            tokens: 0,
+            contextWindow: 8192,
+            mode: "work",
+        });
+
+        expect(context).not.toContain("How you grow:");
+        expect(context).toContain("you cannot change it");
+    });
 });

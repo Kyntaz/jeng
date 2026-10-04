@@ -79,20 +79,41 @@ cat src/index.ts | jeng "what does this do?"
 A piped run has no terminal to ask on, so it cannot create anything: pass `-y`/`--yes` if the
 run is yours and you trust it to write to the home folder.
 
+## Modes
+
+Jeng has two modes, and which one it is in decides whether it may change its home.
+
+| Mode   | Does                                                                              |
+| ------ | --------------------------------------------------------------------------------- |
+| `learn` | the default; grows the home, writing gadgets and protocols as it goes              |
+| `work` | uses only what the home already holds and cannot write to it at all                 |
+
+```sh
+jeng --mode work "summarise what changed in this repo"
+```
+
+Work mode is worth reaching for on a model with a small context: its prompt is a fraction of
+learn's, so more of the window is left for the task. It is also the honest way to run Jeng on
+someone else's machine, where a well-meant gadget is a change to a disk you did not ask for.
+
+The TUI starts in whichever mode `--mode` named, and `tab` moves between the two. The prompt
+box is bordered in the colour of the current mode, gold for learn and blue for work, and so is
+everything Jeng says; you are green, because you are neither.
+
 The TUI shows the context size the model is actually working with, and has a few keys of its own:
 
 | Key           | Does                                        |
 | ------------- | ------------------------------------------- |
 | `enter`       | send the prompt, or pick what is focused     |
 | `shift+enter` | start a new line in the prompt              |
-| `tab`         | move between the answers to what is asked   |
+| `tab`         | change mode, or move between the answers    |
 | `ctrl+esc`    | quit                                        |
 | `ctrl+l`      | clear the conversation and loaded protocols |
 | `esc`         | interrupt what Jeng is doing right now      |
 | `ctrl+r`      | show or hide what the model is thinking      |
 
 When a gadget puts an interface in front of you, the prompt box gives up the keys until you have
-answered it and `tab` walks between its fields.
+answered it and `tab` walks between its fields rather than changing mode.
 
 `shift+enter` needs a terminal that reports modified keys, such as any with the kitty keyboard protocol.
 The prompt box stays focused while Jeng works, so you can keep typing.
@@ -138,6 +159,8 @@ Jeng writes gadgets for itself, and it shows you the whole file before it saves 
 Ask it to iterate on a gadget and it will run it throwaway first, so you get asked about code that is
 already working rather than code that is still being guessed at.
 Deleting a gadget is the one thing `--yes` will not do for it, because there is no undo and no backup.
+All of that is learn mode only: under `--mode work` Jeng is never offered the actions that would let
+it write, so it works the home as it finds it.
 
 ### Gadgets with an interface
 

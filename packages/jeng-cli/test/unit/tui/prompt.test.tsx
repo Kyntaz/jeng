@@ -10,6 +10,7 @@ async function renderPrompt() {
     const setup = await testRender(
         <PromptInput
             input={input}
+            mode="learn"
             onSubmit={() => {
                 sent.push(input.current?.plainText ?? "");
                 input.current?.clear();

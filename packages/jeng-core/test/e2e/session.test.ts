@@ -537,4 +537,108 @@ describe("a jeng session", () => {
         model.stop();
         await rm(home, { recursive: true, force: true });
     });
+
+    test("a working session is never told how to grow", async () => {
+        const home = await mkdtemp(join(tmpdir(), "jeng-e2e-"));
+        const model = fakeModel([end("4")]);
+
+        const agent = await createAgent({
+            cwd: home,
+            homes: [home],
+            config: CONFIG(model.url),
+            mode: "work",
+            approve: allow,
+        });
+
+        expect(await agent.send("what is 2+2?")).toBe("4");
+        expect(model.requests()[0]).not.toContain("How you grow:");
+        model.stop();
+        await rm(home, { recursive: true, force: true });
+    });
+
+    test("a working session is never shown the action that writes a gadget", async () => {
+        const home = await mkdtemp(join(tmpdir(), "jeng-e2e-"));
+        const model = fakeModel([end("4")]);
+
+        const agent = await createAgent({
+            cwd: home,
+            homes: [home],
+            config: CONFIG(model.url),
+            mode: "work",
+            approve: allow,
+        });
+
+        await agent.send("what is 2+2?");
+        expect(model.requests()[0]).not.toContain("create_gadget");
+        model.stop();
+        await rm(home, { recursive: true, force: true });
+    });
+
+    test("a working session writes nothing even when the model asks it to", async () => {
+        const home = await mkdtemp(join(tmpdir(), "jeng-e2e-"));
+        const model = fakeModel([
+            act({ action: "create_gadget", name: "greet", reason: "to greet", source: GADGET }),
+            end("i cannot, this run cannot change the home"),
+        ]);
+
+        const agent = await createAgent({
+            cwd: home,
+            homes: [home],
+            config: CONFIG(model.url),
+            mode: "work",
+            approve: allow,
+        });
+
+        await agent.send("say hi to the world");
+        expect(agent.homes[0].gadgets).toEqual([]);
+        expect(await Bun.file(join(home, "gadgets", "greet.ts")).exists()).toBe(false);
+        model.stop();
+        await rm(home, { recursive: true, force: true });
+    });
+
+    test("a working session still runs the gadgets it was given", async () => {
+        const home = await mkdtemp(join(tmpdir(), "jeng-e2e-"));
+        await Bun.$`mkdir -p ${join(home, "gadgets")}`.quiet();
+        await Bun.write(join(home, "gadgets", "greet.ts"), GADGET);
+        const model = fakeModel([
+            act({ action: "run_gadget", name: "greet", input: { who: "world" } }),
+            end("hi world"),
+        ]);
+
+        const agent = await createAgent({
+            cwd: home,
+            homes: [home],
+            config: CONFIG(model.url),
+            mode: "work",
+            approve: allow,
+        });
+
+        expect(await agent.send("say hi to the world")).toBe("hi world");
+        model.stop();
+        await rm(home, { recursive: true, force: true });
+    });
+
+    test("switching to work changes the next turn and leaves the conversation alone", async () => {
+        const home = await mkdtemp(join(tmpdir(), "jeng-e2e-"));
+        const model = fakeModel([end("first"), end("second")]);
+
+        const agent = await createAgent({
+            cwd: home,
+            homes: [home],
+            config: CONFIG(model.url),
+            approve: allow,
+        });
+
+        await agent.send("what is 2+2?");
+        const before = agent.history.length;
+        agent.setMode("work");
+        await agent.send("and 3+3?");
+
+        expect(model.requests()[1]).not.toContain("create_gadget");
+        // The prompt, the call and its result, so a switch rewrote nothing that
+        // was already said.
+        expect(agent.history.length).toBe(before + 3);
+        model.stop();
+        await rm(home, { recursive: true, force: true });
+    });
 });

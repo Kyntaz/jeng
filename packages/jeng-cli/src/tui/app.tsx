@@ -1,4 +1,12 @@
-import { type Agent, type Answers, type ApprovalDecision, fields, type Widget } from "@jeng/core";
+import {
+    type Agent,
+    type Answers,
+    type ApprovalDecision,
+    fields,
+    MODES,
+    type Mode,
+    type Widget,
+} from "@jeng/core";
 import {
     createCliRenderer,
     type ScrollBoxRenderable,
@@ -12,7 +20,7 @@ import { Panel } from "./panel";
 import { PromptInput } from "./prompt";
 import { useSpinner } from "./spinner";
 import { Footer, Header } from "./status";
-import { BORDER, MUTED } from "./theme";
+import { MODE_COLOR, MUTED } from "./theme";
 import { BlockView, blocks } from "./transcript";
 
 /** A gadget's interface, waiting on a user who has not answered it yet. */
@@ -37,6 +45,7 @@ export function App({ agent, onExit }: { agent: Agent; onExit: () => void }) {
     const [entries, setEntries] = useState<Entry[]>([]);
     const [busy, setBusy] = useState(false);
     const [tokens, setTokens] = useState(0);
+    const [mode, setMode] = useState<Mode>(agent.mode);
     const [showThinking, setShowThinking] = useState(false);
     const [awaiting, setAwaiting] = useState(false);
     const [asking, setAsking] = useState<Ask[]>([]);
@@ -83,13 +92,13 @@ export function App({ agent, onExit }: { agent: Agent; onExit: () => void }) {
             if (decision.approved)
                 setEntries((current) => [
                     ...current,
-                    { kind: "tool", icon: "↳", text: "approved" },
+                    { kind: "tool", icon: "↳", text: "approved", mode },
                 ]);
             else fail(decision.reason ? `rejected: ${decision.reason}` : "rejected");
             deciding.current?.(decision);
             deciding.current = undefined;
         },
-        [fail],
+        [fail, mode],
     );
 
     // An answer belongs to the widget it came from, which is the same object the
@@ -132,6 +141,15 @@ export function App({ agent, onExit }: { agent: Agent; onExit: () => void }) {
             setTokens(0);
         }
         if (key.ctrl && key.name === "r") setShowThinking((value) => !value);
+        // Tab walks the answers of an interface or an approval, so it only changes
+        // the mode when the prompt holds the keys. The switch takes hold at the
+        // next model call, which is what leaves a turn in one piece.
+        if (!key.shift && !key.ctrl && key.name === "tab" && !asking.length && !awaiting)
+            setMode((current) => {
+                const next = MODES[(MODES.indexOf(current) + 1) % MODES.length];
+                agent.setMode(next);
+                return next;
+            });
     });
 
     const submit = useCallback(async () => {
@@ -150,6 +168,9 @@ export function App({ agent, onExit }: { agent: Agent; onExit: () => void }) {
 
         setBusy(true);
         running.current = new AbortController();
+        // Read once per turn rather than per event, so a mode switched while
+        // Jeng works stamps the whole turn rather than splitting it in two.
+        const speaking = mode;
         try {
             let streamed = "";
             const reply = await agent.send(prompt, {
@@ -158,12 +179,15 @@ export function App({ agent, onExit }: { agent: Agent; onExit: () => void }) {
                     if (event.type === "usage") setTokens(event.promptTokens);
                     else {
                         if (event.type === "text") streamed += event.text;
-                        setEntries((current) => append(current, event));
+                        setEntries((current) => append(current, event, speaking));
                     }
                 },
             });
             if (reply.trim() && reply.trim() !== streamed.trim())
-                setEntries((current) => [...current, { kind: "jeng", text: reply }]);
+                setEntries((current) => [
+                    ...current,
+                    { kind: "jeng", text: reply, mode: speaking },
+                ]);
         } catch (error) {
             if (running.current.signal.aborted) fail("interrupted");
             else fail((error as Error).message);
@@ -171,7 +195,7 @@ export function App({ agent, onExit }: { agent: Agent; onExit: () => void }) {
             running.current = undefined;
             setBusy(false);
         }
-    }, [agent, busy, fail]);
+    }, [agent, busy, fail, mode]);
 
     const visible = useMemo(
         () => (showThinking ? entries : entries.filter((entry) => entry.kind !== "think")),
@@ -204,7 +228,7 @@ export function App({ agent, onExit }: { agent: Agent; onExit: () => void }) {
 
     return (
         <box flexDirection="column" style={{ width: "100%", height: "100%" }}>
-            <Header homes={agent.homes.map((home) => home.dir)} tokens={tokens} />
+            <Header homes={agent.homes.map((home) => home.dir)} tokens={tokens} mode={mode} />
 
             <scrollbox
                 ref={scroller}
@@ -227,7 +251,7 @@ export function App({ agent, onExit }: { agent: Agent; onExit: () => void }) {
                 ))}
                 {busy && (
                     <box flexDirection="row" gap={1} paddingLeft={1}>
-                        <text fg={BORDER.jeng} content={spinner} />
+                        <text fg={MODE_COLOR[mode]} content={spinner} />
                         <text fg={MUTED} content={waiting ? "waiting for you" : "thinking"} />
                     </box>
                 )}
@@ -242,6 +266,7 @@ export function App({ agent, onExit }: { agent: Agent; onExit: () => void }) {
             <PromptInput
                 input={input}
                 onSubmit={() => void submit()}
+                mode={mode}
                 focused={asking.length === 0 && !awaiting}
                 visible={!awaiting}
             />

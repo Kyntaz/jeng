@@ -1,10 +1,21 @@
-import type { Choice } from "@jeng/core";
+import type { Choice, Mode } from "@jeng/core";
 import { SyntaxStyle } from "@opentui/core";
 import type { Entry } from "./entries";
 
-// An action keeps Jeng's gold because it is Jeng's, so the box around it rather
-// than the colour of it is what tells an action apart from Jeng's words.
-export const BORDER = { user: "#5fb3d4", jeng: "#d9a441", tool: "#d9a441" };
+// A mode is told apart by its colour, so the word and the boxes around it have to
+// agree: gold is the agent that grows, blue the one that has already grown.
+export const MODE_COLOR = { learn: "#d9a441", work: "#5fb3d4" };
+
+// The user is never either mode, so they get the one colour that is neither.
+export const USER = "#98c379";
+
+// Chrome the user is looking at rather than something either of them said, so it
+// keeps one colour of its own instead of taking the mode's.
+export const BORDER = MODE_COLOR.learn;
+
+// An action keeps its owner's colour because it is its owner's, so the box around
+// it rather than the colour of it is what tells an action from Jeng's words.
+export type Owner = "user" | "jeng" | "tool";
 
 export const MUTED = "#606070";
 
@@ -45,22 +56,38 @@ export function choiceList(options: Choice[]) {
 }
 
 // Jeng's thinking and words belong in its box, an action in a box of its own, and
-// an error in neither speaker's.
-export const OWNER: Record<Entry["kind"], keyof typeof BORDER | undefined> = {
-    user: "user",
-    jeng: "jeng",
-    think: "jeng",
-    tool: "tool",
-    approval: "tool",
-    view: "jeng",
-    error: undefined,
-};
+// an error in neither speaker's. The owner is what decides which box an entry
+// shares, so the mode has to be carried separately rather than folded into it.
+export function owner(entry: Entry): Owner | undefined {
+    switch (entry.kind) {
+        case "user":
+            return "user";
+        case "jeng":
+        case "think":
+        case "view":
+            return "jeng";
+        case "tool":
+        case "approval":
+            return "tool";
+        case "error":
+            return undefined;
+    }
+}
+
+export function color(owner: Owner, mode: Mode = "learn"): string {
+    switch (owner) {
+        case "user":
+            return USER;
+        default:
+            return MODE_COLOR[mode];
+    }
+}
 
 export const COLORS: Record<Entry["kind"], string | undefined> = {
-    user: undefined,
+    user: USER,
     jeng: undefined,
     think: "#6c6c80",
-    tool: "#d9a441",
+    tool: MODE_COLOR.learn,
     approval: "#d19a66",
     view: undefined,
     error: "#e06c75",

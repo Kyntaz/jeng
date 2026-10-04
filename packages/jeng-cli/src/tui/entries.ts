@@ -1,35 +1,46 @@
-import type { AgentEvent, Answers, Approval, Widget } from "@jeng/core";
+import type { AgentEvent, Answers, Approval, Mode, Widget } from "@jeng/core";
 
+// Everything Jeng says, thinks or calls carries the mode it was said in, because
+// a mode switched halfway through a conversation must not repaint the half that
+// came before it.
 export type Entry =
-    | { kind: "user" | "jeng" | "think"; text: string }
-    | { kind: "tool" | "approval" | "error"; icon: string; text: string }
-    | { kind: "view"; widget: Widget; answers?: Answers };
+    | { kind: "user"; text: string }
+    | { kind: "jeng" | "think"; text: string; mode: Mode }
+    | { kind: "tool"; icon: string; text: string; mode: Mode }
+    | { kind: "view"; widget: Widget; mode: Mode; answers?: Answers }
+    | { kind: "approval"; icon: string; text: string }
+    | { kind: "error"; icon: string; text: string };
 
-export function append(entries: Entry[], event: AgentEvent): Entry[] {
+export function append(entries: Entry[], event: AgentEvent, mode: Mode): Entry[] {
     switch (event.type) {
         case "text": {
             const last = entries.at(-1);
             if (last?.kind === "jeng")
                 return [...entries.slice(0, -1), { ...last, text: last.text + event.text }];
-            return [...entries, { kind: "jeng", text: event.text }];
+            return [...entries, { kind: "jeng", text: event.text, mode }];
         }
         case "reasoning": {
             const last = entries.at(-1);
             if (last?.kind === "think")
                 return [...entries.slice(0, -1), { ...last, text: last.text + event.text }];
-            return [...entries, { kind: "think", text: event.text }];
+            return [...entries, { kind: "think", text: event.text, mode }];
         }
         case "tool": {
             const args = describe(event.args);
             return [
                 ...entries,
-                { kind: "tool", icon: "⚙", text: args ? `${event.action} ${args}` : event.action },
+                {
+                    kind: "tool",
+                    icon: "⚙",
+                    text: args ? `${event.action} ${args}` : event.action,
+                    mode,
+                },
             ];
         }
         case "view":
-            return [...entries, { kind: "view", widget: event.widget }];
+            return [...entries, { kind: "view", widget: event.widget, mode }];
         case "result":
-            return [...entries, { kind: "tool", icon: "↳", text: event.content }];
+            return [...entries, { kind: "tool", icon: "↳", text: event.content, mode }];
         case "usage":
             return entries;
     }

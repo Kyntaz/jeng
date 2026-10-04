@@ -25,6 +25,20 @@ This should make Jeng particularly well suited to work with local or weaker mode
     - It exists so one disk can carry several agents, each with a config of its own.
     - It is the only source of configuration once found, so the environment is a fallback rather than a second voice.
     - Anything it leaves out falls back to the same default the environment would have supplied, which keeps a config file from having to be complete.
+- **Mode** is which of the two shapes of Jeng is running: `learn` grows the home, `work` uses only what it holds.
+    - It comes from `--mode` and nowhere else. A config file describes an agent, and the mode is a decision about this run rather than a fact about the agent, so it is not written down anywhere the user has to keep in step with it.
+    - Learn is the default, because an agent that cannot grow cannot get started.
+
+## Modes
+
+The same agent is two things depending on what it is allowed to do to its home, and the difference is worth more prompt than anything else Jeng spends context on.
+
+- **Learn mode is told what Jeng is for before it is told how a turn goes.** A model that does not know it is meant to grow will finish every task with whatever it happens to have, which is a working agent that never improves. So the identity comes first and says the home is the point, then says how to gain an ability, when to commit a protocol and when to delete one.
+- **Work mode gets the rules of a turn and nothing else.** What it grows is already there, so the only remaining question is what to do with it. The prompt is a fraction of learn's, which is the whole reason to have it: an agent with 8k of context gets a much larger share of it for the task.
+- **The actions are removed, not discouraged.** Work mode's tool does not list the actions that change the home and does not carry the arguments only they need, so a model cannot spend a turn talking itself into one and a small model never sees the words at all. `test_gadget` goes with them, because a throwaway gadget in a run that cannot keep anything is a turn wasted, and so does `load_ui`, which exists only to describe writing one.
+- **A call that names one anyway is refused, and told which mode would have it.** A model asked to work will sometimes reach for what it was asked not to, and a refusal that only says no leaves it with nothing to do instead of something to try.
+- **A mode changes the prompt and the tool, never the conversation.** Switching mid-session rewrites neither the history nor what is on disk, and takes hold at the next model call rather than halfway through the current one, so a turn is never spent in two modes at once.
+- **The user is shown which mode is in force by colour.** Learn is gold, work is blue, the user is green because they are neither, and the prompt box is bordered in the mode's colour because that box is the one thing on screen that is always there to read it.
 
 ## Turns
 

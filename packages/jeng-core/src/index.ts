@@ -13,6 +13,7 @@ export { buildContext, type Memory } from "./context";
 export { runGadget } from "./gadget";
 export { type Header, parseGadget, parseProtocol, writeProtocol } from "./header";
 export { type GadgetRef, type Home, loadHome, loadHomes, type ProtocolRef } from "./home";
+export { DEFAULT_MODE, GROWS, isMode, MODES, type Mode } from "./mode";
 export {
     chat,
     type Message,
@@ -21,7 +22,7 @@ export {
     type ToolSpec,
     type Turn,
 } from "./model";
-export { ACTIONS, JENG_TOOL } from "./tool";
+export { ACTIONS, actionsFor, jengTool } from "./tool";
 export {
     type Answers,
     type Choice,

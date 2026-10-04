@@ -4,7 +4,8 @@ import { prepareGadget } from "./draft";
 import { runGadget } from "./gadget";
 import { writeProtocol } from "./header";
 import { type GadgetRef, type Home, loadHome } from "./home";
-import { ACTIONS } from "./tool";
+import { DEFAULT_MODE, GROWS, type Mode } from "./mode";
+import { actionsFor } from "./tool";
 import { UI_LANGUAGE, type Ui } from "./ui";
 import { validateProtocol } from "./validate";
 
@@ -16,6 +17,7 @@ export interface ActionContext {
     approve: Approve;
     /** Absent wherever there is no interface to draw on, which is what makes a run headless. */
     ui?: Ui;
+    mode?: Mode;
 }
 
 const primaryHome = (ctx: ActionContext) => ctx.homes[0]?.dir ?? join(ctx.cwd, ".jeng");
@@ -228,6 +230,14 @@ export async function runAction(
     args: Record<string, unknown>,
     ctx: ActionContext,
 ): Promise<ActionResult> {
+    // Work mode never offers these, so a call that names one anyway is a model
+    // reaching for something this run has no way to give it.
+    if (ctx.mode === "work" && GROWS.includes(action))
+        return {
+            ok: false,
+            content: `"${action}" is a learn-mode action and this run cannot change the home. Use what you have, or end and say what is missing.`,
+        };
+
     switch (action) {
         case "run_gadget":
             return await runGadgetAction(ctx, args);
@@ -248,7 +258,7 @@ export async function runAction(
         default:
             return {
                 ok: false,
-                content: `unknown action "${action}". Available: ${ACTIONS.join(", ")}`,
+                content: `unknown action "${action}". Available: ${actionsFor(ctx.mode ?? DEFAULT_MODE).join(", ")}`,
             };
     }
 }

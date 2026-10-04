@@ -4,8 +4,9 @@ import type { Approve } from "./approve";
 import { defaultHome, defaultModel } from "./config";
 import { buildContext, type Memory } from "./context";
 import { type Home, loadHomes } from "./home";
+import { DEFAULT_MODE, type Mode } from "./mode";
 import { chat, type Message, type ModelConfig } from "./model";
-import { JENG_TOOL } from "./tool";
+import { jengTool } from "./tool";
 import type { Ui, Widget } from "./ui";
 
 const NUDGE =
@@ -24,6 +25,7 @@ export interface Agent {
     cwd: string;
     history: Message[];
     memory: Memory[];
+    mode: Mode;
     clear: () => void;
     inject: (text: string) => void;
     // A UI has no approver until it has rendered, so this is how one takes over
@@ -31,6 +33,9 @@ export interface Agent {
     setApprove: (approve: Approve) => void;
     // Handing over an interface is what makes a run anything but headless.
     setUi: (ui: Ui) => void;
+    // A mode changes the prompt and the tool rather than the conversation, so the
+    // next model call is the first thing that sees it.
+    setMode: (mode: Mode) => void;
     send(
         prompt: string,
         options?: { signal?: AbortSignal; onEvent?: (event: AgentEvent) => void },
@@ -43,6 +48,7 @@ export interface AgentOptions {
     config?: ModelConfig;
     history?: Message[];
     maxTurns?: number;
+    mode?: Mode;
     approve: Approve;
 }
 
@@ -53,11 +59,15 @@ export async function createAgent(options: AgentOptions): Promise<Agent> {
     const agentsFiles = await loadAgentsFiles(cwd);
     let approve = options.approve;
     let hostUi: Ui | undefined;
+    let mode = options.mode ?? DEFAULT_MODE;
     const ctx: ActionContext = {
         homes,
         cwd,
         approve: (request) => approve(request),
         ui: undefined,
+        get mode() {
+            return mode;
+        },
     };
     const history = options.history ?? [];
     const memory: Memory[] = [];
@@ -93,10 +103,15 @@ export async function createAgent(options: AgentOptions): Promise<Agent> {
         let nudged = false;
 
         for (let turn = 0; turn < maxTurns; turn++) {
+            // Read once per iteration rather than per call, so a mode the user
+            // switched mid-turn takes hold at the next boundary instead of
+            // leaving a half-learned turn behind.
+            const speaking = mode;
             messages[0].content = buildContext(ctx.homes, agentsFiles, memory, {
                 tokens: promptTokens,
                 contextWindow: config.contextWindow,
                 ui: Boolean(ctx.ui),
+                mode: speaking,
             });
 
             // The previous iteration always ended with a result rather than a
@@ -113,7 +128,7 @@ export async function createAgent(options: AgentOptions): Promise<Agent> {
 
             const reply = await chat(messages, {
                 config,
-                tools: [JENG_TOOL],
+                tools: [jengTool(speaking)],
                 signal,
                 onDelta: (text) => onEvent?.({ type: "text", text }),
                 onReasoning: (text) => onEvent?.({ type: "reasoning", text }),
@@ -226,12 +241,18 @@ export async function createAgent(options: AgentOptions): Promise<Agent> {
         cwd,
         history,
         memory,
+        get mode() {
+            return mode;
+        },
         clear,
         setApprove: (next) => {
             approve = next;
         },
         setUi: (next) => {
             hostUi = next;
+        },
+        setMode: (next) => {
+            mode = next;
         },
         inject: (text: string) => {
             pending.push(text);
