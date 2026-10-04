@@ -110,7 +110,7 @@ The TUI shows the context size the model is actually working with, and has a few
 | `ctrl+esc`    | quit                                        |
 | `ctrl+l`      | clear the conversation and loaded protocols |
 | `esc`         | interrupt what Jeng is doing right now      |
-| `ctrl+r`      | show or hide what the model is thinking      |
+| `ctrl+r`      | show or hide the detail behind a turn: what the model is thinking and what each action returned |
 
 When a gadget puts an interface in front of you, the prompt box gives up the keys until you have
 answered it and `tab` walks between its fields rather than changing mode.

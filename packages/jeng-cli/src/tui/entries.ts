@@ -6,10 +6,15 @@ import type { AgentEvent, Answers, Approval, Mode, Widget } from "@jeng/core";
 export type Entry =
     | { kind: "user"; text: string }
     | { kind: "jeng" | "think"; text: string; mode: Mode }
-    | { kind: "tool"; icon: string; text: string; mode: Mode }
+    | { kind: "tool" | "output" | "failure"; icon: string; text: string; mode: Mode }
     | { kind: "view"; widget: Widget; mode: Mode; answers?: Answers }
     | { kind: "approval"; icon: string; text: string }
     | { kind: "error"; icon: string; text: string };
+
+// What the toggle holds back: the thinking behind a reply and the output behind an
+// action. A failure is neither -- it is the user being told something went wrong, so
+// it stays whatever the toggle says.
+export const QUIET: Entry["kind"][] = ["think", "output"];
 
 export function append(entries: Entry[], event: AgentEvent, mode: Mode): Entry[] {
     switch (event.type) {
@@ -40,7 +45,17 @@ export function append(entries: Entry[], event: AgentEvent, mode: Mode): Entry[]
         case "view":
             return [...entries, { kind: "view", widget: event.widget, mode }];
         case "result":
-            return [...entries, { kind: "tool", icon: "↳", text: event.content, mode }];
+            // What an action returned is detail, but what it could not return is the
+            // answer to whether it worked, so only the two are told apart here.
+            return [
+                ...entries,
+                {
+                    kind: event.ok ? "output" : "failure",
+                    icon: "↳",
+                    text: event.content,
+                    mode,
+                },
+            ];
         case "usage":
             return entries;
     }

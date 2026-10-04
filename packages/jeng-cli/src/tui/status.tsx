@@ -52,7 +52,7 @@ export function Footer({
             <text fg={MUTED} wrapMode="none" content="ctrl+esc quit" />
             <text fg={MUTED} wrapMode="none" content="ctrl+l clear" />
             <text fg={MUTED} wrapMode="none" content="esc interrupt" />
-            <text fg={showThinking ? BORDER : MUTED} wrapMode="none" content="ctrl+r thinking" />
+            <text fg={showThinking ? BORDER : MUTED} wrapMode="none" content="ctrl+r detail" />
             <text fg={MUTED} wrapMode="none" content="tab mode" />
             {busy && <text fg={BORDER} wrapMode="none" content={`${spinner} thinking`} />}
         </box>

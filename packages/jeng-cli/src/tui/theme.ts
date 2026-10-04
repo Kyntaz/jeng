@@ -67,6 +67,8 @@ export function owner(entry: Entry): Owner | undefined {
         case "view":
             return "jeng";
         case "tool":
+        case "output":
+        case "failure":
         case "approval":
             return "tool";
         case "error":
@@ -83,11 +85,15 @@ export function color(owner: Owner, mode: Mode = "learn"): string {
     }
 }
 
+// The output of an action is drawn in the same muted gray as the chrome, so the
+// call it answers rather than its answer is what the eye lands on.
 export const COLORS: Record<Entry["kind"], string | undefined> = {
     user: USER,
     jeng: undefined,
     think: "#6c6c80",
     tool: MODE_COLOR.learn,
+    output: MUTED,
+    failure: "#e06c75",
     approval: "#d19a66",
     view: undefined,
     error: "#e06c75",

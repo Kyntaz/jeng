@@ -23,6 +23,50 @@ describe("transcript", () => {
         expect(groups.map((group) => group.owner)).toEqual(["jeng", "tool"]);
     });
 
+    test("keeps the output of an action inside the action's box", () => {
+        const groups = blocks([
+            { kind: "tool", icon: "⚙", text: "read path=a.txt", mode: "learn" },
+            { kind: "output", icon: "↳", text: "a", mode: "learn" },
+            { kind: "failure", icon: "↳", text: "boom", mode: "learn" },
+        ]);
+
+        expect(groups.length).toBe(1);
+    });
+
+    test("draws the output of an action quieter than the call above it", async () => {
+        const { renderer, captureSpans, flush } = await testRender(
+            <BlockView
+                block={{
+                    entries: [{ kind: "output", icon: "↳", text: "a", mode: "learn" }],
+                }}
+            />,
+            { width: 20, height: 5 },
+        );
+        await flush();
+        const output = captureSpans()
+            .lines.flatMap((line) => line.spans)
+            .find((span) => span.text.includes("a"));
+        act(() => renderer.destroy());
+
+        expect(output?.fg.equals(RGBA.fromHex("#606070"))).toBe(true);
+    });
+
+    test("draws what an action could not return in the color of an error", async () => {
+        const { renderer, captureSpans, flush } = await testRender(
+            <BlockView
+                block={{ entries: [{ kind: "failure", icon: "↳", text: "boom", mode: "learn" }] }}
+            />,
+            { width: 20, height: 5 },
+        );
+        await flush();
+        const failure = captureSpans()
+            .lines.flatMap((line) => line.spans)
+            .find((span) => span.text.includes("boom"));
+        act(() => renderer.destroy());
+
+        expect(failure?.fg.equals(RGBA.fromHex("#e06c75"))).toBe(true);
+    });
+
     test("keeps the speaker's turn apart from the other one", () => {
         const groups = blocks([
             { kind: "user", text: "hi" },

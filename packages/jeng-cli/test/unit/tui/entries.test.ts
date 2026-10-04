@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { Widget } from "@jeng/core";
-import { append, approvalText, type Entry } from "../../../src/tui/entries";
+import { append, approvalText, type Entry, QUIET } from "../../../src/tui/entries";
 
 const GADGET = {
     kind: "create gadget",
@@ -104,11 +104,26 @@ describe("entries", () => {
         const entries = append([], { type: "result", content: "3 files", ok: true }, "learn");
 
         expect(entries.at(-1)).toEqual({
-            kind: "tool",
+            kind: "output",
             icon: "↳",
             text: "3 files",
             mode: "learn",
         });
+    });
+
+    test("tells an action that failed apart from one that returned something", () => {
+        const entries = append([], { type: "result", content: "no such file", ok: false }, "learn");
+
+        expect(entries.at(-1)).toEqual({
+            kind: "failure",
+            icon: "↳",
+            text: "no such file",
+            mode: "learn",
+        });
+    });
+
+    test("holds back only what the toggle reveals", () => {
+        expect(QUIET).toEqual(["think", "output"]);
     });
 
     test("ignores usage, which is a number and not a line", () => {

@@ -1,10 +1,15 @@
 import { describe, expect, test } from "bun:test";
-import type { Agent, Mode } from "@jeng/core";
+import type { Agent, AgentEvent, Mode } from "@jeng/core";
 import { testRender } from "@opentui/react/test-utils";
 import { act } from "react";
 import { App } from "../../../src/tui/app";
 
-function stubAgent(sent: string[], switched: Mode[], answer = "done"): Agent {
+function stubAgent(
+    sent: string[],
+    switched: Mode[],
+    answer = "done",
+    events: AgentEvent[] = [],
+): Agent {
     let mode: Mode = "learn";
     return {
         homes: [],
@@ -22,17 +27,23 @@ function stubAgent(sent: string[], switched: Mode[], answer = "done"): Agent {
             mode = next;
             switched.push(next);
         },
-        send: async (prompt) => {
+        send: async (prompt, options) => {
             sent.push(prompt);
+            for (const event of events) options?.onEvent?.(event);
             return answer;
         },
     };
 }
 
-async function render(sent: string[], switched: Mode[] = [], answer = "done") {
+async function render(
+    sent: string[],
+    switched: Mode[] = [],
+    answer = "done",
+    events: AgentEvent[] = [],
+) {
     // Shift+Enter only arrives as its own key when the terminal reports
     // modifiers, which is what the kitty keyboard protocol buys.
-    return testRender(<App agent={stubAgent(sent, switched, answer)} onExit={() => {}} />, {
+    return testRender(<App agent={stubAgent(sent, switched, answer, events)} onExit={() => {}} />, {
         width: 80,
         height: 24,
         kittyKeyboard: true,
@@ -56,6 +67,42 @@ describe("transcript", () => {
         act(() => renderer.destroy());
 
         expect(header).not.toContain("│");
+    });
+
+    test("holds what an action returned back until ctrl+r", async () => {
+        const { renderer, mockInput, flush, captureCharFrame } = await render([], [], "done", [
+            { type: "tool", action: "read", args: { path: "a.txt" } },
+            { type: "result", content: "three files", ok: true },
+        ]);
+
+        await mockInput.typeText("hello");
+        act(() => mockInput.pressEnter());
+        await act(async () => await flush());
+        const before = captureCharFrame();
+        act(() => mockInput.pressKey("r", { ctrl: true }));
+        await act(async () => await flush());
+        const after = captureCharFrame();
+        act(() => renderer.destroy());
+
+        expect({
+            before: before.includes("three files"),
+            after: after.includes("three files"),
+        }).toEqual({ before: false, after: true });
+    });
+
+    test("leaves what an action could not return on screen", async () => {
+        const { renderer, mockInput, flush, captureCharFrame } = await render([], [], "done", [
+            { type: "tool", action: "read", args: { path: "a.txt" } },
+            { type: "result", content: "no such file", ok: false },
+        ]);
+
+        await mockInput.typeText("hello");
+        act(() => mockInput.pressEnter());
+        await act(async () => await flush());
+        const frame = captureCharFrame();
+        act(() => renderer.destroy());
+
+        expect(frame).toContain("no such file");
     });
 });
 

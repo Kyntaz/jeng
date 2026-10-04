@@ -15,7 +15,7 @@ import {
 import { createRoot, useKeyboard } from "@opentui/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ApprovalBar } from "./approval";
-import { append, approvalText, type Entry } from "./entries";
+import { append, approvalText, type Entry, QUIET } from "./entries";
 import { Panel } from "./panel";
 import { PromptInput } from "./prompt";
 import { useSpinner } from "./spinner";
@@ -198,7 +198,7 @@ export function App({ agent, onExit }: { agent: Agent; onExit: () => void }) {
     }, [agent, busy, fail, mode]);
 
     const visible = useMemo(
-        () => (showThinking ? entries : entries.filter((entry) => entry.kind !== "think")),
+        () => (showThinking ? entries : entries.filter((entry) => !QUIET.includes(entry.kind))),
         [entries, showThinking],
     );
     const groups = useMemo(() => blocks(visible), [visible]);
