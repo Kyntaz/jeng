@@ -1,10 +1,11 @@
-import { type ActionContext, JENG_TOOL, runAction } from "./actions";
+import { type ActionContext, runAction } from "./actions";
 import { loadAgentsFiles } from "./agents";
 import type { Approve } from "./approve";
 import { defaultHome, defaultModel } from "./config";
 import { buildContext, type Memory } from "./context";
 import { type Home, loadHomes } from "./home";
 import { chat, type Message, type ModelConfig } from "./model";
+import { JENG_TOOL } from "./tool";
 import type { Ui, Widget } from "./ui";
 
 const NUDGE =

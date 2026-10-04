@@ -15,6 +15,8 @@ This should make Jeng particularly well suited to work with local or weaker mode
 - **Action** is something that Jeng can do out-of-the-box.
     - **Create Gadget** creates a new Gadget that can be used later. This checks the Gadget to make sure it is valid and rejects it otherwise, then puts it to the user to approve.
     - **Create Protocol** creates a new Protocol that can be referenced later. This checks the structure of the protocol to make sure it is valid and rejects it otherwise, then puts it to the user to approve.
+    - **Test Gadget** runs a Gadget the model just wrote and throws it away afterwards. It goes through the same gates and the same approval as creating one, so iterating on a Gadget costs a read rather than a rewrite of the home.
+    - **Delete Gadget** and **Delete Protocol** remove memory for good. There is no undo and no backup, so both require a reason and put the bytes that are going away to the user.
     - **Load Protocol** pulls a Protocol's body into context when its `when` matches the task.
     - **Load UI** hands over the language a Gadget's `ui` argument is written in, and is the only description of an interface that costs nothing until it is asked for.
     - **End** hands control back to the user. It is the only way a turn finishes, so an answer is a call rather than text.
@@ -144,8 +146,10 @@ two different things.
 
 - Rejections are phrased as one sentence naming the offending field, because that sentence is read by the model, who then gets to fix its own attempt.
 - Nothing is written until validation passes, so a rejected creation leaves the home exactly as it was.
-- A gadget is compiled but never executed at creation time, so writing a gadget cannot run arbitrary code before anyone has looked at it.
-- A gadget whose name already exists is overwritten rather than rejected, because the model has no way to edit a file it is unhappy with. It is still validated first, so a rewrite cannot be a way in either, and it is still approved, so a rewrite cannot be a way around being read.
+- A Gadget the model has not had approved yet lives in a draft outside the home, so a run that is cut short cannot leave a half-written Gadget behind for a later run to find.
+- A Gadget is compiled but never executed at creation time, so writing a gadget cannot run arbitrary code before anyone has looked at it. Testing one is the one time it is executed, and that is also the one time it is put to the user first.
+- A Gadget whose name already exists is overwritten rather than rejected, because the model has no way to edit a file it is unhappy with. It is still validated first, so a rewrite cannot be a way in either, and it is still approved, so a rewrite cannot be a way around being read.
+- An approval names the verb as well as the thing, because "rewrite" and "delete" are not the same decision as "create" even when the bytes are identical. The user is always shown the bytes at stake, whether they are about to land or about to go.
 
 ## Stack
 

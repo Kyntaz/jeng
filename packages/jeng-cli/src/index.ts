@@ -4,7 +4,9 @@ import {
     type Agent,
     type Approval,
     type ApprovalDecision,
+    type Approve,
     createAgent,
+    isDelete,
     loadConfig,
 } from "@jeng/core";
 import { Command } from "commander";
@@ -50,6 +52,11 @@ async function askOnStdin(request: Approval): Promise<ApprovalDecision> {
     return reason ? { approved: false, reason } : { approved: true };
 }
 
+// --yes answers for anything that runs code, but never for a deletion: a scripted
+// run should not be able to throw a home away that nobody was there to see go.
+const yes: Approve = async (request) =>
+    isDelete(request.kind) ? await askOnStdin(request) : { approved: true };
+
 async function once(agent: Agent, prompt: string): Promise<void> {
     try {
         // Text streamed before `end` is progress, not the answer, so it goes out as
@@ -90,7 +97,7 @@ await new Command()
     )
     .option(
         "-y, --yes",
-        "approve every gadget and protocol without asking; for scripted runs with nothing to read them",
+        "approve every gadget and protocol without asking; a deletion is always asked for",
     )
     .showHelpAfterError()
     .action(
@@ -109,8 +116,9 @@ await new Command()
             const agent = await createAgent({
                 homes: config.homes,
                 config: config.model,
-                // --yes never installs the reader, so a scripted run touches no stdin.
-                approve: options.yes ? async () => ({ approved: true }) : askOnStdin,
+                // --yes never installs the reader on its own, so a scripted run
+                // touches no stdin unless it has something to delete.
+                approve: options.yes ? yes : askOnStdin,
             });
             const text = prompt.length ? prompt.join(" ") : await piped();
             if (text.trim()) await once(agent, text);

@@ -133,6 +133,11 @@ export default async (input: { who: string }) => `hi ${input.who}`
 Jeng only ever sees the name and the description, so write the description for the model, not for yourself.
 Name the input fields in it: that description is all Jeng has to go on when it later calls the gadget.
 
+Jeng writes gadgets for itself, and it shows you the whole file before it saves or runs one.
+Ask it to iterate on a gadget and it will run it throwaway first, so you get asked about code that is
+already working rather than code that is still being guessed at.
+Deleting a gadget is the one thing `--yes` will not do for it, because there is no undo and no backup.
+
 ### Gadgets with an interface
 
 A gadget can take a second argument and put an interface of its own in front of the user:
@@ -198,6 +203,9 @@ run `make deploy`, then watch the logs for five minutes before walking away.
 
 Both a gadget and a protocol are validated before they are written to disk.
 A gadget that doesn't compile or is missing its header is rejected with the reason, and Jeng gets to try again.
+
+A protocol Jeng got wrong is worth as little as a gadget that does the wrong thing, so Jeng can delete one
+too. It shows you the body first and tells you why it wants it gone; nothing is removed without you saying yes.
 
 ## Why "Jeng"?
 

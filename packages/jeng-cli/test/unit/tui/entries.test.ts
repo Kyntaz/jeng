@@ -3,11 +3,10 @@ import type { Widget } from "@jeng/core";
 import { append, approvalText, type Entry } from "../../../src/tui/entries";
 
 const GADGET = {
-    kind: "gadget",
+    kind: "create gadget",
     name: "greet",
     source: "/**\n * name: greet\n */\n\nexport default async () => 'hi'\n",
     reason: "so i can say hi",
-    replacing: false,
 } as const;
 
 describe("entries", () => {
@@ -93,11 +92,19 @@ describe("entries", () => {
     });
 
     test("says so when a gadget is being rewritten rather than created", () => {
-        expect(approvalText({ ...GADGET, replacing: true })).toContain("rewrite gadget `greet`");
+        expect(approvalText({ ...GADGET, kind: "rewrite gadget" })).toContain(
+            "rewrite gadget `greet`",
+        );
+    });
+
+    test("says so when what is on the stake is going away", () => {
+        expect(approvalText({ ...GADGET, kind: "delete gadget" })).toContain(
+            "delete gadget `greet`",
+        );
     });
 
     test("leaves out a reason a protocol does not need", () => {
-        const text = approvalText({ ...GADGET, kind: "protocol", reason: "" });
+        const text = approvalText({ ...GADGET, kind: "create protocol", reason: "" });
 
         expect(text).toContain("create protocol `greet`");
         expect(text).not.toContain("why:");

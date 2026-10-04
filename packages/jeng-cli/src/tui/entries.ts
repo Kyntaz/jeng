@@ -36,7 +36,7 @@ export function append(entries: Entry[], event: AgentEvent): Entry[] {
 // reads what they are being asked to allow rather than a summary of it.
 export function approvalText(request: Approval): string {
     return [
-        `⚑ ${request.replacing ? "rewrite" : "create"} ${request.kind} \`${request.name}\``,
+        `⚑ ${request.kind} \`${request.name}\``,
         ...(request.reason ? [`why: ${request.reason}`] : []),
         "",
         request.source,

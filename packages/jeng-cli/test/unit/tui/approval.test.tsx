@@ -5,11 +5,10 @@ import { act } from "react";
 import { App } from "../../../src/tui/app";
 
 const GADGET: Approval = {
-    kind: "gadget",
+    kind: "create gadget",
     name: "greet",
     source: "/**\n * name: greet\n */\n\nexport default async () => 'hi there'\n",
     reason: "so i can say hi",
-    replacing: false,
 };
 
 // Stands in for an agent whose whole turn is asking for one gadget and then

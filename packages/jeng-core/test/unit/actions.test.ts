@@ -249,7 +249,7 @@ describe("actions", () => {
         expect(await runAction("teleport", {}, ctx)).toEqual({
             ok: false,
             content:
-                'unknown action "teleport". Available: run_gadget, load_protocol, load_ui, create_protocol, create_gadget, end, compact',
+                'unknown action "teleport". Available: run_gadget, test_gadget, load_protocol, load_ui, create_protocol, create_gadget, delete_gadget, delete_protocol, end, compact',
         });
         await cleanup();
     });
@@ -264,7 +264,7 @@ describe("actions", () => {
         await runAction("create_gadget", { reason: WHY, source: GADGET }, ctx);
 
         expect(asked).toEqual([
-            { kind: "gadget", name: "greet", source: GADGET, reason: WHY, replacing: false },
+            { kind: "create gadget", name: "greet", source: GADGET, reason: WHY },
         ]);
         await cleanup();
     });
@@ -283,7 +283,7 @@ describe("actions", () => {
             ctx,
         );
 
-        expect(asked[1].replacing).toBe(true);
+        expect(asked[1].kind).toBe("rewrite gadget");
         await cleanup();
     });
 
@@ -295,7 +295,8 @@ describe("actions", () => {
 
         expect(result).toEqual({
             ok: false,
-            content: 'the user rejected gadget "greet": it deletes files. Change it and ask again.',
+            content:
+                'the user rejected create gadget "greet": it deletes files. Change it and ask again.',
         });
         expect(await Bun.file(join(dir, "gadgets", "greet.ts")).exists()).toBe(false);
         expect(ctx.homes[0].gadgets).toEqual([]);
@@ -345,11 +346,10 @@ describe("actions", () => {
 
         expect(asked).toEqual([
             {
-                kind: "protocol",
+                kind: "create protocol",
                 name: "deploy",
                 source: "---\nname: deploy\ndescription: how we ship\nwhen: deploying\n---\n\nrun make\n",
                 reason: "",
-                replacing: false,
             },
         ]);
         await cleanup();
@@ -432,6 +432,233 @@ describe("actions", () => {
 
         expect(result.ok).toBe(false);
         expect(result.content).toContain("nowhere to show it");
+        await cleanup();
+    });
+
+    test("test_gadget runs a gadget and leaves nothing behind to run it again", async () => {
+        const { ctx, dir, cleanup } = await context();
+        const source =
+            '/**\n * name: greet\n * description: says hi\n */\n\nexport default async (input: { who: string }) => "hi " + input.who\n';
+
+        const result = await runAction(
+            "test_gadget",
+            { reason: WHY, source, input: { who: "world" } },
+            ctx,
+        );
+
+        expect(result.ok).toBe(true);
+        expect(result.content).toContain("hi world");
+        expect(ctx.homes[0].gadgets).toEqual([]);
+        expect(await Bun.file(join(dir, "gadgets", "greet.ts")).exists()).toBe(false);
+        await cleanup();
+    });
+
+    test("tells the model a tested gadget is still only a draft", async () => {
+        const { ctx, cleanup } = await context();
+
+        const result = await runAction("test_gadget", { reason: WHY, source: GADGET }, ctx);
+
+        expect(result.content).toContain('gadget "greet" ran but was not saved');
+        await cleanup();
+    });
+
+    test("puts the gadget it is about to run to the user as a test", async () => {
+        const asked: Approval[] = [];
+        const { ctx, cleanup } = await context(async (request) => {
+            asked.push(request);
+            return { approved: true };
+        });
+
+        await runAction("test_gadget", { reason: WHY, source: GADGET }, ctx);
+
+        expect(asked).toEqual([
+            { kind: "test gadget", name: "greet", source: GADGET, reason: WHY },
+        ]);
+        await cleanup();
+    });
+
+    test("runs nothing when the user turns a test run down", async () => {
+        const { ctx, dir, cleanup } = await context(turnsDownFirst("not right now").approve);
+        const marker = join(dir, "it-ran");
+        const runs =
+            "/**\n * name: greet\n * description: says hi\n */\n\nexport default async () => { await Bun.write(" +
+            JSON.stringify(marker) +
+            ', "yes"); return "hi" }\n';
+
+        const result = await runAction("test_gadget", { reason: WHY, source: runs }, ctx);
+
+        expect(result.ok).toBe(false);
+        expect(result.content).toContain('the user rejected test gadget "greet": not right now');
+        expect(await Bun.file(marker).exists()).toBe(false);
+        await cleanup();
+    });
+
+    test("never asks to run a gadget the model gave no reason for", async () => {
+        const asked: Approval[] = [];
+        const { ctx, cleanup } = await context(async (request) => {
+            asked.push(request);
+            return { approved: true };
+        });
+
+        const result = await runAction("test_gadget", { source: GADGET }, ctx);
+
+        expect(result.ok).toBe(false);
+        expect(asked).toEqual([]);
+        await cleanup();
+    });
+
+    test("never asks to run a gadget that would not compile", async () => {
+        const asked: Approval[] = [];
+        const { ctx, cleanup } = await context(async (request) => {
+            asked.push(request);
+            return { approved: true };
+        });
+        const broken = "/**\n * name: greet\n * description: says hi\n */\n\nexport default (\n";
+
+        await runAction("test_gadget", { reason: WHY, source: broken }, ctx);
+
+        expect(asked).toEqual([]);
+        await cleanup();
+    });
+
+    test("delete_gadget takes the gadget out of the home", async () => {
+        const { ctx, dir, cleanup } = await context();
+        await Bun.write(join(dir, "gadgets", "greet.ts"), GADGET);
+        ctx.homes = [await loadHome(dir)];
+
+        const result = await runAction(
+            "delete_gadget",
+            { name: "greet", reason: "it does nothing i want" },
+            ctx,
+        );
+
+        expect(result.ok).toBe(true);
+        expect(await Bun.file(join(dir, "gadgets", "greet.ts")).exists()).toBe(false);
+        expect(ctx.homes[0].gadgets).toEqual([]);
+        await cleanup();
+    });
+
+    test("puts the whole gadget to the user before it goes, because it is the only copy", async () => {
+        const asked: Approval[] = [];
+        const { ctx, dir, cleanup } = await context(async (request) => {
+            asked.push(request);
+            return { approved: true };
+        });
+        await Bun.write(join(dir, "gadgets", "greet.ts"), GADGET);
+        ctx.homes = [await loadHome(dir)];
+
+        await runAction("delete_gadget", { name: "greet", reason: "it does nothing i want" }, ctx);
+
+        expect(asked).toEqual([
+            {
+                kind: "delete gadget",
+                name: "greet",
+                source: GADGET,
+                reason: "it does nothing i want",
+            },
+        ]);
+        await cleanup();
+    });
+
+    test("keeps the gadget when the user turns the deletion down, and says nothing went", async () => {
+        const { ctx, dir, cleanup } = await context(
+            turnsDownFirst("i still want that one").approve,
+        );
+        await Bun.write(join(dir, "gadgets", "greet.ts"), GADGET);
+        ctx.homes = [await loadHome(dir)];
+
+        const result = await runAction(
+            "delete_gadget",
+            { name: "greet", reason: "it does nothing i want" },
+            ctx,
+        );
+
+        expect(result).toEqual({
+            ok: false,
+            content:
+                'the user rejected delete gadget "greet": i still want that one. Nothing was deleted. Do something else, or say so with end.',
+        });
+        expect(ctx.homes[0].gadgets.map((gadget) => gadget.name)).toEqual(["greet"]);
+        await cleanup();
+    });
+
+    test("never asks about a deletion the model gave no reason for", async () => {
+        const asked: Approval[] = [];
+        const { ctx, dir, cleanup } = await context(async (request) => {
+            asked.push(request);
+            return { approved: true };
+        });
+        await Bun.write(join(dir, "gadgets", "greet.ts"), GADGET);
+        ctx.homes = [await loadHome(dir)];
+
+        const result = await runAction("delete_gadget", { name: "greet" }, ctx);
+
+        expect(result.ok).toBe(false);
+        expect(asked).toEqual([]);
+        await cleanup();
+    });
+
+    test("delete_gadget reports a gadget that is not there", async () => {
+        const { ctx, cleanup } = await context();
+
+        expect(await runAction("delete_gadget", { name: "nope", reason: "junk" }, ctx)).toEqual({
+            ok: false,
+            content: 'no gadget named "nope"',
+        });
+        await cleanup();
+    });
+
+    test("deleting from another home takes it out of that home rather than the first", async () => {
+        const { ctx, cleanup } = await context();
+        const other = await mkdtemp(join(tmpdir(), "jeng-other-"));
+        await Bun.write(join(other, "gadgets", "peek.ts"), GADGET.replace("greet", "peek"));
+        ctx.homes.push(await loadHome(other));
+
+        const result = await runAction(
+            "delete_gadget",
+            { name: "peek", reason: "it was only ever a probe" },
+            ctx,
+        );
+
+        expect(result.ok).toBe(true);
+        expect(ctx.homes[1].gadgets).toEqual([]);
+        await rm(other, { recursive: true, force: true });
+        await cleanup();
+    });
+
+    test("delete_protocol takes the memory out of the home", async () => {
+        const { ctx, dir, cleanup } = await context();
+        await runAction(
+            "create_protocol",
+            { name: "deploy", description: "how we ship", when: "deploying", content: "run make" },
+            ctx,
+        );
+
+        const result = await runAction(
+            "delete_protocol",
+            { name: "deploy", reason: "we use make ship now" },
+            ctx,
+        );
+
+        expect(result.ok).toBe(true);
+        expect(await Bun.file(join(dir, "protocols", "deploy.md")).exists()).toBe(false);
+        expect(ctx.homes[0].protocols).toEqual([]);
+        await cleanup();
+    });
+
+    test("keeps the protocol when the user keeps the memory", async () => {
+        const { ctx, dir, cleanup } = await context(
+            turnsDownFirst("that is right, leave it").approve,
+        );
+        await Bun.write(
+            join(dir, "protocols", "deploy.md"),
+            "---\nname: deploy\ndescription: how we ship\nwhen: deploying\n---\n\nrun make\n",
+        );
+        ctx.homes = [await loadHome(dir)];
+
+        await runAction("delete_protocol", { name: "deploy", reason: "we use make ship now" }, ctx);
+
+        expect(ctx.homes[0].protocols.map((protocol) => protocol.name)).toEqual(["deploy"]);
         await cleanup();
     });
 });

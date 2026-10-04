@@ -1,7 +1,13 @@
-export { ACTIONS, type ActionContext, type ActionResult, JENG_TOOL, runAction } from "./actions";
+export { type ActionContext, type ActionResult, runAction } from "./actions";
 export { type Agent, type AgentEvent, type AgentOptions, createAgent } from "./agent";
 export { type AgentsFile, loadAgentsFiles } from "./agents";
-export type { Approval, ApprovalDecision, Approve } from "./approve";
+export {
+    type Approval,
+    type ApprovalDecision,
+    type ApprovalKind,
+    type Approve,
+    isDelete,
+} from "./approve";
 export { type Config, defaultHome, defaultModel, loadConfig } from "./config";
 export { buildContext, type Memory } from "./context";
 export { runGadget } from "./gadget";
@@ -15,6 +21,7 @@ export {
     type ToolSpec,
     type Turn,
 } from "./model";
+export { ACTIONS, JENG_TOOL } from "./tool";
 export {
     type Answers,
     type Choice,

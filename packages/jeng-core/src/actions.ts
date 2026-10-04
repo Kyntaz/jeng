@@ -1,110 +1,14 @@
 import { join } from "node:path";
-import { type Approve, type Review, review } from "./approve";
+import { type ApprovalKind, type Approve, review } from "./approve";
+import { prepareGadget } from "./draft";
 import { runGadget } from "./gadget";
-import { parseGadget, writeProtocol } from "./header";
-import { type Home, loadHome } from "./home";
+import { writeProtocol } from "./header";
+import { type GadgetRef, type Home, loadHome } from "./home";
+import { ACTIONS } from "./tool";
 import { UI_LANGUAGE, type Ui } from "./ui";
-import { validateGadget, validateGadgetSyntax, validateProtocol } from "./validate";
+import { validateProtocol } from "./validate";
 
 export type ActionResult = { ok: boolean; content: string };
-
-export const ACTIONS = [
-    "run_gadget",
-    "load_protocol",
-    "load_ui",
-    "create_protocol",
-    "create_gadget",
-    "end",
-    "compact",
-];
-
-export const JENG_TOOL = {
-    name: "jeng",
-    description: [
-        "Do one thing. This is your only tool.",
-        "",
-        "Every message you send is exactly one call to this tool. Your answer is a call too.",
-        "",
-        'action="end", content=<the answer the user reads>',
-        "  Hand control back to the user. This is the only way a turn ever ends, so nothing you say",
-        "  in plain text will do it. Put the whole answer in content.",
-        '  e.g. {"action":"end","content":"Tokyo is the capital of Japan."}',
-        'action="compact", summary=<everything worth keeping from this conversation>',
-        "  Throw the transcript away and continue from your summary alone. When the context line at",
-        "  the top of your context is near its limit, summarize and call this.",
-        'action="run_gadget", name=<existing gadget>, input=<object>',
-        "  Run a gadget. `name` must be a gadget listed under Gadgets in your context.",
-        'action="create_gadget", name=<new kebab-case name>, reason=<why you need it>, description=<one line>, source=<TypeScript>',
-        "  Write a gadget you do not have yet.",
-        "  The user reads the whole file and decides, so reason is required and must be honest:",
-        "  they are about to let code run on their machine. If they say no you are told why, so",
-        "  change the gadget and ask again rather than repeating the call.",
-        "  source must be a complete TypeScript file that starts with this exact 4-line comment",
-        "  header, where the words `name:` and `description:` are literal and required:",
-        "",
-        "  /**",
-        "   * name: count-lines",
-        "   * description: counts the lines of a file. input: { path: string }",
-        "   */",
-        "",
-        "  Then code that compiles with bun, ending in:",
-        "  export default async (input: { path: string }) => string",
-        "  Only `node:*` builtins and the `Bun` global are available. No other package can be imported.",
-        "  The description is all you will see about this gadget later, so name its input fields.",
-        "  A gadget may take a second argument, `ui`, to put an interface in front of the user. That",
-        '  has a language of its own: call action="load_ui" for it, and add the line `* ui: true` to',
-        "  the header. Without a UI to draw on such a gadget cannot run, and is not listed either.",
-        'action="load_protocol", name=<existing protocol>',
-        "  Pull a protocol's body into your context. Use it when the protocol's `when` matches the task.",
-        'action="load_ui"',
-        "  The language for a gadget's `ui` argument. You cannot guess it: call this before writing",
-        "  a gadget that takes a second argument.",
-        'action="create_protocol", name=<new kebab-case name>, when=<when to load it>, description=<one line>, content=<knowledge>',
-        "  Save knowledge worth keeping. Never save a guess: only what you actually learned.",
-        "  The user reads it before it is committed, to check the memory is right rather than the",
-        "  prose, so there is no reason to give.",
-        "",
-        "After every call you get a result. Read it before deciding what to do next.",
-        "If a result is an error, do not repeat that same call. Change the arguments, or end without it.",
-        "Keep going until you call end. There is no turn limit, so nothing stops you but your own judgement.",
-        "If you cannot do something, end with that in one line instead of calling a tool.",
-    ].join("\n"),
-    parameters: {
-        type: "object",
-        properties: {
-            action: { type: "string", enum: ACTIONS },
-            name: { type: "string", description: "gadget or protocol name, kebab-case" },
-            input: {
-                type: "object",
-                description: "arguments for run_gadget, as an object",
-            },
-            when: {
-                type: "string",
-                description: "for create_protocol: when to load this protocol",
-            },
-            description: { type: "string" },
-            reason: {
-                type: "string",
-                description:
-                    "for create_gadget: why you need this gadget, in one line. the user reads it before deciding",
-            },
-            content: {
-                type: "string",
-                description:
-                    "for create_protocol: the markdown body. for end: the answer the user reads",
-            },
-            summary: {
-                type: "string",
-                description: "for compact: what is worth keeping from this conversation",
-            },
-            source: {
-                type: "string",
-                description: "for create_gadget: the complete TypeScript file, header first",
-            },
-        },
-        required: ["action"],
-    },
-};
 
 export interface ActionContext {
     homes: Home[];
@@ -129,24 +33,21 @@ function coerceInput(input: unknown): { bad: string } | { bad: undefined; value:
     }
 }
 
-const EXPORT_ARGUMENTS = /export\s+default\s+(?:async\s+)?(?:function\s*\w*\s*)?\(([^)]*)\)/;
-
-// A second parameter is the interface argument, and the header is the only place
-// Jeng looks to learn that, so a gadget drawing without saying so is a gadget that
-// would be offered to a run with no way to show it.
-function drawsUndeclared(source: string): boolean {
-    const args = EXPORT_ARGUMENTS.exec(source)?.[1];
-    return (args?.split(",").filter((arg) => arg.trim()).length ?? 0) > 1;
+// A gadget and a protocol are the same shape on disk, so they are found the same
+// way. The home comes back with it, because that is the one that has to be
+// reloaded afterwards when something under it goes away.
+function findIn(
+    ctx: ActionContext,
+    noun: "gadget" | "protocol",
+    name: string,
+): { dir: string; ref: GadgetRef } | undefined {
+    for (const home of ctx.homes)
+        for (const ref of noun === "gadget" ? home.gadgets : home.protocols)
+            if (ref.name === name) return { dir: home.dir, ref };
+    return undefined;
 }
 
-const findGadget = (ctx: ActionContext, name: string) =>
-    ctx.homes.flatMap((home) => home.gadgets).find((it) => it.name === name);
-
-const findProtocol = (ctx: ActionContext, name: string) =>
-    ctx.homes.flatMap((home) => home.protocols).find((it) => it.name === name);
-
-async function refreshPrimary(ctx: ActionContext): Promise<void> {
-    const dir = primaryHome(ctx);
+async function refresh(ctx: ActionContext, dir: string): Promise<void> {
     const refreshed = await Promise.all(
         ctx.homes.map((home) => (home.dir === dir ? loadHome(home.dir) : home)),
     );
@@ -158,12 +59,12 @@ async function runGadgetAction(
     args: Record<string, unknown>,
 ): Promise<ActionResult> {
     const name = String(args.name ?? "");
-    const found = findGadget(ctx, name);
+    const found = findIn(ctx, "gadget", name);
     if (!found) return { ok: false, content: `no gadget named "${name}"` };
 
     // Offering a gadget that draws and then refusing it to run would be a waste of
     // a turn, so the run without a UI says so rather than pretending the call can work.
-    if (found.ui && !ctx.ui)
+    if (found.ref.ui && !ctx.ui)
         return {
             ok: false,
             content: `gadget "${name}" draws its own interface, which this run has nowhere to show it. Say so with end instead.`,
@@ -172,7 +73,7 @@ async function runGadgetAction(
     const input = coerceInput(args.input);
     if (input.bad !== undefined) return { ok: false, content: input.bad };
 
-    const result = await runGadget(found.file, input.value, ctx.ui);
+    const result = await runGadget(found.ref.file, input.value, ctx.ui);
     return { ok: result.ok, content: result.ok ? result.output : result.error };
 }
 
@@ -181,10 +82,10 @@ async function loadProtocolAction(
     args: Record<string, unknown>,
 ): Promise<ActionResult> {
     const name = String(args.name ?? "");
-    const found = findProtocol(ctx, name);
+    const found = findIn(ctx, "protocol", name);
     if (!found) return { ok: false, content: `no protocol named "${name}"` };
 
-    return { ok: true, content: await Bun.file(found.file).text() };
+    return { ok: true, content: await Bun.file(found.ref.file).text() };
 }
 
 async function createProtocolAction(
@@ -192,7 +93,8 @@ async function createProtocolAction(
     args: Record<string, unknown>,
 ): Promise<ActionResult> {
     const name = String(args.name ?? "");
-    if (findProtocol(ctx, name)) return { ok: false, content: `protocol "${name}" already exists` };
+    if (findIn(ctx, "protocol", name))
+        return { ok: false, content: `protocol "${name}" already exists` };
 
     const source = writeProtocol(
         { name, description: String(args.description ?? ""), when: String(args.when ?? "") },
@@ -201,22 +103,22 @@ async function createProtocolAction(
     const valid = validateProtocol(source);
     if (!valid.ok) return { ok: false, content: valid.error };
 
-    const dir = join(primaryHome(ctx), "protocols");
+    const home = primaryHome(ctx);
+    const dir = join(home, "protocols");
 
     // A protocol is only text, so there is nothing to justify; the user is
     // confirming the memory is right rather than judging how it worded itself.
     const approved = await review(ctx.approve, {
-        kind: "protocol",
+        kind: "create protocol",
         name,
         source,
         reason: "",
-        replacing: false,
     });
     if (!approved.ok) return { ok: false, content: approved.error };
 
     await Bun.$`mkdir -p ${dir}`.quiet();
     await Bun.write(join(dir, `${name}.md`), source);
-    await refreshPrimary(ctx);
+    await refresh(ctx, home);
 
     return { ok: true, content: `protocol "${name}" committed. It is available from now on.` };
 }
@@ -225,75 +127,100 @@ async function createGadgetAction(
     ctx: ActionContext,
     args: Record<string, unknown>,
 ): Promise<ActionResult> {
-    // The user is about to let code run on their machine, so a gadget that
-    // cannot say why it is wanted is refused before anyone is asked about it.
+    const source = String(args.source ?? "");
+    const reason = String(args.reason ?? "");
+    const prepared = await prepareGadget(source, reason, "create_gadget", ctx.ui);
+    if (!prepared.ok) return prepared;
+    const { draft } = prepared;
+
+    try {
+        // The model cannot edit files, so rewriting a gadget it is unhappy with is
+        // the only way it can fix one. Validation has already passed either way.
+        const existing = findIn(ctx, "gadget", draft.name);
+        const kind: ApprovalKind = existing ? "rewrite gadget" : "create gadget";
+
+        const approved = await review(ctx.approve, { kind, name: draft.name, source, reason });
+        if (!approved.ok) return { ok: false, content: approved.error };
+
+        const home = primaryHome(ctx);
+        const dir = join(home, "gadgets");
+        await Bun.$`mkdir -p ${dir}`.quiet();
+        await Bun.write(join(dir, `${draft.name}.ts`), source);
+        await refresh(ctx, home);
+
+        return {
+            ok: true,
+            content: existing
+                ? `gadget "${draft.name}" rewritten at ${join(dir, `${draft.name}.ts`)}`
+                : `gadget "${draft.name}" created at ${join(dir, `${draft.name}.ts`)}`,
+        };
+    } finally {
+        await draft.dispose();
+    }
+}
+
+async function testGadgetAction(
+    ctx: ActionContext,
+    args: Record<string, unknown>,
+): Promise<ActionResult> {
+    // Asked about before anyone is, because a run that cannot happen is not worth
+    // a user's time to read a gadget over.
+    const input = coerceInput(args.input);
+    if (input.bad !== undefined) return { ok: false, content: input.bad };
+
+    const source = String(args.source ?? "");
+    const reason = String(args.reason ?? "");
+    const prepared = await prepareGadget(source, reason, "test_gadget", ctx.ui);
+    if (!prepared.ok) return prepared;
+    const { draft } = prepared;
+
+    try {
+        const approved = await review(ctx.approve, {
+            kind: "test gadget",
+            name: draft.name,
+            source,
+            reason,
+        });
+        if (!approved.ok) return { ok: false, content: approved.error };
+
+        const result = await runGadget(draft.file, input.value, ctx.ui);
+        if (!result.ok) return { ok: false, content: result.error };
+
+        return {
+            ok: true,
+            content: `${result.output}\n\n(gadget "${draft.name}" ran but was not saved. Commit this same source with create_gadget once it is right.)`,
+        };
+    } finally {
+        await draft.dispose();
+    }
+}
+
+async function deleteAction(
+    ctx: ActionContext,
+    args: Record<string, unknown>,
+    noun: "gadget" | "protocol",
+): Promise<ActionResult> {
+    const name = String(args.name ?? "");
+    const found = findIn(ctx, noun, name);
+    if (!found) return { ok: false, content: `no ${noun} named "${name}"` };
+
+    // Nothing else about a deletion can be undone, so a model that cannot say why
+    // this one should go is turned down before the user is asked to weigh in.
     const reason = String(args.reason ?? "").trim();
     if (!reason)
         return {
             ok: false,
-            content:
-                "create_gadget needs a `reason`: the user reads it to decide whether to allow the gadget",
+            content: `delete_${noun} needs a \`reason\`: the user reads it to decide whether to let this go`,
         };
 
-    const source = String(args.source ?? "");
-    const valid = validateGadget(source);
-    if (!valid.ok) return { ok: false, content: valid.error };
-
-    // The header is what every later read sees, so the file is named after it
-    // rather than after whatever the model passed as `name`.
-    const header = parseGadget(source);
-    const name = header?.name ?? "";
-
-    if (header?.ui !== "true" && drawsUndeclared(source))
-        return {
-            ok: false,
-            content:
-                'the export takes a second argument, so this gadget draws an interface: it needs `* ui: true` in its header, and action="load_ui" for the language',
-        };
-
-    // A gadget that draws would be dead code here, so it is refused before anyone
-    // is asked about it rather than approved and then never offered again.
-    if (header?.ui === "true" && !ctx.ui)
-        return {
-            ok: false,
-            content:
-                "this run has no interface to draw a gadget in, so one that draws would never be seen",
-        };
-
-    const existing = findGadget(ctx, name);
-
-    const dir = join(primaryHome(ctx), "gadgets");
-    await Bun.$`mkdir -p ${dir}`.quiet();
-
-    const temp = join(dir, `.pending-${name}.ts`);
-    await Bun.write(temp, source);
-
-    // Compiled but never run, so the source the user is shown is the source that
-    // lands, and they are never asked about a gadget that would not build.
-    const compiles = await validateGadgetSyntax(temp);
-    const approved: Review = compiles.ok
-        ? await review(ctx.approve, {
-              kind: "gadget",
-              name,
-              source,
-              reason,
-              replacing: Boolean(existing),
-          })
-        : { ok: false, error: compiles.error };
-    await Bun.file(temp).delete();
+    const source = await Bun.file(found.ref.file).text();
+    const approved = await review(ctx.approve, { kind: `delete ${noun}`, name, source, reason });
     if (!approved.ok) return { ok: false, content: approved.error };
 
-    // The model cannot edit files, so rewriting a gadget it is unhappy with is
-    // the only way it can fix one. Validation has already passed either way.
-    await Bun.write(join(dir, `${name}.ts`), source);
-    await refreshPrimary(ctx);
+    await Bun.file(found.ref.file).delete();
+    await refresh(ctx, found.dir);
 
-    return {
-        ok: true,
-        content: existing
-            ? `gadget "${name}" rewritten at ${join(dir, `${name}.ts`)}`
-            : `gadget "${name}" created at ${join(dir, `${name}.ts`)}`,
-    };
+    return { ok: true, content: `${noun} "${name}" deleted from ${found.dir}` };
 }
 
 export async function runAction(
@@ -304,6 +231,8 @@ export async function runAction(
     switch (action) {
         case "run_gadget":
             return await runGadgetAction(ctx, args);
+        case "test_gadget":
+            return await testGadgetAction(ctx, args);
         case "load_protocol":
             return await loadProtocolAction(ctx, args);
         case "load_ui":
@@ -312,6 +241,10 @@ export async function runAction(
             return await createProtocolAction(ctx, args);
         case "create_gadget":
             return await createGadgetAction(ctx, args);
+        case "delete_gadget":
+            return await deleteAction(ctx, args, "gadget");
+        case "delete_protocol":
+            return await deleteAction(ctx, args, "protocol");
         default:
             return {
                 ok: false,

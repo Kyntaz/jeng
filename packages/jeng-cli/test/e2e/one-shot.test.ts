@@ -57,23 +57,29 @@ function echoModel(): { url: string; stop: () => void } {
     return { url: `http://localhost:${server.port}/v1`, stop: () => server.stop(true) };
 }
 
-function runPiped(home: string, prompt: string, model: string, args: string[] = []) {
-    const proc = Bun.spawn(
-        ["bun", "run", resolve("packages/jeng-cli/src/index.ts"), "--home", home, ...args],
-        {
-            cwd: resolve("."),
-            env: {
-                ...process.env,
-                JENG_BASE_URL: model,
-                JENG_MODEL: "fake",
-                JENG_API_KEY: "",
-            },
-            stdin: new Blob([prompt]),
-            stdout: "pipe",
-            stderr: "pipe",
-        },
+// A config file outranks the environment, so a test that ran jeng from this repo
+// would answer from whatever model the repo's own jeng.json names. Every run gets
+// a home and a config of its own instead, which is the only way a fake model here
+// is the model that gets used.
+async function cli(home: string, model: string, args: string[], prompt?: string) {
+    await Bun.write(
+        join(home, "jeng.json"),
+        JSON.stringify({ homes: [home], model: { baseUrl: model, model: "fake" } }),
     );
-    return proc;
+
+    return Bun.spawn(["bun", "run", resolve("packages/jeng-cli/src/index.ts"), ...args], {
+        cwd: home,
+        // The config settles the model on its own, so no ambient variable can reach
+        // the run and nothing about the spawn has to be restated here.
+        env: process.env,
+        ...(prompt === undefined ? {} : { stdin: new Blob([prompt]) }),
+        stdout: "pipe",
+        stderr: "pipe",
+    });
+}
+
+function runPiped(home: string, prompt: string, model: string, args: string[] = []) {
+    return cli(home, model, ["--home", home, ...args], prompt);
 }
 
 interface Step {
@@ -104,20 +110,7 @@ function buildingModel(): { url: string; stop: () => void } {
 const gadget = (home: string) => join(home, "gadgets", "shout.ts");
 
 function run(home: string, prompt: string, model: string, args: string[] = []) {
-    return Bun.spawn(
-        ["bun", "run", resolve("packages/jeng-cli/src/index.ts"), prompt, "--home", home, ...args],
-        {
-            cwd: resolve("."),
-            env: {
-                ...process.env,
-                JENG_BASE_URL: model,
-                JENG_MODEL: "fake",
-                JENG_API_KEY: "",
-            },
-            stdout: "pipe",
-            stderr: "pipe",
-        },
-    );
+    return cli(home, model, [prompt, "--home", home, ...args]);
 }
 
 describe("jeng", () => {
@@ -125,7 +118,7 @@ describe("jeng", () => {
         const home = await mkdtemp(join(tmpdir(), "jeng-cli-"));
         const model = fakeModel([end("hello from the fake model")]);
 
-        const proc = run(home, "say hi", model.url);
+        const proc = await run(home, "say hi", model.url);
 
         const [stdout, code] = await Promise.all([new Response(proc.stdout).text(), proc.exited]);
 
@@ -141,7 +134,7 @@ describe("jeng", () => {
         const home = await mkdtemp(join(tmpdir(), "jeng-cli-"));
         const model = fakeModel([{ delta: "let me check" }, { delta: "one moment" }, end("4")]);
 
-        const proc = run(home, "what is 2+2?", model.url);
+        const proc = await run(home, "what is 2+2?", model.url);
 
         const [stdout, code] = await Promise.all([new Response(proc.stdout).text(), proc.exited]);
 
@@ -157,7 +150,7 @@ describe("jeng", () => {
         const home = await mkdtemp(join(tmpdir(), "jeng-cli-"));
         const model = fakeModel([end("4")], "two plus two is four");
 
-        const proc = run(home, "what is 2+2?", model.url);
+        const proc = await run(home, "what is 2+2?", model.url);
 
         const [stdout, code] = await Promise.all([new Response(proc.stdout).text(), proc.exited]);
 
@@ -224,7 +217,7 @@ describe("jeng", () => {
         const home = await mkdtemp(join(tmpdir(), "jeng-cli-"));
         const model = echoModel();
 
-        const proc = runPiped(home, "say hi\nfrom a pipe\n", model.url);
+        const proc = await runPiped(home, "say hi\nfrom a pipe\n", model.url);
 
         const [stdout, code] = await Promise.all([new Response(proc.stdout).text(), proc.exited]);
 
@@ -240,7 +233,7 @@ describe("jeng", () => {
         const home = await mkdtemp(join(tmpdir(), "jeng-cli-"));
         const model = echoModel();
 
-        const proc = runPiped(home, "\n", model.url);
+        const proc = await runPiped(home, "\n", model.url);
 
         const [stderr, code] = await Promise.all([new Response(proc.stderr).text(), proc.exited]);
 
@@ -269,7 +262,7 @@ describe("jeng", () => {
         const home = await mkdtemp(join(tmpdir(), "jeng-cli-"));
         const model = buildingModel();
 
-        const proc = runPiped(home, "make me a gadget that shouts\n", model.url);
+        const proc = await runPiped(home, "make me a gadget that shouts\n", model.url);
 
         const [stderr, code] = await Promise.all([new Response(proc.stderr).text(), proc.exited]);
 
@@ -284,7 +277,7 @@ describe("jeng", () => {
         const home = await mkdtemp(join(tmpdir(), "jeng-cli-"));
         const model = buildingModel();
 
-        const proc = runPiped(home, "make me a gadget that shouts\n", model.url, ["--yes"]);
+        const proc = await runPiped(home, "make me a gadget that shouts\n", model.url, ["--yes"]);
 
         const [code] = await Promise.all([proc.exited]);
 
