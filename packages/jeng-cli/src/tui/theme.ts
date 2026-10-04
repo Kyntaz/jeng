@@ -17,6 +17,11 @@ export const USER = "#98c379";
 // keeps one colour of its own instead of taking the mode's.
 export const BORDER = MODE_COLOR.learn;
 
+// What the mouse is holding, which is neither an answer nor chrome. Nothing in
+// opentui highlights a selection on its own, so without this the drag that copies
+// cannot be seen.
+export const SELECTION = "#3f5b73";
+
 // An action keeps its owner's colour because it is its owner's, so the box around
 // it rather than the colour of it is what tells an action from Jeng's words.
 export type Owner = "user" | "jeng" | "tool";

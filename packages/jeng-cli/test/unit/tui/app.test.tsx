@@ -151,6 +151,36 @@ describe("transcript", () => {
 
         expect(frame).toContain("no such file");
     });
+
+    test("holds a turn that fell over back until ctrl+r", async () => {
+        // The one way the model request fails, so this is the whole of what an error
+        // in the transcript is.
+        const failing: Agent = {
+            ...stubAgent([], []),
+            send: async () => {
+                throw new Error("boom");
+            },
+        };
+        const { renderer, mockInput, flush, captureCharFrame, waitFor } = await testRender(
+            <App agent={failing} onExit={() => {}} />,
+            { width: 80, height: 24, kittyKeyboard: true },
+        );
+
+        await mockInput.typeText("hello");
+        act(() => mockInput.pressEnter());
+        await act(async () => await flush());
+        await waitFor(() => captureCharFrame().includes("hello"));
+        const quiet = captureCharFrame();
+        act(() => mockInput.pressKey("r", { ctrl: true }));
+        await act(async () => await flush());
+        const loud = captureCharFrame();
+        act(() => renderer.destroy());
+
+        expect({ quiet: quiet.includes("boom"), loud: loud.includes("boom") }).toEqual({
+            quiet: false,
+            loud: true,
+        });
+    });
 });
 
 describe("prompt box", () => {
@@ -170,9 +200,9 @@ describe("prompt box", () => {
         const sent: string[] = [];
         const { renderer, mockInput, flush } = await render(sent);
 
-        await mockInput.typeText("first line");
+        await act(async () => await mockInput.typeText("first line"));
         act(() => mockInput.pressEnter({ shift: true }));
-        await mockInput.typeText("second line");
+        await act(async () => await mockInput.typeText("second line"));
         act(() => mockInput.pressEnter());
         await act(async () => await flush());
         act(() => renderer.destroy());

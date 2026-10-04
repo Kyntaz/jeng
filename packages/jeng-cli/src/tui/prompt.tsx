@@ -1,7 +1,8 @@
 import type { Mode } from "@jeng/core";
 import type { KeyBinding, TextareaRenderable } from "@opentui/core";
-import type { RefObject } from "react";
-import { MODE_COLOR, MODE_TINT } from "./theme";
+import { useTerminalDimensions } from "@opentui/react";
+import { type RefObject, useState } from "react";
+import { MODE_COLOR, MODE_TINT, SELECTION } from "./theme";
 
 // Sending a prompt stays a single key, so Enter submits and Shift+Enter is what
 // breaks a line. Bindings merge over the defaults, so only the differences need
@@ -13,6 +14,16 @@ export const PROMPT_KEYS: KeyBinding[] = [
     { name: "return", shift: true, action: "newline" },
     { name: "kpenter", shift: true, action: "newline" },
 ];
+
+// Half the screen is as much of the prompt as may take it, because the transcript
+// above is what the answer is read in.
+const SHARE = 2;
+
+// `virtualLineCount` only counts the rows that are currently laid out, so a box
+// one row tall would never learn how tall it wants to be. This is the whole of it,
+// wrapped the way the box is wrapping it.
+const rowsOf = (input: RefObject<TextareaRenderable | null>): number =>
+    input.current?.editorView.getTotalVirtualLineCount() ?? 1;
 
 export function PromptInput({
     input,
@@ -32,6 +43,11 @@ export function PromptInput({
     // typed while Jeng worked is still there once the answer is in.
     visible?: boolean;
 }) {
+    // The box is as tall as what is in it, so a prompt can be read while it is
+    // being written rather than scrolled inside a row that cannot show it.
+    const [rows, setRows] = useState(1);
+    const { height } = useTerminalDimensions();
+
     return (
         <box
             border
@@ -46,8 +62,10 @@ export function PromptInput({
                 ref={input}
                 focused={focused}
                 wrapMode="word"
-                height={4}
+                selectionBg={SELECTION}
+                height={Math.min(rows, Math.max(1, Math.floor(height / SHARE)))}
                 keyBindings={PROMPT_KEYS}
+                onContentChange={() => setRows(rowsOf(input))}
                 onSubmit={onSubmit}
             />
         </box>

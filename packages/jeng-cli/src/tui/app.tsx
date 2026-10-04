@@ -15,6 +15,7 @@ import {
 import { createRoot, useKeyboard } from "@opentui/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ApprovalBar } from "./approval";
+import { useCopySelection } from "./copy";
 import { append, approvalText, blank, type Entry, QUIET } from "./entries";
 import { Panel } from "./panel";
 import { PromptInput } from "./prompt";
@@ -28,6 +29,11 @@ interface Ask {
     widget: Widget;
     resolve: (answers: Answers) => void;
 }
+
+const decided = (decision: ApprovalDecision): string => {
+    if (decision.approved) return "approved";
+    return decision.reason ? `rejected: ${decision.reason}` : "rejected";
+};
 
 export async function renderTui(agent: Agent): Promise<void> {
     const renderer = await createCliRenderer({ exitOnCtrlC: true });
@@ -54,6 +60,7 @@ export function App({ agent, onExit }: { agent: Agent; onExit: () => void }) {
     const running = useRef<AbortController | undefined>(undefined);
     const deciding = useRef<((decision: ApprovalDecision) => void) | undefined>(undefined);
     const spinner = useSpinner(busy);
+    useCopySelection();
 
     // The agent cannot have a UI approver until there is a UI, so it is handed one
     // here rather than at construction. The same goes for the interface a gadget
@@ -86,20 +93,14 @@ export function App({ agent, onExit }: { agent: Agent; onExit: () => void }) {
         setEntries((current) => [...current, { kind: "error", icon: "err", text }]);
     }, []);
 
-    const answer = useCallback(
-        (decision: ApprovalDecision) => {
-            setAwaiting(false);
-            if (decision.approved)
-                setEntries((current) => [
-                    ...current,
-                    { kind: "tool", icon: "↳", text: "approved", mode },
-                ]);
-            else fail(decision.reason ? `rejected: ${decision.reason}` : "rejected");
-            deciding.current?.(decision);
-            deciding.current = undefined;
-        },
-        [fail, mode],
-    );
+    const answer = useCallback((decision: ApprovalDecision) => {
+        setAwaiting(false);
+        // An answer is the user talking, so it wears the user's green rather than
+        // sitting in the margin as chrome the model wrote.
+        setEntries((current) => [...current, { kind: "user", text: decided(decision) }]);
+        deciding.current?.(decision);
+        deciding.current = undefined;
+    }, []);
 
     // An answer belongs to the widget it came from, which is the same object the
     // transcript entry was built from, so nothing has to be numbered to find it.

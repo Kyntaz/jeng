@@ -1,7 +1,7 @@
 import type { Mode } from "@jeng/core";
 import { memo } from "react";
 import type { Entry } from "./entries";
-import { COLORS, color, type Owner, owner } from "./theme";
+import { COLORS, color, type Owner, owner, SELECTION } from "./theme";
 import { GadgetView } from "./view";
 
 export interface Block {
@@ -51,14 +51,26 @@ export const nameOf = (block: Block): number => {
 function Row({ entry }: { entry: Entry }) {
     if (entry.kind === "view") return <GadgetView widget={entry.widget} answers={entry.answers} />;
     if (!("icon" in entry))
-        return <text fg={COLORS[entry.kind]} wrapMode="word" content={entry.text} />;
+        return (
+            <text
+                fg={COLORS[entry.kind]}
+                selectionBg={SELECTION}
+                wrapMode="word"
+                content={entry.text}
+            />
+        );
     // The icon is a column of its own, so a wrapped line hangs off what is being
     // written about rather than off the marker in front of it. The gutter on the
     // left of it belongs to the box, so an action lines up with the prose above it.
     return (
         <box flexDirection="row" gap={2}>
             <text fg={COLORS[entry.kind]} content={entry.icon} />
-            <text fg={COLORS[entry.kind]} wrapMode="word" content={entry.text} />
+            <text
+                fg={COLORS[entry.kind]}
+                selectionBg={SELECTION}
+                wrapMode="word"
+                content={entry.text}
+            />
         </box>
     );
 }

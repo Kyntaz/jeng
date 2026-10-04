@@ -36,7 +36,17 @@ export function ApprovalBar({ onDecide }: { onDecide: (decision: ApprovalDecisio
             flexShrink={0}
         >
             <Button label="approve" focused={stop === "approve"} color={YES} />
-            <input ref={reason} focused={stop === "reason"} flexGrow={1} />
+            {/* A renderable measures to its own text and does not shrink, so a long
+                reason would otherwise push the reject button off the end of the bar.
+                The reason is what may give up room; the buttons are the way out of
+                the decision and have to stay where they are. */}
+            <input
+                ref={reason}
+                focused={stop === "reason"}
+                flexGrow={1}
+                flexShrink={1}
+                minWidth={0}
+            />
             <Button label="reject" focused={stop === "reject"} color={NO} />
         </box>
     );

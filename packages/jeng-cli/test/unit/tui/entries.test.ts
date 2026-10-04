@@ -35,11 +35,23 @@ describe("entries", () => {
     test("leaves no gap behind a call that takes no arguments", () => {
         const entries = append(
             [],
-            { type: "tool", action: "end", args: { action: "end" } },
+            { type: "tool", action: "compact", args: { action: "compact" } },
             "learn",
         );
 
-        expect(entries).toEqual([{ kind: "tool", icon: "⚙", text: "end", mode: "learn" }]);
+        expect(entries).toEqual([{ kind: "tool", icon: "⚙", text: "compact", mode: "learn" }]);
+    });
+
+    test("draws no box for an end, whose answer is the box that follows it", () => {
+        const entries = append(
+            [{ kind: "tool", icon: "⚙", text: "read path=a.txt", mode: "learn" }],
+            { type: "tool", action: "end", args: { content: "three files" } },
+            "learn",
+        );
+
+        expect(entries).toEqual([
+            { kind: "tool", icon: "⚙", text: "read path=a.txt", mode: "learn" },
+        ]);
     });
 
     test("serializes args that are not strings as json", () => {
@@ -123,7 +135,7 @@ describe("entries", () => {
     });
 
     test("holds back only what the toggle reveals", () => {
-        expect(QUIET).toEqual(["think", "output"]);
+        expect(QUIET).toEqual(["think", "output", "error"]);
     });
 
     test("ignores usage, which is a number and not a line", () => {

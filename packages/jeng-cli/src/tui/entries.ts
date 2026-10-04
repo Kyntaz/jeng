@@ -11,10 +11,10 @@ export type Entry =
     | { kind: "approval"; icon: string; text: string }
     | { kind: "error"; icon: string; text: string };
 
-// What the toggle holds back: the thinking behind a reply and the output behind an
-// action. A failure is neither -- it is the user being told something went wrong, so
-// it stays whatever the toggle says.
-export const QUIET: Entry["kind"][] = ["think", "output"];
+// What the toggle holds back: the thinking behind a reply, the output behind an
+// action, and a turn that went wrong. A failure is none of those -- it is the answer
+// to whether an action worked, and the call above it says nothing without it.
+export const QUIET: Entry["kind"][] = ["think", "output", "error"];
 
 // A box drawn around nothing is just a border, so a message that carries no words is
 // not one. Left in, it also breaks the turn in two, since a box of its own is what a
@@ -52,6 +52,9 @@ export function append(entries: Entry[], event: AgentEvent, mode: Mode): Entry[]
             return [...entries, { kind: "think", text: event.text, mode }];
         }
         case "tool": {
+            // The answer an end carries is drawn in the box that follows it, so a
+            // box of its own here would only say what that box already says.
+            if (event.action === "end") return entries;
             const args = describe(event.args);
             return [
                 ...entries,

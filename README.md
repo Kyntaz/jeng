@@ -86,7 +86,7 @@ Jeng has two modes, and which one it is in decides whether it may change its hom
 | `work` | uses only what the home already holds and cannot write to it at all                 |
 
 ```sh
-jeng --mode work "summarise what changed in this repo"
+jeng --mode work "summarize what changed in this repo"
 ```
 
 Work mode is worth reaching for on a model with a small context: its prompt is a fraction of
@@ -106,7 +106,10 @@ The TUI shows the context size the model is actually working with, and has a few
 | `ctrl+esc`    | quit                                        |
 | `ctrl+l`      | clear the conversation and loaded protocols |
 | `esc`         | interrupt what Jeng is doing right now      |
-| `ctrl+r`      | show or hide the detail behind a turn: what the model is thinking and what each action returned |
+| `ctrl+r`      | show or hide the detail behind a turn: what the model is thinking, what each action returned and what went wrong |
+
+Drag with the mouse to select any of it and let go, and the selection goes to your
+clipboard. The prompt box grows to hold what you have written, up to half the screen.
 
 When a gadget puts an interface in front of you, the prompt box gives up the keys until you have
 answered it and `tab` walks between its fields rather than changing mode.

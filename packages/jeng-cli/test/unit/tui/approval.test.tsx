@@ -1,8 +1,13 @@
 import { describe, expect, test } from "bun:test";
 import type { Agent, Approval, ApprovalDecision, Approve, Mode } from "@jeng/core";
+import type { CapturedLine } from "@opentui/core";
+import { RGBA } from "@opentui/core";
 import { testRender } from "@opentui/react/test-utils";
 import { act } from "react";
 import { App } from "../../../src/tui/app";
+import { USER } from "../../../src/tui/theme";
+
+const joined = (line: CapturedLine) => line.spans.map((span) => span.text).join("");
 
 const GADGET: Approval = {
     kind: "create gadget",
@@ -111,6 +116,44 @@ describe("approving a gadget", () => {
         act(() => renderer.destroy());
 
         expect(decided).toEqual([{ approved: false, reason: "" }]);
+    });
+
+    test("keeps the reject button on screen under a long reason", async () => {
+        const { renderer, mockInput, flush, captureCharFrame, waitFor } = await render(
+            stubAgent([]),
+        );
+
+        await mockInput.typeText("say hi");
+        act(() => mockInput.pressEnter());
+        await act(async () => await flush());
+        await waitFor(() => captureCharFrame().includes("approve"));
+        act(() => mockInput.pressTab());
+        await act(async () => await flush());
+        await mockInput.typeText("it deletes files and rewrites the whole home folder twice over");
+        await act(async () => await flush());
+        const bar = captureCharFrame()
+            .split("\n")
+            .find((line) => line.includes("approve"));
+        act(() => renderer.destroy());
+
+        expect(bar).toContain("reject");
+    });
+
+    test("gives the answer the user's green, because the answer is theirs", async () => {
+        const { renderer, mockInput, flush, captureSpans, waitFor } = await render(stubAgent([]));
+
+        await mockInput.typeText("say hi");
+        act(() => mockInput.pressEnter());
+        await act(async () => await flush());
+        await waitFor(() => captureSpans().lines.some((line) => joined(line).includes("approve")));
+        act(() => mockInput.pressEnter());
+        await act(async () => await flush());
+        await waitFor(() => captureSpans().lines.some((line) => joined(line).includes("approved")));
+        const answer = captureSpans().lines.find((line) => joined(line).includes("approved"));
+        const border = answer?.spans.find((span) => span.text.includes("│"));
+        act(() => renderer.destroy());
+
+        expect(border?.fg.equals(RGBA.fromHex(USER))).toBe(true);
     });
 
     test("holds on to what was half typed while jeng was working", async () => {

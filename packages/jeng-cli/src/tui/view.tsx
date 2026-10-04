@@ -1,7 +1,7 @@
 import type { Widget } from "@jeng/core";
 import type { InputRenderable, TextareaRenderable } from "@opentui/core";
 import { useRef } from "react";
-import { COLORS, choiceList, SYNTAX } from "./theme";
+import { COLORS, choiceList, SELECTION, SYNTAX } from "./theme";
 
 type Drawn = Extract<Widget, { kind: "text" | "markdown" | "code" | "diff" }>;
 type Choice = Extract<Widget, { kind: "select" }>;
@@ -36,10 +36,16 @@ export function GadgetView(props: ViewProps) {
             // nothing about what it is asking.
             return (
                 <box flexDirection="column" marginBottom={1}>
-                    <text fg={COLORS.jeng} wrapMode="word" content={widget.question} />
+                    <text
+                        fg={COLORS.jeng}
+                        selectionBg={SELECTION}
+                        wrapMode="word"
+                        content={widget.question}
+                    />
                     {answers ? (
                         <text
                             fg={widget.name in answers ? COLORS.jeng : COLORS.think}
+                            selectionBg={SELECTION}
                             wrapMode="word"
                             content={answers[widget.name] ?? "skipped"}
                         />
@@ -64,7 +70,7 @@ function DrawnWidget({ widget }: { widget: Drawn }) {
         case "diff":
             return <diff diff={widget.diff} filetype={widget.filetype} syntaxStyle={SYNTAX} />;
         default:
-            return <text wrapMode="word" content={widget.content} />;
+            return <text selectionBg={SELECTION} wrapMode="word" content={widget.content} />;
     }
 }
 
