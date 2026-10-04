@@ -6,17 +6,11 @@ This means that it is an agent that works well with tiny models, since it uses n
 
 ## Installation
 
-### Windows
-
-```pwsh
-bun install -g jeng
-```
-
-### Unix
-
 ```sh
-bun install -g jeng
+bun run setup
 ```
+
+This builds Jeng into a single executable with `bun run build` and installs it as `jeng` in `~/.jeng/bin`, adding that folder to your PATH if it isn't there yet. Open a new terminal afterwards. `bun run build` alone just writes the executable to `dist/jeng` (`dist/jeng.exe` on Windows).
 
 ## Configuration
 

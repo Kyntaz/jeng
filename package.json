@@ -7,6 +7,8 @@
     ],
     "scripts": {
         "jeng": "bun run packages/jeng-cli/src/index.ts",
+        "build": "bun build --compile --outfile dist/jeng packages/jeng-cli/src/index.ts",
+        "setup": "bun run build && bun run scripts/setup.ts",
         "test": "bun test",
         "typecheck": "tsc --noEmit",
         "format": "biome format --write .",
