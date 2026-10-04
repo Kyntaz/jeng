@@ -1,7 +1,7 @@
 import type { Mode } from "@jeng/core";
 import type { KeyBinding, TextareaRenderable } from "@opentui/core";
 import type { RefObject } from "react";
-import { MODE_COLOR } from "./theme";
+import { MODE_COLOR, MODE_TINT } from "./theme";
 
 // Sending a prompt stays a single key, so Enter submits and Shift+Enter is what
 // breaks a line. Bindings merge over the defaults, so only the differences need
@@ -37,6 +37,7 @@ export function PromptInput({
             border
             borderStyle="heavy"
             borderColor={MODE_COLOR[mode]}
+            backgroundColor={MODE_TINT[mode]}
             visible={visible}
             paddingX={1}
             flexShrink={0}

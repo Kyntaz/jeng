@@ -69,6 +69,52 @@ describe("transcript", () => {
         expect(header).not.toContain("│");
     });
 
+    test("keeps the first box clear of the header it is laid over", async () => {
+        const { renderer, mockInput, flush, captureCharFrame, waitFor } = await render(
+            [],
+            [],
+            "done",
+        );
+
+        await mockInput.typeText("hello");
+        act(() => mockInput.pressEnter());
+        await act(async () => await flush());
+        await waitFor(() => captureCharFrame().includes("done"));
+        const underHeader = captureCharFrame().split("\n")[1];
+        act(() => renderer.destroy());
+
+        // The box opens below the header rather than underneath it, where its own top
+        // border would be the row the header has already painted over.
+        expect(underHeader).toContain("┌");
+    });
+
+    test("puts the transcript back as it was once detail is switched off again", async () => {
+        const { renderer, mockInput, flush, captureCharFrame, waitFor } = await render(
+            [],
+            [],
+            "done",
+            [
+                { type: "tool", action: "read", args: { path: "a.txt" } },
+                { type: "result", content: "three files", ok: true },
+            ],
+        );
+
+        await mockInput.typeText("hello");
+        act(() => mockInput.pressEnter());
+        await act(async () => await flush());
+        await waitFor(() => captureCharFrame().includes("read path=a.txt"));
+        await waitFor(() => !captureCharFrame().includes("thinking"));
+        const before = captureCharFrame();
+        act(() => mockInput.pressKey("r", { ctrl: true }));
+        await act(async () => await flush());
+        act(() => mockInput.pressKey("r", { ctrl: true }));
+        await act(async () => await flush());
+        const after = captureCharFrame();
+        act(() => renderer.destroy());
+
+        expect(after).toBe(before);
+    });
+
     test("holds what an action returned back until ctrl+r", async () => {
         const { renderer, mockInput, flush, captureCharFrame } = await render([], [], "done", [
             { type: "tool", action: "read", args: { path: "a.txt" } },

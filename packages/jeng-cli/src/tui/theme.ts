@@ -6,6 +6,10 @@ import type { Entry } from "./entries";
 // agree: gold is the agent that grows, blue the one that has already grown.
 export const MODE_COLOR = { learn: "#d9a441", work: "#5fb3d4" };
 
+// A wash of the mode's own colour behind the prompt, because the transcript scrolls
+// under that box and a border showing through it reads as a broken one.
+export const MODE_TINT = { learn: "#3a3018", work: "#1d3340" };
+
 // The user is never either mode, so they get the one colour that is neither.
 export const USER = "#98c379";
 

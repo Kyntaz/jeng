@@ -1,16 +1,17 @@
 import { describe, expect, test } from "bun:test";
-import type { TextareaRenderable } from "@opentui/core";
+import { RGBA, type TextareaRenderable } from "@opentui/core";
 import { testRender } from "@opentui/react/test-utils";
 import { act, createRef } from "react";
 import { PromptInput } from "../../../src/tui/prompt";
+import { MODE_TINT } from "../../../src/tui/theme";
 
-async function renderPrompt() {
+async function renderPrompt(mode: "learn" | "work" = "learn") {
     const input = createRef<TextareaRenderable>();
     const sent: string[] = [];
     const setup = await testRender(
         <PromptInput
             input={input}
-            mode="learn"
+            mode={mode}
             onSubmit={() => {
                 sent.push(input.current?.plainText ?? "");
                 input.current?.clear();
@@ -58,5 +59,17 @@ describe("prompt box", () => {
         act(() => renderer.destroy());
 
         expect(sent).toEqual(["first", "second"]);
+    });
+
+    test("wears a wash of the mode's own colour, so the transcript cannot show through it", async () => {
+        const { renderer, captureSpans, flush } = await renderPrompt("work");
+
+        await flush();
+        const wash = captureSpans()
+            .lines.flatMap((line) => line.spans)
+            .find((span) => span.bg.equals(RGBA.fromHex(MODE_TINT.work)));
+        act(() => renderer.destroy());
+
+        expect(wash !== undefined).toBe(true);
     });
 });

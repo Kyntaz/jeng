@@ -98,10 +98,9 @@ jeng --mode work "summarise what changed in this repo"
 Work mode is worth reaching for on a model with a small context: its prompt is a fraction of
 learn's, so more of the window is left for the task. It is also the honest way to run Jeng on
 someone else's machine, where a well-meant gadget is a change to a disk you did not ask for.
+The TUI starts in whichever mode `--mode` named, and `tab` moves between the two.
 
-The TUI starts in whichever mode `--mode` named, and `tab` moves between the two. The prompt
-box is bordered in the colour of the current mode, gold for learn and blue for work, and so is
-everything Jeng says; you are green, because you are neither.
+## The TUI
 
 The TUI shows the context size the model is actually working with, and has a few keys of its own:
 

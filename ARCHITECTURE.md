@@ -38,7 +38,7 @@ The same agent is two things depending on what it is allowed to do to its home, 
 - **The actions are removed, not discouraged.** Work mode's tool does not list the actions that change the home and does not carry the arguments only they need, so a model cannot spend a turn talking itself into one and a small model never sees the words at all. `test_gadget` goes with them, because a throwaway gadget in a run that cannot keep anything is a turn wasted, and so does `load_ui`, which exists only to describe writing one.
 - **A call that names one anyway is refused, and told which mode would have it.** A model asked to work will sometimes reach for what it was asked not to, and a refusal that only says no leaves it with nothing to do instead of something to try.
 - **A mode changes the prompt and the tool, never the conversation.** Switching mid-session rewrites neither the history nor what is on disk, and takes hold at the next model call rather than halfway through the current one, so a turn is never spent in two modes at once.
-- **The user is shown which mode is in force by colour.** Learn is gold, work is blue, the user is green because they are neither, and the prompt box is bordered in the mode's colour because that box is the one thing on screen that is always there to read it.
+- **The user is shown which mode is in force by colour.** Learn is gold, work is blue, the user is green because they are neither, and the prompt box is bordered in the mode's colour because that box is the one thing on screen that is always there to read it. It is washed in a fainter version of the same colour, because the transcript scrolls under it and a border showing through reads as a broken one.
 
 ## Turns
 

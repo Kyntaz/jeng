@@ -21,7 +21,7 @@ import { PromptInput } from "./prompt";
 import { useSpinner } from "./spinner";
 import { Footer, Header } from "./status";
 import { MODE_COLOR, MUTED } from "./theme";
-import { BlockView, blocks } from "./transcript";
+import { BlockView, blocks, nameOf } from "./transcript";
 
 /** A gadget's interface, waiting on a user who has not answered it yet. */
 interface Ask {
@@ -240,12 +240,15 @@ export function App({ agent, onExit }: { agent: Agent; onExit: () => void }) {
                 minHeight={0}
                 scrollX={false}
                 viewportCulling
+                // The header is laid over this region's first row, so the transcript
+                // keeps a row of its own clear of it rather than being sliced by it.
+                paddingTop={1}
                 verticalScrollbarOptions={{ visible: false }}
                 horizontalScrollbarOptions={{ visible: false }}
                 style={{ width: "100%" }}
             >
-                {groups.map((block, index) => (
-                    <BlockView key={index} block={block} />
+                {groups.map((block) => (
+                    <BlockView key={nameOf(block)} block={block} />
                 ))}
                 {busy && (
                     <box flexDirection="row" gap={1} paddingLeft={1}>

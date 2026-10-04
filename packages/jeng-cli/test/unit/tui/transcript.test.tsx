@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { RGBA } from "@opentui/core";
 import { testRender } from "@opentui/react/test-utils";
 import { act } from "react";
-import { BlockView, blocks } from "../../../src/tui/transcript";
+import { BlockView, blocks, nameOf } from "../../../src/tui/transcript";
 
 describe("transcript", () => {
     test("gathers jeng's own words and thinking into one box", () => {
@@ -31,6 +31,16 @@ describe("transcript", () => {
         ]);
 
         expect(groups.length).toBe(1);
+    });
+
+    test("gives each action a box of its own, rather than one box for a run of them", () => {
+        const groups = blocks([
+            { kind: "tool", icon: "⚙", text: "read path=a.txt", mode: "learn" },
+            { kind: "output", icon: "↳", text: "a", mode: "learn" },
+            { kind: "tool", icon: "⚙", text: "read path=b.txt", mode: "learn" },
+        ]);
+
+        expect(groups.map((group) => group.entries.length)).toEqual([2, 1]);
     });
 
     test("draws the output of an action quieter than the call above it", async () => {
@@ -84,6 +94,23 @@ describe("transcript", () => {
         ]);
 
         expect(groups.map((group) => group.mode)).toEqual(["learn", "work"]);
+    });
+
+    test("names a box after what is in it, so a box that moves is still the same box", () => {
+        const said = { kind: "tool" as const, icon: "⚙", text: "read a", mode: "learn" as const };
+        const later = { kind: "tool" as const, icon: "⚙", text: "read b", mode: "learn" as const };
+        const [before, after] = blocks([said, later]);
+        const [stillBefore, , stillAfter] = blocks([
+            said,
+            { kind: "error", icon: "err", text: "boom" },
+            later,
+        ]);
+
+        expect({
+            said: nameOf(before) === nameOf(stillBefore),
+            later: nameOf(after) === nameOf(stillAfter),
+            apart: nameOf(before) !== nameOf(after),
+        }).toEqual({ said: true, later: true, apart: true });
     });
 
     test("leaves an error outside every box", () => {
@@ -198,5 +225,27 @@ describe("transcript", () => {
         act(() => renderer.destroy());
 
         expect(frame).toContain("│ 0123456789abcdef │");
+    });
+
+    test("stays taller than its text when the column around it is too short", async () => {
+        const jeng = (text: string) => ({
+            owner: "jeng" as const,
+            mode: "learn" as const,
+            entries: [{ kind: "jeng" as const, text, mode: "learn" as const }],
+        });
+        const { renderer, captureCharFrame, flush } = await testRender(
+            <box flexDirection="column" width={20} height={6}>
+                <BlockView block={jeng("a reply that wraps onto a second line")} />
+                <BlockView block={jeng("another reply that wraps as well")} />
+                <BlockView block={jeng("a third reply that wraps as well")} />
+            </box>,
+            { width: 20, height: 8 },
+        );
+        await flush();
+        const frame = captureCharFrame();
+        act(() => renderer.destroy());
+
+        // A squashed box is one whose lower border is written over by its own text.
+        expect(frame).toContain("└──────────────────┘");
     });
 });
