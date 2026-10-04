@@ -5,6 +5,7 @@ import { runGadget } from "./gadget";
 import { writeProtocol } from "./header";
 import { type GadgetRef, type Home, loadHome } from "./home";
 import { DEFAULT_MODE, GROWS, type Mode } from "./mode";
+import { prompt } from "./prompts";
 import { actionsFor } from "./tool";
 import { UI_LANGUAGE, type Ui } from "./ui";
 import { validateProtocol } from "./validate";
@@ -98,7 +99,7 @@ async function runGadgetAction(
     if (found.ref.ui && !ctx.ui)
         return {
             ok: false,
-            content: `gadget "${name}" draws its own interface, which this run has nowhere to show it. Say so with end instead.`,
+            content: prompt("gadget-draws", { name }),
         };
 
     const result = await runGadget(found.ref.file, input, ctx.ui);
@@ -216,7 +217,7 @@ async function testGadgetAction(
 
         return {
             ok: true,
-            content: `${result.output}\n\n(gadget "${draft.name}" ran but was not saved. Commit this same source with create_gadget once it is right.)`,
+            content: prompt("untested-gadget", { output: result.output, name: draft.name }),
         };
     } finally {
         await draft.dispose();
@@ -261,7 +262,7 @@ export async function runAction(
     if (ctx.mode === "work" && GROWS.includes(action))
         return {
             ok: false,
-            content: `"${action}" is a learn-mode action and this run cannot change the home. Use what you have, or end and say what is missing.`,
+            content: prompt("learn-only-action", { action }),
         };
 
     switch (action) {

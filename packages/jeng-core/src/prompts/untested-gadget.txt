@@ -1,0 +1,3 @@
+${output}
+
+(gadget "${name}" ran but was not saved. Commit this same source with create_gadget once it is right.)

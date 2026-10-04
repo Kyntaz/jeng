@@ -6,11 +6,11 @@ import { buildContext, type Memory } from "./context";
 import { type Home, loadHomes } from "./home";
 import { DEFAULT_MODE, type Mode } from "./mode";
 import { chatWithRetry, type Message, type ModelConfig } from "./model";
+import { prompt } from "./prompts";
 import { jengTool } from "./tool";
 import type { Ui, Widget } from "./ui";
 
-const NUDGE =
-    'That was plain text, which does not reach the user. Call action="end" with that answer now, or call a tool if you still need one.';
+const NUDGE = prompt("nudge");
 
 export type AgentEvent =
     | { type: "text"; text: string }
@@ -38,7 +38,7 @@ export interface Agent {
     // next model call is the first thing that sees it.
     setMode: (mode: Mode) => void;
     send(
-        prompt: string,
+        text: string,
         options?: { signal?: AbortSignal; onEvent?: (event: AgentEvent) => void },
     ): Promise<string>;
 }
@@ -77,7 +77,7 @@ export async function createAgent(options: AgentOptions): Promise<Agent> {
     let promptTokens = 0;
 
     async function send(
-        prompt: string,
+        text: string,
         sendOptions: { signal?: AbortSignal; onEvent?: (event: AgentEvent) => void } = {},
     ): Promise<string> {
         const { signal, onEvent } = sendOptions;
@@ -93,13 +93,13 @@ export async function createAgent(options: AgentOptions): Promise<Agent> {
         // Anything injected after the last turn ended never got read by the
         // model, so it becomes part of the conversation before this prompt
         // rather than an oddity trailing the next one.
-        for (const text of pending.splice(0)) history.push({ role: "user", content: text });
+        for (const injected of pending.splice(0)) history.push({ role: "user", content: injected });
         const messages: Message[] = [
             { role: "system", content: "" },
             ...history,
-            { role: "user", content: prompt },
+            { role: "user", content: text },
         ];
-        history.push({ role: "user", content: prompt });
+        history.push({ role: "user", content: text });
         let previous = "";
         let nudged = false;
         let reported = false;
@@ -178,8 +178,7 @@ export async function createAgent(options: AgentOptions): Promise<Agent> {
                 if (name === "end") {
                     const answer = String(args.content ?? "").trim();
                     if (!answer) {
-                        const complaint =
-                            "end was called with no content. Put the answer in content.";
+                        const complaint = prompt("end-no-content");
                         onEvent?.({ type: "result", content: complaint, ok: false });
                         close(complaint);
                         continue;
@@ -191,7 +190,7 @@ export async function createAgent(options: AgentOptions): Promise<Agent> {
                 if (name === "compact") {
                     const summary = String(args.summary ?? "").trim();
                     if (!summary) {
-                        const complaint = "compact was called with no summary. Say what to keep.";
+                        const complaint = prompt("compact-no-summary");
                         onEvent?.({ type: "result", content: complaint, ok: false });
                         close(complaint);
                         continue;
@@ -219,7 +218,7 @@ export async function createAgent(options: AgentOptions): Promise<Agent> {
                 // call is legitimate, because the context has changed.
                 const signature = `${name}:${JSON.stringify(args)}`;
                 if (signature === previous) {
-                    const refusal = `"${name}" was just called with the same arguments, so it changed nothing and was not run again. Say what you already know with action="end", or call something that changes things.`;
+                    const refusal = prompt("repeat-call", { name });
                     onEvent?.({ type: "result", content: refusal, ok: false });
                     close(refusal);
                     continue;

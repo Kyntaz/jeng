@@ -1,0 +1,1 @@
+gadget "${name}" draws its own interface, which this run has nowhere to show it. Say so with end instead.

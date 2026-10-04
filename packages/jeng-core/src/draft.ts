@@ -2,6 +2,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { parseGadget } from "./header";
+import { prompt } from "./prompts";
 import type { Ui } from "./ui";
 import { validateGadget, validateGadgetSyntax } from "./validate";
 
@@ -48,20 +49,11 @@ export async function prepareGadget(
     const header = parseGadget(source);
 
     if (header?.ui !== "true" && drawsUndeclared(source))
-        return {
-            ok: false,
-            content:
-                'the export takes a second argument, so this gadget draws an interface: it needs `* ui: true` in its header, and action="load_ui" for the language',
-        };
+        return { ok: false, content: prompt("draws-undeclared") };
 
     // A gadget that draws would be dead code here, so it is refused before anyone
     // is asked about it rather than approved and then never offered again.
-    if (header?.ui === "true" && !ui)
-        return {
-            ok: false,
-            content:
-                "this run has no interface to draw a gadget in, so one that draws would never be seen",
-        };
+    if (header?.ui === "true" && !ui) return { ok: false, content: prompt("no-interface") };
 
     // The home is only ever written to once the user has agreed, so the file that
     // is compiled is a draft outside it: nothing survives a run that is cut short.

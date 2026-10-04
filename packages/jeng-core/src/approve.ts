@@ -1,3 +1,5 @@
+import { prompt } from "./prompts";
+
 export type ApprovalKind =
     | "create gadget"
     | "rewrite gadget"
@@ -30,12 +32,12 @@ export const isDelete = (kind: ApprovalKind) => kind.startsWith("delete");
 export async function review(approve: Approve, request: Approval): Promise<Review> {
     const decision = await approve(request);
     if (decision.approved) return { ok: true };
-    const reason = decision.reason.trim() || "no reason was given";
-    const next = isDelete(request.kind)
-        ? "Nothing was deleted. Do something else, or say so with end."
-        : "Change it and ask again.";
     return {
         ok: false,
-        error: `the user rejected ${request.kind} "${request.name}": ${reason}. ${next}`,
+        error: prompt(isDelete(request.kind) ? "rejected-delete" : "rejected-change", {
+            kind: request.kind,
+            name: request.name,
+            reason: decision.reason.trim() || "no reason was given",
+        }),
     };
 }

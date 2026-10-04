@@ -1,0 +1,1 @@
+the user rejected ${kind} "${name}": ${reason}. Nothing was deleted. Do something else, or say so with end.

@@ -1,0 +1,1 @@
+the user rejected ${kind} "${name}": ${reason}. Change it and ask again.

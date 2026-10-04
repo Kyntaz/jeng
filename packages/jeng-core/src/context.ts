@@ -1,6 +1,7 @@
 import type { AgentsFile } from "./agents";
 import type { Home } from "./home";
 import { DEFAULT_MODE, identity, type Mode } from "./mode";
+import { prompt } from "./prompts";
 
 export interface Memory {
     name: string;
@@ -15,8 +16,12 @@ function section(title: string, lines: string[]): string {
 // window the line tells it to compact rather than leaving the choice to luck.
 function usageLine(usage?: { tokens: number; contextWindow: number }): string {
     if (!usage) return "";
-    const near = usage.tokens >= usage.contextWindow * 0.8;
-    return `Context: ${usage.tokens}/${usage.contextWindow} tokens.${near ? " Compact now." : ""}`;
+    const urgent = usage.tokens >= usage.contextWindow * 0.8 ? " Compact now." : "";
+    return prompt("context-usage", {
+        tokens: String(usage.tokens),
+        contextWindow: String(usage.contextWindow),
+        urgent,
+    });
 }
 
 export function buildContext(

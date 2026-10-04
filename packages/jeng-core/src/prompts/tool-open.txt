@@ -1,0 +1,11 @@
+Do one thing. This is your only tool.
+
+Every message you send is exactly one call to this tool. Your answer is a call too.
+
+action="end", content=<the answer the user reads>
+  Hand control back to the user. This is the only way a turn ever ends, so nothing you say
+  in plain text will do it. Put the whole answer in content.
+  e.g. {"action":"end","content":"Tokyo is the capital of Japan."}
+action="compact", summary=<everything worth keeping from this conversation>
+  Throw the transcript away and continue from your summary alone. When the context line at
+  the top of your context is near its limit, summarize and call this.

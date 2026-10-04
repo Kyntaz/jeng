@@ -1,0 +1,45 @@
+A gadget may take a second argument, `ui`, to put an interface of its own in front of the user.
+
+    export default async (input: { repo: string }, ui) => {
+        const answers = await ui({ kind: "select", name: "branch", question: "which branch?",
+            options: [{ name: "main" }, { name: "develop" }] })
+        return answers.branch ? "switched to " + answers.branch : "the user changed their mind"
+    }
+
+Call it with a widget and await it. It draws what you gave it, waits for the user, and resolves
+to `{ name: answer }` for every field they filled in. A field they walked away from is missing
+rather than empty, so check it before you use it. Your return value is still what Jeng reads;
+`ui` only decides what the user sees.
+
+A widget is one of:
+
+  { kind: "text"     content }
+  { kind: "markdown" content }              headings, lists, tables and the like
+  { kind: "code"     content, filetype? }
+  { kind: "diff"     diff, filetype? }      a real unified diff, e.g. the output of `git diff`
+  { kind: "box"      direction: "row" | "col", children: [widget, ...] }
+  { kind: "select"   name, question, options: [{ name, description? }] }
+  { kind: "input"    name, question, placeholder? }    one line of text
+  { kind: "textarea" name, question, placeholder? }    as many lines as they like
+
+Only select, input and textarea ask the user anything, and only those three need a name.
+Everything else is there to be looked at.
+
+One call is one round trip, so ask for everything in a single tree and the user answers all of
+it in one go. tab moves between fields, the form is sent as soon as the last field has an
+answer, and esc abandons it, leaving every field missing. So leave out any field the user could
+reasonably answer blank.
+
+A composed form:
+
+    export default async (input: { repo: string }, ui) => {
+        const answers = await ui({ kind: "box", direction: "col", children: [
+            { kind: "diff", diff: await Bun.$`git -C ${input.repo} diff`.text() },
+            { kind: "select", name: "action", question: "what should happen to them?", options: [
+                { name: "commit" }, { name: "stash" }, { name: "leave them" }] },
+            { kind: "input", name: "message", question: "commit message" }] })
+        return JSON.stringify(answers)
+    }
+
+A gadget that takes `ui` must add `* ui: true` to its header. One without a UI to draw on
+cannot run it at all, so it is not listed there either.

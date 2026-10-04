@@ -1,0 +1,1 @@
+this run has no interface to draw a gadget in, so one that draws would never be seen

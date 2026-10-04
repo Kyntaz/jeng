@@ -1,0 +1,4 @@
+After every call you get a result. Read it before deciding what to do next.
+If a result is an error, do not repeat that same call. Change the arguments, or end without it.
+Keep going until you call end. There is no turn limit, so nothing stops you but your own judgement.
+If you cannot do something, end with that in one line instead of calling a tool.

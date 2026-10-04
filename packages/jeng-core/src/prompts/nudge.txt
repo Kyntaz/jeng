@@ -1,0 +1,1 @@
+That was plain text, which does not reach the user. Call action="end" with that answer now, or call a tool if you still need one.
