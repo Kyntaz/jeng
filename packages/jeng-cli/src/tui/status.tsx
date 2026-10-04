@@ -1,6 +1,4 @@
-import { BORDER } from "./theme";
-
-const MUTED = "#606070";
+import { BORDER, MUTED } from "./theme";
 
 export const compact = (tokens: number) =>
     tokens >= 1000 ? `${(tokens / 1000).toFixed(1)}k` : String(tokens);

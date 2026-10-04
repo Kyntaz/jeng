@@ -83,8 +83,9 @@ The TUI shows the context size the model is actually working with, and has a few
 
 | Key           | Does                                        |
 | ------------- | ------------------------------------------- |
-| `enter`       | send the prompt, or approve what Jeng asks  |
+| `enter`       | send the prompt, or pick what is focused     |
 | `shift+enter` | start a new line in the prompt              |
+| `tab`         | move between the answers to what is asked   |
 | `ctrl+esc`    | quit                                        |
 | `ctrl+l`      | clear the conversation and loaded protocols |
 | `esc`         | interrupt what Jeng is doing right now      |

@@ -1,11 +1,4 @@
-import {
-    type Agent,
-    type Answers,
-    type Approval,
-    type ApprovalDecision,
-    fields,
-    type Widget,
-} from "@jeng/core";
+import { type Agent, type Answers, type ApprovalDecision, fields, type Widget } from "@jeng/core";
 import {
     createCliRenderer,
     type ScrollBoxRenderable,
@@ -13,12 +6,13 @@ import {
 } from "@opentui/core";
 import { createRoot, useKeyboard } from "@opentui/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ApprovalBar } from "./approval";
 import { append, approvalText, type Entry } from "./entries";
 import { Panel } from "./panel";
 import { PromptInput } from "./prompt";
 import { useSpinner } from "./spinner";
 import { Footer, Header } from "./status";
-import { BORDER } from "./theme";
+import { BORDER, MUTED } from "./theme";
 import { BlockView, blocks } from "./transcript";
 
 /** A gadget's interface, waiting on a user who has not answered it yet. */
@@ -44,7 +38,7 @@ export function App({ agent, onExit }: { agent: Agent; onExit: () => void }) {
     const [busy, setBusy] = useState(false);
     const [tokens, setTokens] = useState(0);
     const [showThinking, setShowThinking] = useState(false);
-    const [approval, setApproval] = useState<Approval | undefined>(undefined);
+    const [awaiting, setAwaiting] = useState(false);
     const [asking, setAsking] = useState<Ask[]>([]);
     const input = useRef<TextareaRenderable>(null);
     const scroller = useRef<ScrollBoxRenderable>(null);
@@ -63,9 +57,9 @@ export function App({ agent, onExit }: { agent: Agent; onExit: () => void }) {
                     deciding.current = resolve;
                     setEntries((current) => [
                         ...current,
-                        { kind: "approval", text: approvalText(request) },
+                        { kind: "approval", icon: "⚑", text: approvalText(request) },
                     ]);
-                    setApproval(request);
+                    setAwaiting(true);
                 }),
         );
         agent.setUi(
@@ -79,17 +73,24 @@ export function App({ agent, onExit }: { agent: Agent; onExit: () => void }) {
         );
     }, [agent]);
 
-    const answer = useCallback((decision: ApprovalDecision) => {
-        setApproval(undefined);
-        setEntries((current) => [
-            ...current,
-            decision.approved
-                ? { kind: "tool", text: "↳ approved" }
-                : { kind: "error", text: `rejected: ${decision.reason}` },
-        ]);
-        deciding.current?.(decision);
-        deciding.current = undefined;
+    const fail = useCallback((text: string) => {
+        setEntries((current) => [...current, { kind: "error", icon: "err", text }]);
     }, []);
+
+    const answer = useCallback(
+        (decision: ApprovalDecision) => {
+            setAwaiting(false);
+            if (decision.approved)
+                setEntries((current) => [
+                    ...current,
+                    { kind: "tool", icon: "↳", text: "approved" },
+                ]);
+            else fail(decision.reason ? `rejected: ${decision.reason}` : "rejected");
+            deciding.current?.(decision);
+            deciding.current = undefined;
+        },
+        [fail],
+    );
 
     // An answer belongs to the widget it came from, which is the same object the
     // transcript entry was built from, so nothing has to be numbered to find it.
@@ -113,7 +114,7 @@ export function App({ agent, onExit }: { agent: Agent; onExit: () => void }) {
             settle(asking[0], {});
             return;
         }
-        if (!key.ctrl && key.name === "escape" && approval) {
+        if (!key.ctrl && key.name === "escape" && awaiting) {
             answer({ approved: false, reason: "the user interrupted" });
             return;
         }
@@ -136,13 +137,6 @@ export function App({ agent, onExit }: { agent: Agent; onExit: () => void }) {
     const submit = useCallback(async () => {
         const prompt = input.current?.plainText.trim() ?? "";
         input.current?.clear();
-
-        // The box doubles as the answer to a request, so submitting while one is
-        // pending decides it rather than sending another prompt.
-        if (approval) {
-            answer(prompt ? { approved: false, reason: prompt } : { approved: true });
-            return;
-        }
         if (!prompt) return;
 
         setEntries((current) => [...current, { kind: "user", text: prompt }]);
@@ -171,18 +165,13 @@ export function App({ agent, onExit }: { agent: Agent; onExit: () => void }) {
             if (reply.trim() && reply.trim() !== streamed.trim())
                 setEntries((current) => [...current, { kind: "jeng", text: reply }]);
         } catch (error) {
-            if (running.current.signal.aborted)
-                setEntries((current) => [...current, { kind: "error", text: "interrupted" }]);
-            else
-                setEntries((current) => [
-                    ...current,
-                    { kind: "error", text: (error as Error).message },
-                ]);
+            if (running.current.signal.aborted) fail("interrupted");
+            else fail((error as Error).message);
         } finally {
             running.current = undefined;
             setBusy(false);
         }
-    }, [agent, approval, answer, busy]);
+    }, [agent, busy, fail]);
 
     const visible = useMemo(
         () => (showThinking ? entries : entries.filter((entry) => entry.kind !== "think")),
@@ -196,10 +185,10 @@ export function App({ agent, onExit }: { agent: Agent; onExit: () => void }) {
         () =>
             asking.length
                 ? { enter: "enter answer", other: "tab next, esc skip" }
-                : approval
-                  ? { enter: `enter approve ${approval.name}`, other: "type why to reject" }
+                : awaiting
+                  ? { enter: "enter picks", other: "tab moves, esc rejects" }
                   : undefined,
-        [asking, approval],
+        [asking, awaiting],
     );
 
     // The bars only ever draw inside the viewport, so hiding them is what keeps
@@ -239,7 +228,7 @@ export function App({ agent, onExit }: { agent: Agent; onExit: () => void }) {
                 {busy && (
                     <box flexDirection="row" gap={1} paddingLeft={1}>
                         <text fg={BORDER.jeng} content={spinner} />
-                        <text fg="#606070" content={waiting ? "waiting for you" : "thinking"} />
+                        <text fg={MUTED} content={waiting ? "waiting for you" : "thinking"} />
                     </box>
                 )}
             </scrollbox>
@@ -248,17 +237,13 @@ export function App({ agent, onExit }: { agent: Agent; onExit: () => void }) {
                 <Panel widget={asking[0].widget} onDone={(answers) => settle(asking[0], answers)} />
             )}
 
+            {awaiting && <ApprovalBar onDecide={answer} />}
+
             <PromptInput
                 input={input}
                 onSubmit={() => void submit()}
-                focused={asking.length === 0}
-                placeholder={
-                    approval
-                        ? "enter to approve, or write why to reject"
-                        : asking.length
-                          ? "esc to send nothing back"
-                          : undefined
-                }
+                focused={asking.length === 0 && !awaiting}
+                visible={!awaiting}
             />
             <Footer busy={busy} showThinking={showThinking} spinner={spinner} waiting={waiting} />
         </box>

@@ -1,7 +1,8 @@
 import type { AgentEvent, Answers, Approval, Widget } from "@jeng/core";
 
 export type Entry =
-    | { kind: "user" | "jeng" | "think" | "tool" | "error" | "approval"; text: string }
+    | { kind: "user" | "jeng" | "think"; text: string }
+    | { kind: "tool" | "approval" | "error"; icon: string; text: string }
     | { kind: "view"; widget: Widget; answers?: Answers };
 
 export function append(entries: Entry[], event: AgentEvent): Entry[] {
@@ -18,25 +19,28 @@ export function append(entries: Entry[], event: AgentEvent): Entry[] {
                 return [...entries.slice(0, -1), { ...last, text: last.text + event.text }];
             return [...entries, { kind: "think", text: event.text }];
         }
-        case "tool":
+        case "tool": {
+            const args = describe(event.args);
             return [
                 ...entries,
-                { kind: "tool", text: `⚙ ${event.action} ${describe(event.args)}` },
+                { kind: "tool", icon: "⚙", text: args ? `${event.action} ${args}` : event.action },
             ];
+        }
         case "view":
             return [...entries, { kind: "view", widget: event.widget }];
         case "result":
-            return [...entries, { kind: "tool", text: `↳ ${event.content}` }];
+            return [...entries, { kind: "tool", icon: "↳", text: event.content }];
         case "usage":
             return entries;
     }
 }
 
 // The whole source goes in, because the point of the request is that the user
-// reads what they are being asked to allow rather than a summary of it.
+// reads what they are being asked to allow rather than a summary of it. The
+// marker is the reader's to add, because each one lays its lines out differently.
 export function approvalText(request: Approval): string {
     return [
-        `⚑ ${request.kind} \`${request.name}\``,
+        `${request.kind} \`${request.name}\``,
         ...(request.reason ? [`why: ${request.reason}`] : []),
         "",
         request.source,

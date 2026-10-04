@@ -2,7 +2,11 @@ import type { Choice } from "@jeng/core";
 import { SyntaxStyle } from "@opentui/core";
 import type { Entry } from "./entries";
 
-export const BORDER: Record<string, string> = { user: "#5fb3d4", jeng: "#d9a441" };
+// An action keeps Jeng's gold because it is Jeng's, so the box around it rather
+// than the colour of it is what tells an action apart from Jeng's words.
+export const BORDER = { user: "#5fb3d4", jeng: "#d9a441", tool: "#d9a441" };
+
+export const MUTED = "#606070";
 
 // Code, diffs and markdown are highlighted from this one style, and a markdown or
 // code block that is handed none of it draws nothing at all rather than drawing
@@ -40,13 +44,14 @@ export function choiceList(options: Choice[]) {
     };
 }
 
-// Jeng's thinking and tools belong in its box; an error belongs to neither speaker.
+// Jeng's thinking and words belong in its box, an action in a box of its own, and
+// an error in neither speaker's.
 export const OWNER: Record<Entry["kind"], keyof typeof BORDER | undefined> = {
     user: "user",
     jeng: "jeng",
     think: "jeng",
-    tool: "jeng",
-    approval: "jeng",
+    tool: "tool",
+    approval: "tool",
     view: "jeng",
     error: undefined,
 };
@@ -60,5 +65,3 @@ export const COLORS: Record<Entry["kind"], string | undefined> = {
     view: undefined,
     error: "#e06c75",
 };
-
-export const GUTTERS = { error: "err " };

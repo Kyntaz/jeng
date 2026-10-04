@@ -58,13 +58,4 @@ describe("prompt box", () => {
 
         expect(sent).toEqual(["first", "second"]);
     });
-
-    test("hints at the keys that send and that break a line", async () => {
-        const { renderer, captureCharFrame, flush } = await renderPrompt();
-        await flush();
-        const frame = captureCharFrame();
-        act(() => renderer.destroy());
-
-        expect(frame).toContain("enter to send, shift+enter for a new line");
-    });
 });

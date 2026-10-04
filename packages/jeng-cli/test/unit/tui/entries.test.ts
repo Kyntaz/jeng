@@ -24,13 +24,19 @@ describe("entries", () => {
             args: { path: "a.txt", action: "read" },
         });
 
-        expect(entries.at(-1)).toEqual({ kind: "tool", text: "⚙ read path=a.txt" });
+        expect(entries.at(-1)).toEqual({ kind: "tool", icon: "⚙", text: "read path=a.txt" });
+    });
+
+    test("leaves no gap behind a call that takes no arguments", () => {
+        const entries = append([], { type: "tool", action: "end", args: { action: "end" } });
+
+        expect(entries).toEqual([{ kind: "tool", icon: "⚙", text: "end" }]);
     });
 
     test("serializes args that are not strings as json", () => {
         const entries = append([], { type: "tool", action: "run", args: { lines: [1, 2] } });
 
-        expect(entries).toEqual([{ kind: "tool", text: "⚙ run lines=[1,2]" }]);
+        expect(entries).toEqual([{ kind: "tool", icon: "⚙", text: "run lines=[1,2]" }]);
     });
 
     test("cuts the args off so a tool line stays one line", () => {
@@ -40,7 +46,7 @@ describe("entries", () => {
             args: { text: "x".repeat(200) },
         });
 
-        expect(entries).toEqual([{ kind: "tool", text: `⚙ run text=${"x".repeat(75)}` }]);
+        expect(entries).toEqual([{ kind: "tool", icon: "⚙", text: `run text=${"x".repeat(75)}` }]);
     });
 
     test("keeps a widget a gadget drew as an entry of its own", () => {
@@ -68,10 +74,10 @@ describe("entries", () => {
         ]);
     });
 
-    test("marks a result as an arrow under the jeng box", () => {
+    test("keeps a result an arrow under the action it answers", () => {
         const entries = append([], { type: "result", content: "3 files", ok: true });
 
-        expect(entries.at(-1)).toEqual({ kind: "tool", text: "↳ 3 files" });
+        expect(entries.at(-1)).toEqual({ kind: "tool", icon: "↳", text: "3 files" });
     });
 
     test("ignores usage, which is a number and not a line", () => {

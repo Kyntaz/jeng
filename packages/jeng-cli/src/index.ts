@@ -35,7 +35,7 @@ async function askOnStdin(request: Approval): Promise<ApprovalDecision> {
         };
 
     ask ??= createInterface({ input: process.stdin, output: process.stderr });
-    process.stderr.write(`\n${approvalText(request)}\n`);
+    process.stderr.write(`\n⚑ ${approvalText(request)}\n`);
 
     // A terminal that cannot be read is not consent, so a failed read turns the
     // gadget down rather than letting it through unreviewed.

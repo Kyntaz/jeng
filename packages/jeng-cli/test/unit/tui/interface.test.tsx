@@ -175,7 +175,9 @@ describe("a gadget drawing its own interface", () => {
         act(() => renderer.destroy());
 
         expect(answered).toEqual([{}]);
-        expect(frame).toContain("enter to send");
+        // The idle footer is what says nothing is holding the keys, which is the
+        // other half of a widget that asks nothing.
+        expect(frame).toContain("esc interrupt");
     });
 
     test("draws markdown, so a gadget can put a table in front of the user", async () => {

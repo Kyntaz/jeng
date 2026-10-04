@@ -44,7 +44,7 @@ The user is not held back while Jeng works, in either direction.
 
 - The input box stays focused, so anything typed during a turn reaches the model between two of its calls rather than interrupting one. A tool call is only ever answered immediately, so that boundary is the one point where a new user message cannot break a call from its result.
 - Aborting throws out of the model request before the reply is recorded, so an interrupted turn leaves nothing half-finished in the history.
-- A gadget already running is not abortable, because a gadget is a function called in-process rather than a process of its own. Interrupting takes effect once it returns — except at an interface, which is a point where the turn is waiting on a human rather than on the model.
+- A gadget already running is not abortable, because a gadget is a function called in-process rather than a process of its own. Interrupting takes effect once it returns — except at an interface or an approval, which are points where the turn is waiting on a human rather than on the model.
 
 ## Gadget UI
 
