@@ -193,6 +193,57 @@ describe("actions", () => {
         await cleanup();
     });
 
+    test("run_gadget finds the gadget a model left inside input, and the gadget never sees the name", async () => {
+        const { ctx, dir, cleanup } = await context();
+        await Bun.write(
+            join(dir, "gadgets", "greet.ts"),
+            // biome-ignore lint/suspicious/noTemplateCurlyInString: gadget source, not a template
+            "/**\n * name: greet\n * description: says hi\n */\n\nexport default async (input: { who: string }) => `hi ${input.who} ${JSON.stringify(input)}`\n",
+        );
+        ctx.homes = [await loadHome(dir)];
+
+        const result = await runAction(
+            "run_gadget",
+            { input: { name: "greet", who: "world" } },
+            ctx,
+        );
+
+        expect(result).toEqual({ ok: true, content: 'hi world {"who":"world"}' });
+        await cleanup();
+    });
+
+    test("run_gadget keeps the name it was given over one left inside input", async () => {
+        const { ctx, dir, cleanup } = await context();
+        await Bun.write(
+            join(dir, "gadgets", "greet.ts"),
+            "/**\n * name: greet\n * description: says hi\n */\n\nexport default async () => 'hi from greet'\n",
+        );
+        await Bun.write(
+            join(dir, "gadgets", "farewell.ts"),
+            "/**\n * name: farewell\n * description: says bye\n */\n\nexport default async () => 'bye from farewell'\n",
+        );
+        ctx.homes = [await loadHome(dir)];
+
+        const result = await runAction(
+            "run_gadget",
+            { name: "greet", input: { name: "farewell" } },
+            ctx,
+        );
+
+        expect(result).toEqual({ ok: true, content: "hi from greet" });
+        await cleanup();
+    });
+
+    test("run_gadget leaves an input name that is no gadget alone", async () => {
+        const { ctx, cleanup } = await context();
+
+        expect(await runAction("run_gadget", { input: { name: "nope" } }, ctx)).toEqual({
+            ok: false,
+            content: 'no gadget named ""',
+        });
+        await cleanup();
+    });
+
     test("run_gadget rejects an input string that is not json", async () => {
         const { ctx, dir, cleanup } = await context();
         await Bun.write(

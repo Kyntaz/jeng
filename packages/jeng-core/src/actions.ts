@@ -35,6 +35,32 @@ function coerceInput(input: unknown): { bad: string } | { bad: undefined; value:
     }
 }
 
+const NAME_KEYS = ["name", "gadget", "gadget_name"];
+
+// A model reading only a gadget's description tends to hand its name back as one
+// more input field, so the name is taken back out when the call left it empty. An
+// explicit name is never overridden, and one that matches no gadget is left alone
+// for the error to name.
+function liftName(
+    ctx: ActionContext,
+    name: string,
+    input: unknown,
+): { name: string; input: unknown } {
+    if (name || typeof input !== "object" || input === null || Array.isArray(input))
+        return { name, input };
+
+    const rest = { ...(input as Record<string, unknown>) };
+    const key = NAME_KEYS.find(
+        (candidate) =>
+            typeof rest[candidate] === "string" && findIn(ctx, "gadget", String(rest[candidate])),
+    );
+    if (key === undefined) return { name, input };
+
+    const lifted = String(rest[key]);
+    delete rest[key];
+    return { name: lifted, input: rest };
+}
+
 // A gadget and a protocol are the same shape on disk, so they are found the same
 // way. The home comes back with it, because that is the one that has to be
 // reloaded afterwards when something under it goes away.
@@ -60,7 +86,10 @@ async function runGadgetAction(
     ctx: ActionContext,
     args: Record<string, unknown>,
 ): Promise<ActionResult> {
-    const name = String(args.name ?? "");
+    const coerced = coerceInput(args.input);
+    if (coerced.bad !== undefined) return { ok: false, content: coerced.bad };
+    const { name, input } = liftName(ctx, String(args.name ?? ""), coerced.value);
+
     const found = findIn(ctx, "gadget", name);
     if (!found) return { ok: false, content: `no gadget named "${name}"` };
 
@@ -72,10 +101,7 @@ async function runGadgetAction(
             content: `gadget "${name}" draws its own interface, which this run has nowhere to show it. Say so with end instead.`,
         };
 
-    const input = coerceInput(args.input);
-    if (input.bad !== undefined) return { ok: false, content: input.bad };
-
-    const result = await runGadget(found.ref.file, input.value, ctx.ui);
+    const result = await runGadget(found.ref.file, input, ctx.ui);
     return { ok: result.ok, content: result.ok ? result.output : result.error };
 }
 

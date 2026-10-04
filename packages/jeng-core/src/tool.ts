@@ -22,6 +22,9 @@ export function actionsFor(mode: Mode): string[] {
 const GROWS_DOC = [
     'action="run_gadget", name=<existing gadget>, input=<object>',
     "  Run a gadget. `name` must be a gadget listed under Gadgets in your context.",
+    '  e.g. {"action":"run_gadget","name":"read-file","input":{"path":"README.md"}}',
+    "  The name goes in name. It is not one of the gadget's own input fields, so never",
+    "  put it inside input.",
     'action="load_protocol", name=<existing protocol>',
     "  Pull a protocol's body into your context. Use it when the protocol's `when` matches the task.",
     "",
@@ -103,7 +106,7 @@ export function jengTool(mode: Mode) {
                 action: { type: "string", enum: actionsFor(mode) },
                 name: {
                     type: "string",
-                    description: `gadget or protocol name, kebab-case${
+                    description: `the gadget or protocol this action acts on, kebab-case${
                         mode === "work"
                             ? ""
                             : "; for create_gadget it is only a label, because a gadget is named after its own header"

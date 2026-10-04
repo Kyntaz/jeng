@@ -47,6 +47,20 @@ describe("tool", () => {
         expect(jengTool("learn").description).toContain("* name: count-lines");
     });
 
+    test("tells both modes the name goes in name rather than inside input", () => {
+        expect(jengTool("learn").description).toContain("The name goes in name.");
+        expect(jengTool("work").description).toContain("The name goes in name.");
+    });
+
+    test("shows both modes a gadget call that puts the name in name", () => {
+        expect(jengTool("learn").description).toContain(
+            '{"action":"run_gadget","name":"read-file","input":{"path":"README.md"}}',
+        );
+        expect(jengTool("work").description).toContain(
+            '{"action":"run_gadget","name":"read-file","input":{"path":"README.md"}}',
+        );
+    });
+
     test("always tells both modes that end is the only way a turn finishes", () => {
         expect(jengTool("learn").description).toContain("Hand control back to the user");
         expect(jengTool("work").description).toContain("Hand control back to the user");
