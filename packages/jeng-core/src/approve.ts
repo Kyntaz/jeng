@@ -6,6 +6,7 @@ export type ApprovalKind =
     | "test gadget"
     | "delete gadget"
     | "create protocol"
+    | "rewrite protocol"
     | "delete protocol";
 
 export interface Approval {

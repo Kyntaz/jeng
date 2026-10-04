@@ -13,11 +13,12 @@ This should make Jeng particularly well suited to work with local or weaker mode
 - **Gadget** is a bun script, written in TypeScript, with a special header with information describing how to use the gadget that is added to Jeng's context.
 - **Protocol** is a Markdown file with information committed by Jeng, including a special header that gives Jeng information about when it should load the protocol.
 - **Action** is something that Jeng can do out-of-the-box.
-    - **Create Gadget** creates a new Gadget that can be used later. This checks the Gadget to make sure it is valid and rejects it otherwise, then puts it to the user to approve.
-    - **Create Protocol** creates a new Protocol that can be referenced later. This checks the structure of the protocol to make sure it is valid and rejects it otherwise, then puts it to the user to approve.
+    - **Create Gadget** creates a new Gadget that can be used later. This checks the Gadget to make sure it is valid and rejects it otherwise, then puts it to the user to approve. A name that already exists is rewritten.
+    - **Create Protocol** creates a new Protocol that can be referenced later. This checks the structure of the protocol to make sure it is valid and rejects it otherwise, then puts it to the user to approve. A name that already exists is rewritten.
     - **Test Gadget** runs a Gadget the model just wrote and throws it away afterwards. It goes through the same gates and the same approval as creating one, so iterating on a Gadget costs a read rather than a rewrite of the home.
     - **Delete Gadget** and **Delete Protocol** remove memory for good. There is no undo and no backup, so both require a reason and put the bytes that are going away to the user.
     - **Load Protocol** pulls a Protocol's body into context when its `when` matches the task.
+    - **Load Gadget** hands back a Gadget's whole source, which is otherwise described by its header alone. A gadget the model wrote earlier has left its context, so this is the only way to see what one actually does before rewriting it, and it is learn-only because a work run would have nothing to do with the source.
     - **Load UI** hands over the language a Gadget's `ui` argument is written in, and is the only description of an interface that costs nothing until it is asked for.
     - **End** hands control back to the user. It is the only way a turn finishes, so an answer is a call rather than text.
     - **Compact** replaces the transcript with a summary the model writes, so a long turn can keep going instead of running out of context.
@@ -35,7 +36,7 @@ The same agent is two things depending on what it is allowed to do to its home, 
 
 - **Learn mode is told what Jeng is for before it is told how a turn goes.** A model that does not know it is meant to grow will finish every task with whatever it happens to have, which is a working agent that never improves. So the identity comes first and says the home is the point, then says how to gain an ability, when to commit a protocol and when to delete one.
 - **Work mode gets the rules of a turn and nothing else.** What it grows is already there, so the only remaining question is what to do with it. The prompt is a fraction of learn's, which is the whole reason to have it: an agent with 8k of context gets a much larger share of it for the task.
-- **The actions are removed, not discouraged.** Work mode's tool does not list the actions that change the home and does not carry the arguments only they need, so a model cannot spend a turn talking itself into one and a small model never sees the words at all. `test_gadget` goes with them, because a throwaway gadget in a run that cannot keep anything is a turn wasted, and so does `load_ui`, which exists only to describe writing one.
+- **The actions are removed, not discouraged.** Work mode's tool does not list the actions that change the home and does not carry the arguments only they need, so a model cannot spend a turn talking itself into one and a small model never sees the words at all. `test_gadget` goes with them, because a throwaway gadget in a run that cannot keep anything is a turn wasted, and so does `load_ui`, which exists only to describe writing one. `load_gadget` goes too, because source it cannot rewrite is a gadget description with more words on it.
 - **A call that names one anyway is refused, and told which mode would have it.** A model asked to work will sometimes reach for what it was asked not to, and a refusal that only says no leaves it with nothing to do instead of something to try.
 - **A mode changes the prompt and the tool, never the conversation.** Switching mid-session rewrites neither the history nor what is on disk, and takes hold at the next model call rather than halfway through the current one, so a turn is never spent in two modes at once.
 - **The user is shown which mode is in force by colour.** Learn is gold, work is blue, the user is green because they are neither, and the prompt box is bordered in the mode's colour because that box is the one thing on screen that is always there to read it. It is washed in a fainter version of the same colour, because the transcript scrolls under it and a border showing through reads as a broken one.
@@ -49,7 +50,7 @@ A turn is one message from the user to the moment Jeng hands control back, which
 - The same action with the same arguments twice in a row means nothing changed in between, so the call is refused and the model is told to say what it knows instead. The turn keeps going, because a repeat is a nudge and not a stop. The same action again *after* something else is legitimate, because the context moved.
 - Arguments that are not a JSON object come back as an error rather than being handed to a gadget.
 - A gadget is named after the header it was validated against, not after whatever the model called it, so the name the model reads back is the name on disk.
-- Creating a gadget that already exists rewrites it. The model cannot edit files, so refusing would leave it unable to fix a gadget it is unhappy with.
+- Creating a gadget or protocol that already exists rewrites it. The model cannot edit files, so refusing would leave it unable to fix memory it is unhappy with.
 - There is no turn limit, because a model that gets stuck should be interrupted rather than cut off at some number the user has to guess. `--max-turns` puts one back for whoever wants one, and stops a turn by returning `stopped after N turns without ending`, which is the only thing in Jeng that ends a turn besides `end` and an interrupt.
 
 ### Interruptions and injections
@@ -192,7 +193,7 @@ which having state is a claim that cannot be kept.
 - Nothing is written until validation passes, so a rejected creation leaves the home exactly as it was.
 - A Gadget the model has not had approved yet lives in a draft outside the home, so a run that is cut short cannot leave a half-written Gadget behind for a later run to find.
 - A Gadget is compiled but never executed at creation time, so writing a gadget cannot run arbitrary code before anyone has looked at it. Testing one is the one time it is executed, and that is also the one time it is put to the user first.
-- A Gadget whose name already exists is overwritten rather than rejected, because the model has no way to edit a file it is unhappy with. It is still validated first, so a rewrite cannot be a way in either, and it is still approved, so a rewrite cannot be a way around being read.
+- A Gadget or Protocol whose name already exists is overwritten rather than rejected, because the model has no way to edit a file it is unhappy with. It is still validated first, so a rewrite cannot be a way in either, and it is still approved, so a rewrite cannot be a way around being read.
 - An approval names the verb as well as the thing, because "rewrite" and "delete" are not the same decision as "create" even when the bytes are identical. The user is always shown the bytes at stake, whether they are about to land or about to go.
 
 ## Stack

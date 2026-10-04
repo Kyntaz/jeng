@@ -116,13 +116,14 @@ async function runGadgetAction(
     return { ok: result.ok, content: result.ok ? result.output : result.error };
 }
 
-async function loadProtocolAction(
+async function loadAction(
     ctx: ActionContext,
     args: Record<string, unknown>,
+    noun: "gadget" | "protocol",
 ): Promise<ActionResult> {
     const name = String(args.name ?? "");
-    const found = findIn(ctx, "protocol", name);
-    if (!found) return { ok: false, content: `no protocol named "${name}"` };
+    const found = findIn(ctx, noun, name);
+    if (!found) return { ok: false, content: `no ${noun} named "${name}"` };
 
     return { ok: true, content: await Bun.file(found.ref.file).text() };
 }
@@ -132,9 +133,6 @@ async function createProtocolAction(
     args: Record<string, unknown>,
 ): Promise<ActionResult> {
     const name = String(args.name ?? "");
-    if (findIn(ctx, "protocol", name))
-        return { ok: false, content: `protocol "${name}" already exists` };
-
     const source = writeProtocol(
         { name, description: String(args.description ?? ""), when: String(args.when ?? "") },
         String(args.content ?? ""),
@@ -145,21 +143,24 @@ async function createProtocolAction(
     const home = primaryHome(ctx);
     const dir = join(home, "protocols");
 
+    // The model cannot edit files, so rewriting a protocol it has come to doubt is
+    // the only way it can correct one. Validation has already passed either way.
+    const existing = findIn(ctx, "protocol", name);
+    const kind: ApprovalKind = existing ? "rewrite protocol" : "create protocol";
+
     // A protocol is only text, so there is nothing to justify; the user is
     // confirming the memory is right rather than judging how it worded itself.
-    const approved = await review(ctx.approve, {
-        kind: "create protocol",
-        name,
-        source,
-        reason: "",
-    });
+    const approved = await review(ctx.approve, { kind, name, source, reason: "" });
     if (!approved.ok) return { ok: false, content: approved.error };
 
     await Bun.$`mkdir -p ${dir}`.quiet();
     await Bun.write(join(dir, `${name}.md`), source);
     await refresh(ctx, home);
 
-    return { ok: true, content: `protocol "${name}" committed. It is available from now on.` };
+    return {
+        ok: true,
+        content: `protocol "${name}" ${existing ? "rewritten" : "committed"}. It is available from now on.`,
+    };
 }
 
 async function createGadgetAction(
@@ -285,8 +286,10 @@ export async function runAction(
             return await runGadgetAction(ctx, args);
         case "test_gadget":
             return await testGadgetAction(ctx, args);
+        case "load_gadget":
+            return await loadAction(ctx, args, "gadget");
         case "load_protocol":
-            return await loadProtocolAction(ctx, args);
+            return await loadAction(ctx, args, "protocol");
         case "load_ui":
             return { ok: true, content: UI_LANGUAGE };
         case "create_protocol":

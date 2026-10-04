@@ -67,24 +67,58 @@ describe("actions", () => {
         await cleanup();
     });
 
-    test("create_protocol refuses to overwrite an existing protocol", async () => {
-        const { ctx, cleanup } = await context();
+    test("lets a protocol be rewritten, since the model cannot edit files itself", async () => {
+        const { ctx, dir, cleanup } = await context();
         await runAction(
             "create_protocol",
             { name: "deploy", description: "how we ship", when: "deploying", content: "run make" },
             ctx,
         );
 
-        expect(
-            await runAction(
-                "create_protocol",
-                { name: "deploy", description: "other", when: "later", content: "x" },
-                ctx,
-            ),
-        ).toEqual({
-            ok: false,
-            content: 'protocol "deploy" already exists',
+        const result = await runAction(
+            "create_protocol",
+            {
+                name: "deploy",
+                description: "how we ship",
+                when: "deploying",
+                content: "run make --fast",
+            },
+            ctx,
+        );
+
+        expect(result.ok).toBe(true);
+        expect(result.content).toContain('protocol "deploy" rewritten');
+        expect(await Bun.file(join(dir, "protocols", "deploy.md")).text()).toContain(
+            "run make --fast",
+        );
+        expect(ctx.homes[0].protocols.length).toBe(1);
+        await cleanup();
+    });
+
+    test("tells the user a protocol they already approved is about to be replaced", async () => {
+        const asked: Approval[] = [];
+        const { ctx, cleanup } = await context(async (request) => {
+            asked.push(request);
+            return { approved: true };
         });
+        await runAction(
+            "create_protocol",
+            { name: "deploy", description: "how we ship", when: "deploying", content: "run make" },
+            ctx,
+        );
+
+        await runAction(
+            "create_protocol",
+            {
+                name: "deploy",
+                description: "how we ship",
+                when: "deploying",
+                content: "run make --fast",
+            },
+            ctx,
+        );
+
+        expect(asked[1].kind).toBe("rewrite protocol");
         await cleanup();
     });
 
@@ -168,6 +202,36 @@ describe("actions", () => {
         const result = await runAction("load_protocol", { name: "deploy" }, ctx);
 
         expect(result.content).toContain("run make");
+        await cleanup();
+    });
+
+    test("load_gadget hands back the whole gadget, so it can be fixed after it is forgotten", async () => {
+        const { ctx, cleanup } = await context();
+        await runAction("create_gadget", { reason: WHY, source: GADGET }, ctx);
+
+        expect(await runAction("load_gadget", { name: "greet" }, ctx)).toEqual({
+            ok: true,
+            content: GADGET,
+        });
+        await cleanup();
+    });
+
+    test("load_gadget rejects an unknown gadget by name", async () => {
+        const { ctx, cleanup } = await context();
+
+        expect(await runAction("load_gadget", { name: "nope" }, ctx)).toEqual({
+            ok: false,
+            content: 'no gadget named "nope"',
+        });
+        await cleanup();
+    });
+
+    test("load_gadget is only a learning action, since a working jeng cannot fix what it reads", async () => {
+        const { ctx, cleanup } = await context();
+
+        const result = await runAction("load_gadget", { name: "greet" }, { ...ctx, mode: "work" });
+
+        expect(result.ok).toBe(false);
         await cleanup();
     });
 
@@ -322,7 +386,7 @@ describe("actions", () => {
         expect(await runAction("teleport", {}, ctx)).toEqual({
             ok: false,
             content:
-                'unknown action "teleport". Available: run_gadget, test_gadget, load_protocol, load_ui, create_protocol, create_gadget, delete_gadget, delete_protocol, end, compact',
+                'unknown action "teleport". Available: run_gadget, test_gadget, load_protocol, load_gadget, load_ui, create_protocol, create_gadget, delete_gadget, delete_protocol, end, compact',
         });
         await cleanup();
     });

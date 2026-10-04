@@ -155,6 +155,9 @@ Name the input fields in it: that description is all Jeng has to go on when it l
 Jeng writes gadgets for itself, and it shows you the whole file before it saves or runs one.
 Ask it to iterate on a gadget and it will run it throwaway first, so you get asked about code that is
 already working rather than code that is still being guessed at.
+Ask it for a gadget whose name it already holds and it rewrites the file, since it has no way to edit
+one itself. It can read the old source back with `{"action": "load_gadget", "name": "greet"}`, which is
+how it fixes a gadget that misbehaves long after writing it.
 Deleting a gadget is the one thing `--yes` will not do for it, because there is no undo and no backup.
 All of that is learn mode only: under `--mode work` Jeng is never offered the actions that would let
 it write, so it works the home as it finds it.
@@ -257,6 +260,8 @@ A gadget that doesn't compile or is missing its header is rejected with the reas
 
 A protocol Jeng got wrong is worth as little as a gadget that does the wrong thing, so Jeng can delete one
 too. It shows you the body first and tells you why it wants it gone; nothing is removed without you saying yes.
+Committed under a name that is already taken, it replaces the old one, which is how it corrects memory it
+has come to doubt.
 
 ## Why "Jeng"?
 

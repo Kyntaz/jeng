@@ -6,10 +6,9 @@ export type Mode = (typeof MODES)[number];
 
 export const DEFAULT_MODE: Mode = "learn";
 
-// Everything that changes the home, plus load_ui, which exists only to describe
-// writing a gadget that draws. Work mode has none of them: the last three change
-// the home, and the first two would spend a turn writing something it could never
-// keep.
+// Everything that changes the home, plus the two that only exist to help write one:
+// load_ui, the language of a gadget that draws, and load_gadget, which is worth
+// nothing to a run that cannot rewrite what it reads.
 export const GROWS: readonly string[] = [
     "create_gadget",
     "test_gadget",
@@ -17,6 +16,7 @@ export const GROWS: readonly string[] = [
     "delete_gadget",
     "delete_protocol",
     "load_ui",
+    "load_gadget",
 ];
 
 export function isMode(value: unknown): value is Mode {

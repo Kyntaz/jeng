@@ -29,10 +29,17 @@ action="test_gadget", reason=<why you need it>, description=<one line>, source=<
   approval as create_gadget, but nothing is written to the home and it does not outlive the
   call, so use it to get the source right and then commit exactly what you tested. State is the
   exception: a gadget that commits during a test really has committed it.
-action="create_protocol", name=<new kebab-case name>, when=<when to load it>, description=<one line>, content=<knowledge>
+action="load_gadget", name=<existing gadget>
+  Read a gadget's whole source back. All you have of a gadget is its description, so this
+  is how you see what one you wrote earlier actually does when it misbehaves: read it,
+  change it, and commit the whole file again with create_gadget under the same name, which
+  takes effect the next time it runs.
+action="create_protocol", name=<kebab-case name>, when=<when to load it>, description=<one line>, content=<knowledge>
   Save knowledge worth keeping. Never save a guess: only what you actually learned.
-  The user reads it before it is committed, to check the memory is right rather than the
-  prose, so there is no reason to give.
+  A name that already exists is replaced rather than refused, so this is also how you
+  correct memory you have come to doubt: call action="load_protocol" first if you want
+  to see what you are replacing. The user reads it before it is committed, to check the
+  memory is right rather than the prose, so there is no reason to give.
 action="delete_gadget", name=<existing gadget>, reason=<why it should go>
   Throw a gadget away for good. There is no undo and nothing reads it again, so reason is
   required and must be honest about what is wrong with it. The user reads the whole file

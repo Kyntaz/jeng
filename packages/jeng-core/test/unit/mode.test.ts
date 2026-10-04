@@ -46,6 +46,7 @@ describe("mode", () => {
             "delete_gadget",
             "delete_protocol",
             "load_ui",
+            "load_gadget",
         ]);
     });
 });

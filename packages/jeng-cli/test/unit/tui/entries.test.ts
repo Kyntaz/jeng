@@ -162,6 +162,12 @@ describe("entries", () => {
         expect(text).not.toContain("why:");
     });
 
+    test("says so when memory the user already approved is being replaced", () => {
+        expect(approvalText({ ...GADGET, kind: "rewrite protocol", reason: "" })).toContain(
+            "rewrite protocol `greet`",
+        );
+    });
+
     test("reads a message that is nothing but spaces as no message", () => {
         expect(blank({ kind: "jeng", text: " \n ", mode: "learn" })).toBe(true);
     });

@@ -5,6 +5,7 @@ export const ACTIONS = [
     "run_gadget",
     "test_gadget",
     "load_protocol",
+    "load_gadget",
     "load_ui",
     "create_protocol",
     "create_gadget",
