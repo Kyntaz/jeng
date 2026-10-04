@@ -32,7 +32,7 @@ export function ApprovalBar({ onDecide }: { onDecide: (decision: ApprovalDecisio
             flexDirection="row"
             alignItems="center"
             gap={2}
-            paddingLeft={1}
+            paddingX={1}
             flexShrink={0}
         >
             <Button label="approve" focused={stop === "approve"} color={YES} />

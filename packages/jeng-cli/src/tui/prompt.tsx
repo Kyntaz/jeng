@@ -38,7 +38,7 @@ export function PromptInput({
             borderStyle="heavy"
             borderColor={MODE_COLOR[mode]}
             visible={visible}
-            paddingLeft={1}
+            paddingX={1}
             flexShrink={0}
         >
             <textarea

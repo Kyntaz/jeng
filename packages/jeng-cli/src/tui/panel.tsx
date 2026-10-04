@@ -23,7 +23,7 @@ export function Panel({ widget, onDone }: { widget: Widget; onDone: (answers: An
     }, [answers, asked, onDone]);
 
     return (
-        <box border borderColor={USER} flexDirection="column" paddingLeft={1} flexShrink={0}>
+        <box border borderColor={USER} flexDirection="column" paddingX={1} flexShrink={0}>
             <GadgetView
                 widget={widget}
                 focused={focused}

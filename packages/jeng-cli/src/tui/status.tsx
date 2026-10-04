@@ -6,10 +6,18 @@ export const compact = (tokens: number) =>
 
 export function Header({ homes, tokens, mode }: { homes: string[]; tokens: number; mode: Mode }) {
     // The header and footer stay on one line however narrow the terminal gets,
-    // so the scroll region is the only one that gives up rows.
+    // so the scroll region is the only one that gives up rows. The bar wears the
+    // mode rather than the word naming it, because the bar is also what has to
+    // cover the transcript row it is laid over.
     return (
-        <box flexDirection="row" flexWrap="no-wrap" gap={2} paddingLeft={1}>
-            <text fg={MODE_COLOR[mode]} wrapMode="none" content="jeng" />
+        <box
+            flexDirection="row"
+            flexWrap="no-wrap"
+            gap={2}
+            paddingLeft={1}
+            backgroundColor={MODE_COLOR[mode]}
+        >
+            <text fg={MUTED} wrapMode="none" content="jeng" />
             <text fg={MUTED} wrapMode="none" content={mode} />
             <text fg={MUTED} wrapMode="none" content={homes.join(", ")} />
             <text fg={MUTED} wrapMode="none" content={`ctx ${compact(tokens)}`} />

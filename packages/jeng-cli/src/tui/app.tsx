@@ -228,8 +228,6 @@ export function App({ agent, onExit }: { agent: Agent; onExit: () => void }) {
 
     return (
         <box flexDirection="column" style={{ width: "100%", height: "100%" }}>
-            <Header homes={agent.homes.map((home) => home.dir)} tokens={tokens} mode={mode} />
-
             <scrollbox
                 ref={scroller}
                 stickyScroll
@@ -271,6 +269,14 @@ export function App({ agent, onExit }: { agent: Agent; onExit: () => void }) {
                 visible={!awaiting}
             />
             <Footer busy={busy} showThinking={showThinking} spinner={spinner} waiting={waiting} />
+
+            {/* The header is laid over the transcript's first row rather than
+                pushing it down, because a scroll region that starts below another
+                row is clipped against the top of the screen instead of against
+                itself, and the transcript lands on the header. */}
+            <box position="absolute" top={0} left={0} width="100%" zIndex={1}>
+                <Header homes={agent.homes.map((home) => home.dir)} tokens={tokens} mode={mode} />
+            </box>
         </box>
     );
 }

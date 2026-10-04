@@ -33,9 +33,10 @@ function Row({ entry }: { entry: Entry }) {
     if (!("icon" in entry))
         return <text fg={COLORS[entry.kind]} wrapMode="word" content={entry.text} />;
     // The icon is a column of its own, so a wrapped line hangs off what is being
-    // written about rather than off the marker in front of it.
+    // written about rather than off the marker in front of it. The gutter on the
+    // left of it belongs to the box, so an action lines up with the prose above it.
     return (
-        <box flexDirection="row" gap={2} paddingLeft={1}>
+        <box flexDirection="row" gap={2}>
             <text fg={COLORS[entry.kind]} content={entry.icon} />
             <text fg={COLORS[entry.kind]} wrapMode="word" content={entry.text} />
         </box>
@@ -51,7 +52,7 @@ export const BlockView = memo(function BlockView({ block }: { block: Block }) {
             border={Boolean(border)}
             borderColor={border}
             flexDirection="column"
-            paddingLeft={1}
+            paddingX={1}
             marginBottom={border ? 1 : 0}
         >
             {block.entries.map((entry, row) => (

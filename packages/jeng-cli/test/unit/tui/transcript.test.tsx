@@ -122,8 +122,8 @@ describe("transcript", () => {
         const frame = captureCharFrame();
         act(() => renderer.destroy());
 
-        // The box pad and the row's own pad, the icon, then the gap of two.
-        expect(frame).toContain("  ⚙  run");
+        // The box's own pad, the icon, then the gap of two.
+        expect(frame).toContain(" ⚙  run");
     });
 
     test("marks an error with a gutter instead of a box", async () => {
@@ -136,5 +136,23 @@ describe("transcript", () => {
         act(() => renderer.destroy());
 
         expect(frame).toContain("err  boom");
+    });
+
+    test("holds a full-width line off the right border", async () => {
+        const { renderer, captureCharFrame, flush } = await testRender(
+            <BlockView
+                block={{
+                    owner: "jeng",
+                    mode: "learn",
+                    entries: [{ kind: "jeng", text: "0123456789abcdefghij", mode: "learn" }],
+                }}
+            />,
+            { width: 20, height: 5 },
+        );
+        await flush();
+        const frame = captureCharFrame();
+        act(() => renderer.destroy());
+
+        expect(frame).toContain("│ 0123456789abcdef │");
     });
 });

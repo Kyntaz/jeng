@@ -29,15 +29,35 @@ function stubAgent(sent: string[], switched: Mode[], answer = "done"): Agent {
     };
 }
 
-async function render(sent: string[], switched: Mode[] = []) {
+async function render(sent: string[], switched: Mode[] = [], answer = "done") {
     // Shift+Enter only arrives as its own key when the terminal reports
     // modifiers, which is what the kitty keyboard protocol buys.
-    return testRender(<App agent={stubAgent(sent, switched)} onExit={() => {}} />, {
+    return testRender(<App agent={stubAgent(sent, switched, answer)} onExit={() => {}} />, {
         width: 80,
         height: 24,
         kittyKeyboard: true,
     });
 }
+
+describe("transcript", () => {
+    test("keeps a long answer off the header row that it scrolls under", async () => {
+        const long = Array.from({ length: 60 }, (_, at) => `line ${at}`).join("\n");
+        const { renderer, mockInput, flush, captureCharFrame, waitFor } = await render(
+            [],
+            [],
+            long,
+        );
+
+        await mockInput.typeText("hello");
+        act(() => mockInput.pressEnter());
+        await act(async () => await flush());
+        await waitFor(() => captureCharFrame().includes("line 59"));
+        const header = captureCharFrame().split("\n")[0];
+        act(() => renderer.destroy());
+
+        expect(header).not.toContain("│");
+    });
+});
 
 describe("prompt box", () => {
     test("sends what was typed when enter is pressed", async () => {
