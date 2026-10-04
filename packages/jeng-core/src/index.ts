@@ -22,6 +22,7 @@ export {
     type ToolSpec,
     type Turn,
 } from "./model";
+export { persistentState, type State, type StateMap, sessionState } from "./state";
 export { ACTIONS, actionsFor, jengTool } from "./tool";
 export {
     type Answers,

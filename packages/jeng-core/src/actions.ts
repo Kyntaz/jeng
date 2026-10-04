@@ -6,6 +6,7 @@ import { writeProtocol } from "./header";
 import { type GadgetRef, type Home, loadHome } from "./home";
 import { DEFAULT_MODE, GROWS, type Mode } from "./mode";
 import { prompt } from "./prompts";
+import { persistentState, type State, type StateMap } from "./state";
 import { actionsFor } from "./tool";
 import { UI_LANGUAGE, type Ui } from "./ui";
 import { validateProtocol } from "./validate";
@@ -19,9 +20,18 @@ export interface ActionContext {
     /** Absent wherever there is no interface to draw on, which is what makes a run headless. */
     ui?: Ui;
     mode?: Mode;
+    /** One scratch for every gadget of the session, so they can hand each other objects. */
+    session: StateMap;
 }
 
 const primaryHome = (ctx: ActionContext) => ctx.homes[0]?.dir ?? join(ctx.cwd, ".jeng");
+
+// A gadget keeps what it commits in the home it came from, and its session is the
+// run's whichever home that is.
+const stateFor = (ctx: ActionContext, dir: string): State => ({
+    session: ctx.session,
+    persistent: persistentState(dir),
+});
 
 // Models often send `input` as a json string rather than an object; a gadget
 // written against an object signature would otherwise receive a string.
@@ -102,7 +112,7 @@ async function runGadgetAction(
             content: prompt("gadget-draws", { name }),
         };
 
-    const result = await runGadget(found.ref.file, input, ctx.ui);
+    const result = await runGadget(found.ref.file, input, ctx.ui, stateFor(ctx, found.dir));
     return { ok: result.ok, content: result.ok ? result.output : result.error };
 }
 
@@ -212,7 +222,12 @@ async function testGadgetAction(
         });
         if (!approved.ok) return { ok: false, content: approved.error };
 
-        const result = await runGadget(draft.file, input.value, ctx.ui);
+        const result = await runGadget(
+            draft.file,
+            input.value,
+            ctx.ui,
+            stateFor(ctx, primaryHome(ctx)),
+        );
         if (!result.ok) return { ok: false, content: result.error };
 
         return {

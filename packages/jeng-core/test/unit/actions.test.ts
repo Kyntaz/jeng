@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { type ActionContext, runAction } from "../../src/actions";
 import type { Approval, Approve } from "../../src/approve";
 import { loadHome } from "../../src/home";
+import { sessionState } from "../../src/state";
 import type { Ui } from "../../src/ui";
 
 const allow: Approve = async () => ({ approved: true });
@@ -20,7 +21,13 @@ async function context(
     const dir = await mkdtemp(join(tmpdir(), "jeng-actions-"));
     return {
         dir,
-        ctx: { homes: [await loadHome(dir)], cwd: dir, approve, ui },
+        ctx: {
+            homes: [await loadHome(dir)],
+            cwd: dir,
+            approve,
+            ui,
+            session: sessionState(),
+        },
         cleanup: () => rm(dir, { recursive: true, force: true }),
     };
 }
@@ -498,6 +505,44 @@ describe("actions", () => {
 
         expect(result.ok).toBe(false);
         expect(result.content).toContain("nowhere to show it");
+        await cleanup();
+    });
+
+    test("hands what one gadget left in the session to the next", async () => {
+        const { ctx, dir, cleanup } = await context();
+        await Bun.write(
+            join(dir, "gadgets", "remember.ts"),
+            "/**\n * name: remember\n * description: remembers who\n */\n\nexport default async (input: { who: string }, _ui: unknown, state: State) => {\n    await state.session.set('who', { name: input.who })\n    return 'remembered'\n}\n",
+        );
+        await Bun.write(
+            join(dir, "gadgets", "recall.ts"),
+            "/**\n * name: recall\n * description: recalls who\n */\n\nexport default async (_input: unknown, _ui: unknown, state: State) => JSON.stringify(await state.session.get('who'))\n",
+        );
+        ctx.homes = [await loadHome(dir)];
+
+        await runAction("run_gadget", { name: "remember", input: { who: "ada" } }, ctx);
+
+        expect(await runAction("run_gadget", { name: "recall" }, ctx)).toEqual({
+            ok: true,
+            content: '{"name":"ada"}',
+        });
+        await cleanup();
+    });
+
+    test("keeps a commit in the home the gadget came from", async () => {
+        const { ctx, dir, cleanup } = await context();
+        const other = await mkdtemp(join(tmpdir(), "jeng-other-"));
+        await Bun.write(
+            join(other, "gadgets", "keep.ts"),
+            "/**\n * name: keep\n * description: keeps a note\n */\n\nexport default async (_input: unknown, _ui: unknown, state: State) => {\n    await state.persistent.set('note', 'ada')\n    return 'kept'\n}\n",
+        );
+        ctx.homes = [await loadHome(dir), await loadHome(other)];
+
+        expect(await runAction("run_gadget", { name: "keep" }, ctx)).toMatchObject({ ok: true });
+
+        expect(await Bun.file(join(other, ".state")).text()).toContain('"note": "ada"');
+        expect(await Bun.file(join(dir, ".state")).exists()).toBe(false);
+        await rm(other, { recursive: true, force: true });
         await cleanup();
     });
 

@@ -86,6 +86,18 @@ const GADGET =
 const UI_GADGET =
     '/**\n * name: pick\n * ui: true\n * description: asks which branch\n */\n\nexport default async (_input: unknown, ui) => {\n    const answers = await ui({ kind: "select", name: "branch", question: "which?", options: [] })\n    return "on " + (answers.branch ?? "nothing")\n}\n';
 
+const REMEMBER =
+    "/**\n * name: remember\n * description: remembers who to greet\n */\n\nexport default async (input: { who: string }, _ui: unknown, state: State) => {\n    await state.session.set('who', input.who)\n    return 'remembered'\n}\n";
+
+const RECALL =
+    "/**\n * name: recall\n * description: recalls who to greet\n */\n\nexport default async (_input: unknown, _ui: unknown, state: State) => String((await state.session.get('who')) ?? 'nobody')\n";
+
+const KEEP =
+    "/**\n * name: keep\n * description: keeps a note\n */\n\nexport default async (input: { note: string }, _ui: unknown, state: State) => {\n    await state.persistent.set('note', input.note)\n    return 'kept'\n}\n";
+
+const RECALL_NOTE =
+    "/**\n * name: recall-note\n * description: recalls the kept note\n */\n\nexport default async (_input: unknown, _ui: unknown, state: State) => String((await state.persistent.get('note')) ?? 'nothing')\n";
+
 describe("a jeng session", () => {
     test("grows a home folder: commits a protocol, learns from a rejected gadget, then answers", async () => {
         const home = await mkdtemp(join(tmpdir(), "jeng-e2e-"));
@@ -323,6 +335,70 @@ describe("a jeng session", () => {
             history: 0,
             memory: 0,
         });
+        model.stop();
+        await rm(home, { recursive: true, force: true });
+    });
+
+    test("carries a gadget's session state to the next one and forgets it on clear", async () => {
+        const home = await mkdtemp(join(tmpdir(), "jeng-e2e-"));
+        await Bun.write(join(home, "gadgets", "remember.ts"), REMEMBER);
+        await Bun.write(join(home, "gadgets", "recall.ts"), RECALL);
+
+        const model = fakeModel([
+            act({ action: "run_gadget", name: "remember", input: { who: "ada" } }),
+            act({ action: "run_gadget", name: "recall" }),
+            end("greeted"),
+            act({ action: "run_gadget", name: "recall" }),
+            end("greeted"),
+        ]);
+
+        const agent = await createAgent({
+            cwd: home,
+            homes: [home],
+            config: CONFIG(model.url),
+            approve: allow,
+        });
+        const answers = () =>
+            agent.history.flatMap((message) => (message.role === "tool" ? [message.content] : []));
+        await agent.send("greet ada");
+        expect(answers()).toEqual(["remembered", "ada", "ended"]);
+
+        agent.clear();
+
+        await agent.send("greet whoever");
+        expect(answers()).toEqual(["nobody", "ended"]);
+        model.stop();
+        await rm(home, { recursive: true, force: true });
+    });
+
+    test("hands a commit to a session that comes later", async () => {
+        const home = await mkdtemp(join(tmpdir(), "jeng-e2e-"));
+        await Bun.write(join(home, "gadgets", "keep.ts"), KEEP);
+        await Bun.write(join(home, "gadgets", "recall-note.ts"), RECALL_NOTE);
+
+        const model = fakeModel([
+            act({ action: "run_gadget", name: "keep", input: { note: "ship on fridays" } }),
+            end("kept"),
+            act({ action: "run_gadget", name: "recall-note" }),
+            end("ship on fridays"),
+        ]);
+
+        const first = await createAgent({
+            cwd: home,
+            homes: [home],
+            config: CONFIG(model.url),
+            approve: allow,
+        });
+        expect(await first.send("keep a note")).toBe("kept");
+
+        const second = await createAgent({
+            cwd: home,
+            homes: [home],
+            config: CONFIG(model.url),
+            approve: allow,
+        });
+
+        expect(await second.send("what was the note?")).toBe("ship on fridays");
         model.stop();
         await rm(home, { recursive: true, force: true });
     });

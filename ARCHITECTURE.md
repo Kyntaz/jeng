@@ -106,6 +106,33 @@ prose.
     - `image` is left out because it fails the whole native frame render rather than drawing nothing,
       which in a transcript means a corrupted screen rather than a missing picture.
 
+## Gadget State
+
+A gadget may take a third argument, `state`, and use it to leave something for another gadget or for a
+later session. It has two halves, and the two are the same shape on purpose so a gadget written against
+one works against the other.
+
+- `state.session` and `state.persistent` both offer `await get(key)` and `await set(key, value)`, both
+  async, because a gadget cannot know which one it is holding without checking and there is no reason
+  for it to have to.
+- **Session state is one object for the whole run**, shared by every gadget whatever home it came from,
+  and it holds any value at all. That is what lets one gadget hand a parsed document or a live handle to
+  the next without writing it to disk in between.
+- **Persistent state is per home**, in `<home>/.state`, and outlives the session. A gadget keeps what it
+  commits in the home it came from, so two homes are two agents' memories rather than one shared drawer.
+- `clear` empties the session state along with the transcript, because a scratch is only meaningful
+  against the conversation it was made in. Persistent state is untouched: it is not part of the
+  conversation at all.
+- **Only json can be committed.** A function, a `NaN` or a value containing itself is refused by name
+  rather than dropped, because `JSON.stringify` would drop it silently and the gadget would read back a
+  `null` and never learn why.
+- Every read and write goes to the file, so a second Jeng on the same home merges keys instead of
+  writing out a whole-file copy it read before the other one did.
+- A `.state` that is not a json object is an error naming the file rather than an empty map, because
+  reading a broken file as empty throws the keys away without ever saying so.
+- `test_gadget` gets the real thing, so a gadget that commits during a test really has committed it. The
+  alternative would be a test that behaves differently from the run it is standing in for.
+
 ## Configuration
 
 `config` is the single definition of where Jeng's homes and model come from, so a caller never has to know how they were chosen.
@@ -153,7 +180,9 @@ export default async (input: { who: string }) => `hi ${input.who}`
 A gadget's default export takes the action's `input` and its return value becomes the action's result.
 A gadget may take a second argument, `ui`, which draws widgets and answers with what the user filled
 in; its return value is still the action's result, because what the user sees and what Jeng reads are
-two different things.
+two different things. A third argument, `state`, is what a gadget uses to leave something for another
+gadget or for a later session, and needs no declaration, because unlike an interface there is no run in
+which having state is a claim that cannot be kept.
 
 ## Validation
 

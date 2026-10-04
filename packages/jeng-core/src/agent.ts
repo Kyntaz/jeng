@@ -7,6 +7,7 @@ import { type Home, loadHomes } from "./home";
 import { DEFAULT_MODE, type Mode } from "./mode";
 import { chatWithRetry, type Message, type ModelConfig } from "./model";
 import { prompt } from "./prompts";
+import { sessionState } from "./state";
 import { jengTool } from "./tool";
 import type { Ui, Widget } from "./ui";
 
@@ -66,6 +67,7 @@ export async function createAgent(options: AgentOptions): Promise<Agent> {
         cwd,
         approve: (request) => approve(request),
         ui: undefined,
+        session: sessionState(),
         get mode() {
             return mode;
         },
@@ -244,6 +246,9 @@ export async function createAgent(options: AgentOptions): Promise<Agent> {
     function clear(): void {
         history.length = 0;
         memory.length = 0;
+        // What one gadget left for the next is a scratch that only makes sense
+        // against what they talked about, so it goes with the conversation.
+        ctx.session = sessionState();
     }
 
     return {

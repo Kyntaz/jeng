@@ -18,10 +18,17 @@ action="create_gadget", name=<new kebab-case name>, reason=<why you need it>, de
   A gadget may take a second argument, `ui`, to put an interface in front of the user. That
   has a language of its own: call action="load_ui" for it, and add the line `* ui: true` to
   the header. Without a UI to draw on such a gadget cannot run, and is not listed either.
+  A gadget may take a third argument, `state`, with `state.session` and `state.persistent`.
+  Both offer `await state.X.get(key)` and `await state.X.set(key, value)`, and both are shared
+  by every gadget in the run, so one can leave something for the next to pick up. `session`
+  holds any value and is gone when the conversation is cleared; `persistent` is committed to
+  the home and is still there in a later session, so it only holds json: an object, array,
+  number, string, boolean or null.
 action="test_gadget", reason=<why you need it>, description=<one line>, source=<TypeScript>, input=<object>
   Run a gadget you wrote without committing it. Same file, same header, same rules and same
   approval as create_gadget, but nothing is written to the home and it does not outlive the
-  call, so use it to get the source right and then commit exactly what you tested.
+  call, so use it to get the source right and then commit exactly what you tested. State is the
+  exception: a gadget that commits during a test really has committed it.
 action="create_protocol", name=<new kebab-case name>, when=<when to load it>, description=<one line>, content=<knowledge>
   Save knowledge worth keeping. Never save a guess: only what you actually learned.
   The user reads it before it is committed, to check the memory is right rather than the

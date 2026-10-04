@@ -128,6 +128,7 @@ Jeng loads up and edits context on the following locations:
     - `/gadgets`
         - `/*.ts` (tools that Jeng can use to interact with the system; these run on the bun runtime)
     - `/AGENTS.md` (global agents file; always loaded into Jeng's context)
+    - `/.state` (json a gadget has committed, kept between sessions)
 
 Additionally, Jeng loads up `AGENTS.md` files for the current working directory or any directory above it, following the expected protocol.
 You can have multiple `--home` folders to have multiple agents with different capabilities.
@@ -205,6 +206,36 @@ unified diff, which is what `git diff` already hands you.
 > It can only run where there is a terminal to draw on, which is the TUI: a piped or one-shot run has
 > nowhere to show it, so those gadgets are left out of Jeng's list entirely and Jeng is told to say so
 > rather than to try.
+
+### Gadgets with state
+
+A gadget can take a third argument and leave something for another gadget, or for a session that has
+not happened yet:
+
+```ts
+/**
+ * name: remember-branch
+ * description: remembers the branch a repo is on. input: { repo: string }
+ */
+
+export default async (input: { repo: string }, ui: Ui, state: State) => {
+    const branch = (await Bun.$`git -C ${input.repo} branch --show-current`.text()).trim();
+    await state.session.set("branch", branch);
+    return branch;
+}
+```
+
+`state.session` and `state.persistent` both do the same two things, `await get(key)` and
+`await set(key, value)`:
+
+- `state.session` is shared by every gadget of the run and holds anything, a live handle included. It is
+  gone when you clear the conversation, which is `ctrl+l` in the TUI.
+- `state.persistent` is committed to `.state` inside the home the gadget came from, and is still there
+  in a later session. It only takes json: an object, array, number, string, boolean or null. Anything
+  else is refused rather than quietly dropped.
+
+A gadget that asks to be tested gets the real state, so a commit it makes during the test is a commit it
+really made.
 
 ## Protocols
 

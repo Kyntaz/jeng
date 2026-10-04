@@ -3,6 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { runGadget } from "../../src/gadget";
+import { persistentState, sessionState } from "../../src/state";
 import type { Ui } from "../../src/ui";
 
 describe("gadget", () => {
@@ -54,6 +55,38 @@ describe("gadget", () => {
         const ui: Ui = async () => ({ branch: "main" });
 
         expect(await runGadget(file, {}, ui)).toEqual({ ok: true, output: "on main" });
+        await rm(dir, { recursive: true, force: true });
+    });
+
+    test("hands the state to the default export as its third argument", async () => {
+        const dir = await mkdtemp(join(tmpdir(), "jeng-gadget-"));
+        const file = join(dir, "remember.ts");
+        await Bun.write(
+            file,
+            "/**\n * name: remember\n * description: remembers\n */\n\nexport default async (_input: unknown, _ui: unknown, state: State) => {\n    await state.session.set('who', 'ada')\n    return JSON.stringify(await state.session.get('who'))\n}\n",
+        );
+
+        const result = await runGadget(file, {}, undefined, {
+            session: sessionState(),
+            persistent: persistentState(dir),
+        });
+
+        expect(result).toEqual({ ok: true, output: '"ada"' });
+        await rm(dir, { recursive: true, force: true });
+    });
+
+    test("refuses a commit rather than dropping it when there is no home to keep it in", async () => {
+        const dir = await mkdtemp(join(tmpdir(), "jeng-gadget-"));
+        const file = join(dir, "keep.ts");
+        await Bun.write(
+            file,
+            "/**\n * name: keep\n * description: keeps\n */\n\nexport default async (_input: unknown, _ui: unknown, state: State) => {\n    await state.persistent.set('who', 'ada')\n    return 'kept'\n}\n",
+        );
+
+        expect(await runGadget(file, {})).toEqual({
+            ok: false,
+            error: "gadget failed: this run has no home to keep state in",
+        });
         await rm(dir, { recursive: true, force: true });
     });
 
