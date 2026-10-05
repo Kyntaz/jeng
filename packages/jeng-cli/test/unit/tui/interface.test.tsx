@@ -35,6 +35,42 @@ function stubAgent(widgets: Widget[]): { agent: Agent; answered: Answers[] } {
     return { agent, answered };
 }
 
+// Mirrors how the agent hands a widget over: the transcript entry is written before
+// the host is asked, and a gadget that does not await its own draw lets the next one
+// land while the form the first one opened is still up.
+function stubTurn(turn: (ask: (widget: Widget) => Promise<Answers>) => Promise<void>): {
+    agent: Agent;
+    answered: Answers[];
+} {
+    const answered: Answers[] = [];
+    let ui: Ui = async () => ({});
+    const agent: Agent = {
+        homes: [],
+        agents: [],
+        cwd: process.cwd(),
+        model: "test-model",
+        history: [],
+        memory: [],
+        mode: "learn",
+        clear: () => {},
+        inject: () => {},
+        setApprove: () => {},
+        setUi: (next) => {
+            ui = next;
+        },
+        setMode: () => {},
+        send: async (_prompt, options) => {
+            const ask = async (widget: Widget) => {
+                options?.onEvent?.({ type: "view", widget });
+                return await ui(widget);
+            };
+            await turn(ask);
+            return "done";
+        },
+    };
+    return { agent, answered };
+}
+
 async function render(agent: Agent) {
     return testRender(<App agent={agent} onExit={() => {}} />, {
         width: 80,
@@ -69,6 +105,23 @@ const BRANCH: Widget = {
         },
         { kind: "input", name: "why", question: "why that one?" },
     ],
+};
+
+// Tall enough to push a form out of a 24 row frame, and asks nothing.
+const TALL: Widget = {
+    kind: "box",
+    direction: "col",
+    children: Array.from({ length: 40 }, (_, at) => ({
+        kind: "text" as const,
+        content: `line ${at}`,
+    })),
+};
+
+const CHOOSE: Widget = {
+    kind: "select",
+    name: "branch",
+    question: "which branch?",
+    options: [{ name: "main" }, { name: "develop" }],
 };
 
 describe("a gadget drawing its own interface", () => {
@@ -181,6 +234,77 @@ describe("a gadget drawing its own interface", () => {
         expect(answered).toEqual([{ branch: "develop", why: "it ships tonight" }]);
     });
 
+    test("does not let a select with nothing in it hold the keys behind a live field", async () => {
+        const { agent, answered } = stubTurn(async (ask) => {
+            answered.push(
+                await ask({
+                    kind: "box",
+                    direction: "col",
+                    children: [
+                        { kind: "select", name: "action", question: "what now?", options: [] },
+                        { kind: "input", name: "why", question: "why that one?" },
+                    ],
+                }),
+            );
+        });
+        const { renderer, mockInput, flush } = await render(agent);
+
+        await mockInput.typeText("what now?");
+        act(() => mockInput.pressEnter());
+        await act(async () => await flush());
+
+        // The dead select is laid out first, so a form that focused it would swallow
+        // every keystroke before it reached the field that can be answered.
+        await mockInput.typeText("because");
+        act(() => mockInput.pressEnter());
+        await act(async () => await flush());
+        act(() => renderer.destroy());
+
+        expect(answered).toEqual([{ why: "because" }]);
+    });
+
+    test("gives the second of two forms its own answers rather than the first one's", async () => {
+        const { agent, answered } = stubTurn(async (ask) => {
+            // A gadget that asks without waiting leaves two forms up at once.
+            const first = ask(CHOOSE);
+            const second = ask(CHOOSE);
+            answered.push(await first);
+            answered.push(await second);
+        });
+        const { renderer, mockInput, flush, captureCharFrame } = await render(agent);
+
+        await mockInput.typeText("pick a branch");
+        act(() => mockInput.pressEnter());
+        await act(async () => await flush());
+
+        act(() => mockInput.pressEnter());
+        await act(async () => await flush());
+        const frame = captureCharFrame();
+        act(() => renderer.destroy());
+
+        expect(answered).toEqual([{ branch: "main" }]);
+        // The second form is still up, so the answer went to the first one alone.
+        expect(frame).toContain("waiting for you");
+    });
+
+    test("draws a widget that asks nothing as a record rather than a live control", async () => {
+        const { agent } = stubTurn(async (ask) => {
+            await ask({ kind: "select", name: "action", question: "what now?", options: [] });
+        });
+        const { renderer, mockInput, flush, waitFor, captureCharFrame } = await render(agent);
+
+        await mockInput.typeText("what now?");
+        act(() => mockInput.pressEnter());
+        await act(async () => await flush());
+        await waitFor(() => captureCharFrame().includes("what now?"));
+        const frame = captureCharFrame();
+        act(() => renderer.destroy());
+
+        // An unanswered widget is the transcript's business, so nothing the user
+        // could aim at is left in the scrollback.
+        expect(frame).toContain("skipped");
+    });
+
     test("draws a widget that asks nothing without ever holding the keys", async () => {
         const { agent, answered } = stubAgent([{ kind: "text", content: "3 files changed" }]);
         const { renderer, mockInput, flush, waitFor, captureCharFrame } = await render(agent);
@@ -196,6 +320,46 @@ describe("a gadget drawing its own interface", () => {
         // The idle footer is what says nothing is holding the keys, which is the
         // other half of a widget that asks nothing.
         expect(frame).toContain("esc interrupt");
+    });
+
+    test("keeps a pending form on screen when a widget asks nothing after it", async () => {
+        const { agent } = stubTurn(async (ask) => {
+            void ask(BRANCH);
+            await ask(TALL);
+        });
+        const { renderer, mockInput, flush, waitFor, captureCharFrame } = await render(agent);
+
+        await mockInput.typeText("pick a branch");
+        act(() => mockInput.pressEnter());
+        await act(async () => await flush());
+        await waitFor(() => captureCharFrame().includes("line 39"));
+        const frame = captureCharFrame();
+        act(() => renderer.destroy());
+
+        expect(frame).toContain("which branch?");
+    });
+
+    test("answers a pending form that a widget asking nothing was drawn over", async () => {
+        const { agent, answered } = stubTurn(async (ask) => {
+            const form = ask(BRANCH);
+            await ask(TALL);
+            answered.push(await form);
+        });
+        const { renderer, mockInput, flush, waitFor, captureCharFrame } = await render(agent);
+
+        await mockInput.typeText("pick a branch");
+        act(() => mockInput.pressEnter());
+        await act(async () => await flush());
+        await waitFor(() => captureCharFrame().includes("line 39"));
+
+        act(() => mockInput.pressEnter());
+        await act(async () => await flush());
+        await mockInput.typeText("it is the release branch");
+        act(() => mockInput.pressEnter());
+        await act(async () => await flush());
+        act(() => renderer.destroy());
+
+        expect(answered).toEqual([{ branch: "main", why: "it is the release branch" }]);
     });
 
     test("draws markdown, so a gadget can put a table in front of the user", async () => {

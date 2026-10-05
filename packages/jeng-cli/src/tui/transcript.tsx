@@ -47,7 +47,10 @@ export const nameOf = (block: Block): number => {
 };
 
 function Row({ entry, mode }: { entry: Entry; mode: Mode | undefined }) {
-    if (entry.kind === "view") return <GadgetView widget={entry.widget} answers={entry.answers} />;
+    // An empty map rather than none, because the transcript is a record: a widget
+    // that asked nothing was drawn once and must not leave a live control behind.
+    if (entry.kind === "view")
+        return <GadgetView widget={entry.widget} answers={entry.answers ?? {}} />;
     const tint = entry.kind === "tool" ? MODE_COLOR[mode ?? "learn"] : COLORS[entry.kind];
     if (!("icon" in entry))
         return <text fg={tint} selectionBg={SELECTION} wrapMode="word" content={entry.text} />;

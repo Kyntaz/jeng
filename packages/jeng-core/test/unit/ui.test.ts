@@ -6,7 +6,12 @@ const FORM: Widget = {
     direction: "col",
     children: [
         { kind: "text", content: "3 files changed" },
-        { kind: "select", name: "action", question: "what now?", options: [] },
+        {
+            kind: "select",
+            name: "action",
+            question: "what now?",
+            options: [{ name: "push" }, { name: "discard" }],
+        },
         {
             kind: "box",
             direction: "row",
@@ -29,5 +34,11 @@ describe("ui", () => {
 
     test("reports no fields for a tree that only draws", () => {
         expect(fields({ kind: "code", content: "" })).toEqual([]);
+    });
+
+    test("leaves a select with nothing to pick out of the fields", () => {
+        expect(
+            fields({ kind: "select", name: "action", question: "what now?", options: [] }),
+        ).toEqual([]);
     });
 });

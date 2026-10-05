@@ -23,7 +23,8 @@ A widget is one of:
   { kind: "textarea" name, question, placeholder? }    as many lines as they like
 
 Only select, input and textarea ask the user anything, and only those three need a name.
-Everything else is there to be looked at.
+Everything else is there to be looked at. A select with no options asks nothing, so when the
+list can come back empty, ask with an input or draw the question instead.
 
 One call is one round trip, so ask for everything in a single tree and the user answers all of
 it in one go. tab moves between fields, the form is sent as soon as the last field has an

@@ -81,6 +81,13 @@ prose.
 - **No submit key.** `enter` answers the focused field, and the form is sent when the last one has an
   answer, so no key has to outrank a control's own `enter`. `esc` abandons the form, which is the same
   answer `esc` already gives an approval.
+- **A field the user cannot answer is not a field.** A `select` with no options is a drawing, because
+  offering it would take the focus and hold the keys while being impossible to answer — the form would
+  come up, promise `enter answer`, and swallow every keystroke. What is reported as a field and what is
+  drawn as one form are the same `fields()`, so they cannot drift.
+- **A form is one at a time, and it keeps its own answers.** A gadget that asks without waiting can
+  leave more than one up; the rest wait rather than reaching for the keys. Each form is keyed by the
+  ask that opened it, so a form never answers itself with the answers given to the one before it.
 - **An interface is drawn once, in the transcript.** A form being filled in is part of the scroll
   region rather than a panel below it, so a tall one scrolls with everything else instead of taking
   rows the prompt needs and being the one thing on screen that cannot be scrolled through. Drawn

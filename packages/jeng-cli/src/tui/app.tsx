@@ -26,6 +26,8 @@ import { BlockView, blocks, nameOf } from "./transcript";
 
 /** A gadget's interface, waiting on a user who has not answered it yet. */
 interface Ask {
+    /** What tells two forms apart, since a gadget can leave more than one up. */
+    id: number;
     widget: Widget;
     resolve: (answers: Answers) => void;
 }
@@ -55,6 +57,7 @@ export async function renderTui(agent: Agent): Promise<void> {
 
 export function App({ agent, onExit }: { agent: Agent; onExit: () => void }) {
     const [entries, setEntries] = useState<Entry[]>([]);
+    const numbered = useRef(0);
     const [busy, setBusy] = useState(false);
     const [tokens, setTokens] = useState(0);
     const [mode, setMode] = useState<Mode>(agent.mode);
@@ -89,7 +92,11 @@ export function App({ agent, onExit }: { agent: Agent; onExit: () => void }) {
                     // Nothing to ask is nothing to wait for, so a widget that only
                     // draws goes straight to the transcript and out of the way.
                     if (fields(widget).length === 0) resolve({});
-                    else setAsking((current) => [...current, { widget, resolve }]);
+                    else
+                        setAsking((current) => [
+                            ...current,
+                            { id: ++numbered.current, widget, resolve },
+                        ]);
                 }),
         );
     }, [agent]);
@@ -209,6 +216,10 @@ export function App({ agent, onExit }: { agent: Agent; onExit: () => void }) {
     );
     const groups = useMemo(() => blocks(visible), [visible]);
 
+    // One form is up at a time. A gadget that asks without waiting leaves more than
+    // one, and the rest wait their turn rather than reaching for the keys.
+    const pending = asking[0];
+
     // An approval and a gadget's interface are the same thing to the user: Jeng has
     // stopped to be answered.
     const waiting = useMemo(
@@ -262,11 +273,13 @@ export function App({ agent, onExit }: { agent: Agent; onExit: () => void }) {
                     </box>
                 )}
                 {/* The form is drawn here rather than below the transcript, so a tall
-                 interface scrolls with everything else. */}
-                {asking.length > 0 && (
+                 interface scrolls with everything else. Keyed because a form that
+                 reuses the last one's answers would answer itself. */}
+                {pending && (
                     <Panel
-                        widget={asking[0].widget}
-                        onDone={(answers) => settle(asking[0], answers)}
+                        key={pending.id}
+                        widget={pending.widget}
+                        onDone={(answers) => settle(pending, answers)}
                     />
                 )}
             </scrollbox>
