@@ -19,11 +19,20 @@ export const PROMPT_KEYS: KeyBinding[] = [
 // above is what the answer is read in.
 const SHARE = 2;
 
-// `virtualLineCount` only counts the rows that are currently laid out, so a box
-// one row tall would never learn how tall it wants to be. This is the whole of it,
-// wrapped the way the box is wrapping it.
-const rowsOf = (input: RefObject<TextareaRenderable | null>): number =>
-    input.current?.editorView.getTotalVirtualLineCount() ?? 1;
+// A box is as tall as what is in it, so what is being written is read while it is
+// being written rather than scrolled inside a row that cannot show it.
+// `virtualLineCount` only counts the rows that are currently laid out, so a box one
+// row tall would never learn how tall it wants to be. This is the whole of it,
+// wrapped the way the box is wrapping it. `share` is how much of the screen it may
+// take, so a long one scrolls inside itself instead of pushing the rest off screen.
+export function useGrowing(input: RefObject<TextareaRenderable | null>, share: number) {
+    const [rows, setRows] = useState(1);
+    const { height } = useTerminalDimensions();
+    return {
+        height: Math.min(rows, Math.max(1, Math.floor(height / share))),
+        onContentChange: () => setRows(input.current?.editorView.getTotalVirtualLineCount() ?? 1),
+    };
+}
 
 export function PromptInput({
     input,
@@ -43,10 +52,7 @@ export function PromptInput({
     // typed while Jeng worked is still there once the answer is in.
     visible?: boolean;
 }) {
-    // The box is as tall as what is in it, so a prompt can be read while it is
-    // being written rather than scrolled inside a row that cannot show it.
-    const [rows, setRows] = useState(1);
-    const { height } = useTerminalDimensions();
+    const growing = useGrowing(input, SHARE);
 
     return (
         <box
@@ -63,10 +69,9 @@ export function PromptInput({
                 focused={focused}
                 wrapMode="word"
                 selectionBg={SELECTION}
-                height={Math.min(rows, Math.max(1, Math.floor(height / SHARE)))}
                 keyBindings={PROMPT_KEYS}
-                onContentChange={() => setRows(rowsOf(input))}
                 onSubmit={onSubmit}
+                {...growing}
             />
         </box>
     );

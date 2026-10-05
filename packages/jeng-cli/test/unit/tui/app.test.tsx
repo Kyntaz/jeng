@@ -116,6 +116,100 @@ describe("transcript", () => {
         expect(after).toBe(before);
     });
 
+    test("scrolls to the last line of a long result once detail is switched on", async () => {
+        // An action's output is held back until ctrl+r, and it is the longest thing
+        // the transcript ever draws, so it is what proves a long entry can be read
+        // to its end rather than only as far as one screen goes.
+        const long = Array.from({ length: 300 }, (_, at) => `result ${at}`).join("\n");
+        const { renderer, mockInput, flush, captureCharFrame, waitFor } = await render(
+            [],
+            [],
+            "done",
+            [
+                { type: "tool", action: "read", args: { path: "a.txt" } },
+                { type: "result", content: long, ok: true },
+            ],
+        );
+
+        await mockInput.typeText("hello");
+        act(() => mockInput.pressEnter());
+        await act(async () => await flush());
+        await waitFor(() => captureCharFrame().includes("done"));
+        act(() => mockInput.pressKey("r", { ctrl: true }));
+        await act(async () => await flush());
+        await act(async () => await flush());
+        const frame = captureCharFrame();
+        act(() => renderer.destroy());
+
+        expect(frame).toContain("result 299");
+    });
+
+    test("scrolls back up through a long result and returns to the end with ctrl+end", async () => {
+        const long = Array.from({ length: 300 }, (_, at) => `result ${at}`).join("\n");
+        const { renderer, mockInput, flush, captureCharFrame, waitFor } = await render(
+            [],
+            [],
+            "done",
+            [
+                { type: "tool", action: "read", args: { path: "a.txt" } },
+                { type: "result", content: long, ok: true },
+            ],
+        );
+
+        await mockInput.typeText("hello");
+        act(() => mockInput.pressEnter());
+        await act(async () => await flush());
+        await waitFor(() => captureCharFrame().includes("done"));
+        act(() => mockInput.pressKey("r", { ctrl: true }));
+        await act(async () => await flush());
+        await act(async () => await flush());
+        // The end is where a turn leaves the transcript, so scrolling back is what
+        // has to be undone rather than re-read from the top of a long result.
+        await mockInput.pressKeys(["\u001b[5~"]);
+        await act(async () => await flush());
+        const up = captureCharFrame();
+        await mockInput.pressKeys(["\u001b[1;5F"]);
+        await act(async () => await flush());
+        const back = captureCharFrame();
+        act(() => renderer.destroy());
+
+        expect({
+            scrolledUp: !up.includes("result 299"),
+            backAtEnd: back.includes("result 299"),
+        }).toEqual({ scrolledUp: true, backAtEnd: true });
+    });
+
+    test("hangs a wrapped line under the icon rather than off it", async () => {
+        // One line long enough to wrap, behind an icon, because the icon is a column
+        // of its own and a wrap that hung off the marker would read as belonging to
+        // the action above rather than to what the action said.
+        const { renderer, mockInput, flush, captureCharFrame, waitFor } = await render(
+            [],
+            [],
+            "done",
+            [
+                { type: "tool", action: "read", args: { path: "a.txt" } },
+                { type: "result", content: "wrapped ".repeat(40), ok: true },
+            ],
+        );
+
+        await mockInput.typeText("hello");
+        act(() => mockInput.pressEnter());
+        await act(async () => await flush());
+        await waitFor(() => captureCharFrame().includes("done"));
+        act(() => mockInput.pressKey("r", { ctrl: true }));
+        await act(async () => await flush());
+        await act(async () => await flush());
+        const lines = captureCharFrame().split("\n");
+        const first = lines.findIndex((line) => line.includes("wrapped"));
+        const continuation = lines[first + 1];
+        act(() => renderer.destroy());
+
+        // The box border and its padding take two columns and the icon and the gap take
+        // three more, so the wrap starts at five rather than at the edge of the box.
+        expect(continuation?.indexOf("wrapped")).toBe(5);
+    });
+
     test("holds what an action returned back until ctrl+r", async () => {
         const { renderer, mockInput, flush, captureCharFrame } = await render([], [], "done", [
             { type: "tool", action: "read", args: { path: "a.txt" } },

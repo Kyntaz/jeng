@@ -35,6 +35,15 @@ const decided = (decision: ApprovalDecision): string => {
     return decision.reason ? `rejected: ${decision.reason}` : "rejected";
 };
 
+const END = Number.MAX_SAFE_INTEGER;
+
+// A scroll is a number of screens from wherever the transcript already is rather
+// than an absolute row, because the region clamps to its own extent and a row
+// number would have to come from a height that is still being measured.
+function scroll(region: ScrollBoxRenderable | null, screens: number): void {
+    region?.scrollBy(screens, screens === END ? "content" : "viewport");
+}
+
 export async function renderTui(agent: Agent): Promise<void> {
     const renderer = await createCliRenderer({ exitOnCtrlC: true });
     try {
@@ -117,6 +126,13 @@ export function App({ agent, onExit }: { agent: Agent; onExit: () => void }) {
     }, []);
 
     useKeyboard((key) => {
+        // The transcript is read by scrolling it, and the prompt holds the focus, so
+        // the keys that scroll are taken here rather than left to the scroll region,
+        // which never sees one. `end` alone is the prompt's own, so the jump to the
+        // bottom is the modified one.
+        if (key.ctrl && key.name === "end") scroll(scroller.current, END);
+        else if (key.name === "pageup") scroll(scroller.current, -1);
+        else if (key.name === "pagedown") scroll(scroller.current, 1);
         if (key.ctrl && key.name === "escape") onExit();
         // A pending ask is the one place escape cannot mean abort, because the
         // turn is waiting on a human rather than on the model.
@@ -198,12 +214,17 @@ export function App({ agent, onExit }: { agent: Agent; onExit: () => void }) {
         }
     }, [agent, busy, fail, mode]);
 
+    // The transcript is the record, so an interface is only drawn here once it has
+    // been answered. While it is still waiting, the panel below is the one and only
+    // copy, and drawing a second one here is what made the form unscrollable.
     const visible = useMemo(
         () =>
-            showThinking
-                ? entries
-                : entries.filter((entry) => !QUIET.includes(entry.kind) && !blank(entry)),
-        [entries, showThinking],
+            entries.filter(
+                (entry) =>
+                    !(entry.kind === "view" && asking.some((ask) => ask.widget === entry.widget)) &&
+                    (showThinking || (!QUIET.includes(entry.kind) && !blank(entry))),
+            ),
+        [entries, showThinking, asking],
     );
     const groups = useMemo(() => blocks(visible), [visible]);
 
@@ -260,11 +281,16 @@ export function App({ agent, onExit }: { agent: Agent; onExit: () => void }) {
                         <text fg={MUTED} content={waiting ? "waiting for you" : "thinking"} />
                     </box>
                 )}
+                {/* The form is drawn here rather than below the transcript, so a tall
+                    interface scrolls with everything else instead of claiming rows the
+                    prompt needs and cannot be scrolled through. */}
+                {asking.length > 0 && (
+                    <Panel
+                        widget={asking[0].widget}
+                        onDone={(answers) => settle(asking[0], answers)}
+                    />
+                )}
             </scrollbox>
-
-            {asking.length > 0 && (
-                <Panel widget={asking[0].widget} onDone={(answers) => settle(asking[0], answers)} />
-            )}
 
             {awaiting && <ApprovalBar onDecide={answer} />}
 

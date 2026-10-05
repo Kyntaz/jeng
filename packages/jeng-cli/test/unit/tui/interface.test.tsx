@@ -86,6 +86,20 @@ describe("a gadget drawing its own interface", () => {
         expect(frame).toContain("develop");
     });
 
+    test("draws a pending form once, rather than once in the transcript and once in the panel", async () => {
+        const { agent } = stubAgent([BRANCH]);
+        const { renderer, mockInput, flush, waitFor, captureCharFrame } = await render(agent);
+
+        await mockInput.typeText("pick a branch");
+        act(() => mockInput.pressEnter());
+        await act(async () => await flush());
+        await waitFor(() => captureCharFrame().includes("which branch?"));
+        const frame = captureCharFrame();
+        act(() => renderer.destroy());
+
+        expect(frame.split("which branch?").length - 1).toBe(1);
+    });
+
     test("answers the form with the chosen option and what was typed", async () => {
         const { agent, answered } = stubAgent([BRANCH]);
         const { renderer, mockInput, flush, waitFor, captureCharFrame } = await render(agent);

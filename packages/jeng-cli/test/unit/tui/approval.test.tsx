@@ -43,12 +43,12 @@ function stubAgent(decided: ApprovalDecision[]): Agent {
     };
 }
 
-async function render(agent: Agent) {
+async function render(agent: Agent, height = 24) {
     // Shift+Enter only arrives as its own key when the terminal reports
     // modifiers, which is what the kitty keyboard protocol buys.
     return testRender(<App agent={agent} onExit={() => {}} />, {
         width: 80,
-        height: 24,
+        height,
         kittyKeyboard: true,
     });
 }
@@ -83,6 +83,25 @@ describe("approving a gadget", () => {
         expect(frame).toContain("reject");
     });
 
+    test("stacks the two buttons full width with the reason box under them", async () => {
+        const { renderer, mockInput, flush, captureCharFrame, waitFor } = await render(
+            stubAgent([]),
+        );
+
+        await mockInput.typeText("say hi");
+        act(() => mockInput.pressEnter());
+        await act(async () => await flush());
+        await waitFor(() => captureCharFrame().includes("approve"));
+        const rows = captureCharFrame()
+            .split("\n")
+            .map((row) => row.trim().length);
+        act(() => renderer.destroy());
+
+        // The last three bordered rows are the two buttons and the reason box, each
+        // spanning the whole eighty columns the test renders at.
+        expect(rows.slice(-11, -8)).toEqual([80, 80, 80]);
+    });
+
     test("sends back what was typed as the reason it was turned down", async () => {
         const decided: ApprovalDecision[] = [];
         const { renderer, mockInput, flush } = await render(stubAgent(decided));
@@ -92,7 +111,11 @@ describe("approving a gadget", () => {
         await act(async () => await flush());
         act(() => mockInput.pressTab());
         await act(async () => await flush());
+        act(() => mockInput.pressTab());
+        await act(async () => await flush());
         await mockInput.typeText("it deletes files");
+        act(() => mockInput.pressTab({ shift: true }));
+        await act(async () => await flush());
         act(() => mockInput.pressEnter());
         await act(async () => await flush());
         act(() => renderer.destroy());
@@ -109,8 +132,6 @@ describe("approving a gadget", () => {
         await act(async () => await flush());
         act(() => mockInput.pressTab());
         await act(async () => await flush());
-        act(() => mockInput.pressTab());
-        await act(async () => await flush());
         act(() => mockInput.pressEnter());
         await act(async () => await flush());
         act(() => renderer.destroy());
@@ -118,7 +139,52 @@ describe("approving a gadget", () => {
         expect(decided).toEqual([{ approved: false, reason: "" }]);
     });
 
-    test("keeps the reject button on screen under a long reason", async () => {
+    test("does not decide when enter breaks a line in the reason box", async () => {
+        const decided: ApprovalDecision[] = [];
+        const { renderer, mockInput, flush } = await render(stubAgent(decided));
+
+        await mockInput.typeText("say hi");
+        act(() => mockInput.pressEnter());
+        await act(async () => await flush());
+        act(() => mockInput.pressTab());
+        await act(async () => await flush());
+        act(() => mockInput.pressTab());
+        await act(async () => await flush());
+        await mockInput.typeText("it deletes files");
+        act(() => mockInput.pressEnter());
+        await act(async () => await flush());
+        act(() => renderer.destroy());
+
+        expect(decided).toEqual([]);
+    });
+
+    test("sends back the lines enter separated as one reason", async () => {
+        const decided: ApprovalDecision[] = [];
+        const { renderer, mockInput, flush } = await render(stubAgent(decided));
+
+        await mockInput.typeText("say hi");
+        act(() => mockInput.pressEnter());
+        await act(async () => await flush());
+        act(() => mockInput.pressTab());
+        await act(async () => await flush());
+        act(() => mockInput.pressTab());
+        await act(async () => await flush());
+        await mockInput.typeText("it deletes files");
+        act(() => mockInput.pressEnter());
+        await act(async () => await flush());
+        await mockInput.typeText("and it rewrites the home folder");
+        act(() => mockInput.pressTab({ shift: true }));
+        await act(async () => await flush());
+        act(() => mockInput.pressEnter());
+        await act(async () => await flush());
+        act(() => renderer.destroy());
+
+        expect(decided).toEqual([
+            { approved: false, reason: "it deletes files\nand it rewrites the home folder" },
+        ]);
+    });
+
+    test("grows the reason box to hold every line of the reason", async () => {
         const { renderer, mockInput, flush, captureCharFrame, waitFor } = await render(
             stubAgent([]),
         );
@@ -129,14 +195,72 @@ describe("approving a gadget", () => {
         await waitFor(() => captureCharFrame().includes("approve"));
         act(() => mockInput.pressTab());
         await act(async () => await flush());
-        await mockInput.typeText("it deletes files and rewrites the whole home folder twice over");
+        act(() => mockInput.pressTab());
         await act(async () => await flush());
-        const bar = captureCharFrame()
-            .split("\n")
-            .find((line) => line.includes("approve"));
+        await mockInput.typeText("first line");
+        act(() => mockInput.pressEnter());
+        await act(async () => await flush());
+        await mockInput.typeText("second line");
+        await act(async () => await flush());
+        const frame = captureCharFrame();
         act(() => renderer.destroy());
 
-        expect(bar).toContain("reject");
+        expect(frame).toContain("second line");
+    });
+
+    test("stops growing at a third of the screen so the buttons stay put", async () => {
+        const { renderer, mockInput, flush, captureCharFrame, waitFor } = await render(
+            stubAgent([]),
+            18,
+        );
+
+        await mockInput.typeText("say hi");
+        act(() => mockInput.pressEnter());
+        await act(async () => await flush());
+        await waitFor(() => captureCharFrame().includes("approve"));
+        act(() => mockInput.pressTab());
+        await act(async () => await flush());
+        act(() => mockInput.pressTab());
+        await act(async () => await flush());
+        for (let line = 0; line < 10; line++) {
+            await act(async () => await mockInput.typeText(`line ${line}`));
+            act(() => mockInput.pressEnter());
+            await act(async () => await flush());
+        }
+        await act(async () => await flush());
+        const rows = captureCharFrame().split("\n");
+        const top = rows.findLastIndex((row) => row.startsWith("┌"));
+        const bottom = rows.findLastIndex((row) => row.startsWith("└"));
+        act(() => renderer.destroy());
+
+        // The reason box is the last bordered thing on screen. Eighteen rows leave
+        // it a third, so six rows of reason between its own borders however long
+        // the reason gets, with both buttons still drawn above them.
+        expect(bottom - top - 1).toBe(6);
+    });
+
+    test("keeps both ways out on screen under a long reason", async () => {
+        const { renderer, mockInput, flush, captureCharFrame, waitFor } = await render(
+            stubAgent([]),
+        );
+
+        await mockInput.typeText("say hi");
+        act(() => mockInput.pressEnter());
+        await act(async () => await flush());
+        await waitFor(() => captureCharFrame().includes("approve"));
+        act(() => mockInput.pressTab());
+        await act(async () => await flush());
+        act(() => mockInput.pressTab());
+        await act(async () => await flush());
+        await mockInput.typeText("it deletes files and rewrites the whole home folder twice over");
+        await act(async () => await flush());
+        const frame = captureCharFrame();
+        act(() => renderer.destroy());
+
+        expect({ approve: frame.includes("approve"), reject: frame.includes("reject") }).toEqual({
+            approve: true,
+            reject: true,
+        });
     });
 
     test("gives the answer the user's green, because the answer is theirs", async () => {

@@ -107,12 +107,21 @@ The TUI shows the context size the model is actually working with, and has a few
 | `ctrl+l`      | clear the conversation and loaded protocols |
 | `esc`         | interrupt what Jeng is doing right now      |
 | `ctrl+r`      | show or hide the detail behind a turn: what the model is thinking, what each action returned and what went wrong |
+| `pageup`      | scroll the transcript back a screen           |
+| `pagedown`    | scroll the transcript on a screen             |
+| `ctrl+end`    | scroll the transcript to the newest thing    |
 
 Drag with the mouse to select any of it and let go, and the selection goes to your
-clipboard. The prompt box grows to hold what you have written, up to half the screen.
+clipboard. The mouse wheel scrolls the transcript too. The prompt box grows to hold
+what you have written, up to half the screen.
 
 When a gadget puts an interface in front of you, the prompt box gives up the keys until you have
 answered it and `tab` walks between its fields rather than changing mode.
+
+When Jeng wants to write something, it takes the prompt box's place with two full width buttons and a
+reason box underneath them. `tab` moves between the three, `enter` picks the button it lands on, and in
+the reason box `enter` breaks a line instead: the box grows to hold what you wrote, up to a third of the
+screen, and turning it down never waits on a reason you feel you have to write.
 
 `shift+enter` needs a terminal that reports modified keys, such as any with the kitty keyboard protocol.
 The prompt box stays focused while Jeng works, so you can keep typing.

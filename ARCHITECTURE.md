@@ -81,10 +81,13 @@ prose.
 - **No submit key.** `enter` answers the focused field, and the form is sent when the last one has an
   answer, so no key has to outrank a control's own `enter`. `esc` abandons the form, which is the same
   answer `esc` already gives an approval.
-- **The transcript is the record, a panel is the live form.** What was asked and what was answered
-  stays in the transcript, so scrolling back shows the decision the gadget went on to make. Only the
-  form being filled in sits above the prompt, which is what keeps the focus and the keystrokes out of
-  the scroll region entirely.
+- **An interface is drawn once, in the transcript.** A form being filled in is part of the scroll
+  region rather than a panel below it, so a tall one scrolls with everything else instead of taking
+  rows the prompt needs and being the one thing on screen that cannot be scrolled through. Drawn
+  twice, once live and once in the transcript, it is only reachable in the copy nobody can move.
+  The live tree is left out of the transcript and put back carrying its answers, so what was asked
+  and what was answered stays in place and scrolling back shows the decision the gadget went on to
+  make.
 - **A gadget that draws is declared in its header** with `ui: true`, because whether it has an
   interface has to be known before it runs rather than discovered while it runs.
 - **No UI means no such gadget.** Absence of a `ui` is what makes a run headless, and a headless run
@@ -101,7 +104,7 @@ prose.
       immediately proves nothing and has to wait for the draw it wants.
     - A select is as tall as it is told and no taller, so its height and whether it spends a row on a
       description are both worked out from the options it was given, and capped so a long list scrolls
-      inside the panel instead of pushing the prompt off the screen.
+      inside the transcript instead of pushing the prompt off the screen.
     - A diff has to be a real unified diff, because a malformed one is reported in the frame rather than
     - refused. `git diff` output is already one.
     - `image` is left out because it fails the whole native frame render rather than drawing nothing,

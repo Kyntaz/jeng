@@ -35,7 +35,7 @@ export function GadgetView(props: ViewProps) {
             // The question is drawn either way, because a control on its own says
             // nothing about what it is asking.
             return (
-                <box flexDirection="column" marginBottom={1}>
+                <box flexDirection="column" marginBottom={1} flexGrow={1}>
                     <text
                         fg={COLORS.jeng}
                         selectionBg={SELECTION}
@@ -59,18 +59,40 @@ export function GadgetView(props: ViewProps) {
     }
 }
 
+// Everything a gadget draws is grown into what is left of its line, because a
+// widget laid beside another measures against that line's height rather than its
+// own and would claim to be one screen tall.
 function DrawnWidget({ widget }: { widget: Drawn }) {
     switch (widget.kind) {
         case "markdown":
-            return <markdown content={widget.content} syntaxStyle={SYNTAX} />;
+            return <markdown content={widget.content} syntaxStyle={SYNTAX} flexGrow={1} />;
         case "code":
             return (
-                <code content={widget.content} filetype={widget.filetype} syntaxStyle={SYNTAX} />
+                <code
+                    content={widget.content}
+                    filetype={widget.filetype}
+                    syntaxStyle={SYNTAX}
+                    flexGrow={1}
+                />
             );
         case "diff":
-            return <diff diff={widget.diff} filetype={widget.filetype} syntaxStyle={SYNTAX} />;
+            return (
+                <diff
+                    diff={widget.diff}
+                    filetype={widget.filetype}
+                    syntaxStyle={SYNTAX}
+                    flexGrow={1}
+                />
+            );
         default:
-            return <text selectionBg={SELECTION} wrapMode="word" content={widget.content} />;
+            return (
+                <text
+                    selectionBg={SELECTION}
+                    wrapMode="word"
+                    content={widget.content}
+                    flexGrow={1}
+                />
+            );
     }
 }
 

@@ -69,6 +69,10 @@ function Row({ entry }: { entry: Entry }) {
                 fg={COLORS[entry.kind]}
                 selectionBg={SELECTION}
                 wrapMode="word"
+                // A text beside another in a row measures against the row's height
+                // rather than its own, so a long result would claim to be one screen
+                // tall and the transcript could not scroll to the rest of it.
+                flexGrow={1}
                 content={entry.text}
             />
         </box>
