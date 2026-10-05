@@ -10,7 +10,7 @@ type Typed = Extract<Widget, { kind: "input" | "textarea" }>;
 export interface ViewProps {
     widget: Widget;
     /** Given, the tree is a record of what was answered rather than something live. */
-    answers?: Record<string, string>;
+    answers?: Record<string, unknown>;
     focused?: string;
     onAnswer?: (name: string, value: string) => void;
 }
@@ -47,7 +47,7 @@ export function GadgetView(props: ViewProps) {
                             fg={widget.name in answers ? COLORS.jeng : COLORS.think}
                             selectionBg={SELECTION}
                             wrapMode="word"
-                            content={answers[widget.name] ?? "skipped"}
+                            content={String(answers[widget.name] ?? "skipped")}
                         />
                     ) : (
                         <Control {...props} widget={widget} />

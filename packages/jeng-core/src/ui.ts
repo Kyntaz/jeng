@@ -1,5 +1,16 @@
 import { prompt } from "./prompts";
 
+/**
+ * What a run can draw in. A host declares which one it is by taking the port for it,
+ * so a run with neither is headless and lists nothing that draws.
+ */
+export type Surface = "tui" | "gui";
+
+/** One thing a gadget asked to be shown, in the vocabulary of the surface that will show it. */
+export type Draw =
+    | { surface: "tui"; widget: Widget }
+    | { surface: "gui"; file: string; props: Record<string, unknown> };
+
 export type Choice = { name: string; description?: string };
 
 export type Widget =

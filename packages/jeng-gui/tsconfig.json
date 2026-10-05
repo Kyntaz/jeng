@@ -1,0 +1,18 @@
+{
+    "extends": "../../.hutch/devkit/tsconfig.json",
+    "compilerOptions": {
+        "lib": ["ESNext", "DOM"],
+        "target": "ESNext",
+        "module": "ESNext",
+        "moduleResolution": "bundler",
+        // The root config points JSX at opentui for the TUI; the window is a
+        // browser, so its JSX is react's.
+        "jsx": "react-jsx",
+        "jsxImportSource": "react",
+        "strict": true,
+        "skipLibCheck": true,
+        "noEmit": true,
+        "types": ["bun"]
+    },
+    "include": ["src", "test"]
+}

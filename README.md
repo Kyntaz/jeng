@@ -127,6 +127,36 @@ screen, and turning it down never waits on a reason you feel you have to write.
 The prompt box stays focused while Jeng works, so you can keep typing.
 Anything you send mid-turn reaches the model between two of its calls instead of cutting the current one short, and `esc` is what cuts it short.
 
+## The GUI
+
+Jeng also runs in a desktop window, with the same agent, the same homes and the same modes behind it:
+
+```sh
+bun run gui
+```
+
+It is a separate frontend rather than a mode, because a gadget that draws a react component is written
+against it and cannot run in a terminal, so the two are listed separately rather than pretending to be
+one thing. What the window has that the TUI does not:
+
+- Gadget interfaces are react components, so a gadget can draw whatever it likes rather than a widget
+  tree.
+- An approval is answered in a card next to the source, with room to say why not.
+- The header carries the homes, the model, the context size and the mode, and the mode is a button.
+
+| Key            | Does                                                            |
+| -------------- | --------------------------------------------------------------- |
+| `enter`        | send the prompt                                                  |
+| `shift+enter`  | break a line in the prompt                                       |
+| `esc`          | abandon a form, turn down an approval, or stop a turn            |
+| `F2`           | show or hide the detail behind a turn: what the model is thinking |
+
+The window is built by [Hutch](https://hutch.blackboard.sh) and [Electrobun](https://electrobun.dev), and
+`bun run setup` prints the one-line install for Hutch if it is missing. It runs from source rather than
+as a packaged app, because a gadget's component is compiled when the window asks for it and that needs
+react to be on disk to compile against. None of that touches the terminal: `jeng` is still a single
+executable and needs none of it.
+
 ## How it works?
 
 Jeng keeps working until it decides it has an answer, and there is no time limit on that.
@@ -220,7 +250,70 @@ unified diff, which is what `git diff` already hands you.
 > A gadget that draws needs `* ui: true` in its header, or Jeng will not offer it to itself later.
 > It can only run where there is a terminal to draw on, which is the TUI: a piped or one-shot run has
 > nowhere to show it, so those gadgets are left out of Jeng's list entirely and Jeng is told to say so
-> rather than to try.
+> rather than to try. A gadget that draws a react component instead is left out of the TUI in exactly
+> the same way, and is described in [Gadgets with a window](#gadgets-with-a-window).
+
+### Gadgets with a window
+
+A gadget can draw a react component instead of a widget tree, which is what the desktop app puts on
+screen. It is the same call with props in place of a widget, and the component is exported by name from
+the same file:
+
+```tsx
+/**
+ * name: pick-branch
+ * gui: true
+ * description: asks which branch to switch to. input: { repo: string }
+ */
+import { useState } from "react";
+
+export function View(props: {
+    repo: string;
+    options: string[];
+    answer?: (answers: object) => void;
+    answers?: object;
+}) {
+    const [picked] = useState<string>();
+    if (props.answers) return <p>switched to {props.answers.branch ?? "nothing"}</p>;
+    return (
+        <div>
+            <h3>{props.repo}</h3>
+            {props.options.map((option) => (
+                <button key={option} onClick={() => props.answer?.({ branch: option })}>
+                    {option}
+                </button>
+            ))}
+        </div>
+    );
+}
+
+export default async (input: { repo: string }, ui: Ui) => {
+    const answers = await ui({ repo: input.repo, options: await branches(input.repo) });
+    return answers.branch ? await checkout(input.repo, answers.branch) : "the user changed their mind";
+};
+```
+
+Ask Jeng for the language the same way:
+
+```json
+{"action": "load_ui"}
+```
+
+Three things are worth knowing before writing one:
+
+- **The file is two worlds.** The component runs in the window, so `react` and the dom are there; the
+  rest of the file runs in bun, so `Bun.$`, `Bun.file` and `state` are there. Anything imported from
+  `node:` is dropped from the window's half, so keep it out of the component.
+- **It is drawn twice.** Live while the user is answering it, and again carrying `props.answers` once
+  they have, which is how what was asked and what was decided stays on screen. Draw yourself read-only
+  when `answers` is set, the way the example above does.
+- **It needs no stylesheet of its own.** The window already defines `--jeng-accent`, `--jeng-user`,
+  `--jeng-muted`, `--jeng-border`, `--jeng-danger`, `--jeng-surface`, `--jeng-radius` and `--jeng-mono`,
+  and a component mounted into the window inherits them.
+
+A gadget that draws a component needs `* gui: true` in its header and is written to a `.tsx` file,
+because it is jsx. It cannot run without a window, so it is left out of the TUI and out of any piped
+run, and it cannot claim `ui: true` as well: a gadget draws one thing or the other.
 
 ### Gadgets with state
 

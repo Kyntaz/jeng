@@ -1,1 +1,1 @@
-the export takes a second argument, so this gadget draws an interface: it needs `* ui: true` in its header, and action="load_ui" for the language
+the export takes a second argument, so this gadget draws: it needs `* ui: true` for a widget tree or `* gui: true` for a react component in its header, and action="load_ui" for the language

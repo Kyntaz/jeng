@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { type ActionContext, runAction } from "../../src/actions";
 import type { Approval, Approve } from "../../src/approve";
+import type { Gui } from "../../src/gui";
 import { loadHome } from "../../src/home";
 import { sessionState } from "../../src/state";
 import type { Ui } from "../../src/ui";
@@ -12,7 +13,7 @@ const allow: Approve = async () => ({ approved: true });
 
 async function context(
     approve: Approve = allow,
-    ui?: Ui,
+    ports: { ui?: Ui; gui?: Gui } = {},
 ): Promise<{
     ctx: ActionContext;
     dir: string;
@@ -25,7 +26,8 @@ async function context(
             homes: [await loadHome(dir)],
             cwd: dir,
             approve,
-            ui,
+            ui: ports.ui,
+            gui: ports.gui,
             session: sessionState(),
         },
         cleanup: () => rm(dir, { recursive: true, force: true }),
@@ -49,6 +51,9 @@ const GADGET =
 
 const UI_GADGET =
     '/**\n * name: pick\n * ui: true\n * description: asks which branch\n */\n\nexport default async (_input: unknown, ui: Ui) => {\n    const answers = await ui({ kind: "select", name: "branch", question: "which?", options: [] })\n    return "on " + (answers.branch ?? "nothing")\n}\n';
+
+const GUI_GADGET =
+    "/**\n * name: review\n * gui: true\n * description: asks what to do with a diff\n */\n\nexport function View(props: { branch: string }) {\n    return <button>{props.branch}</button>\n}\n\nexport default async (input: { branch: string }, ui: (props: object) => Promise<object>) =>\n    JSON.stringify(await ui(input))\n";
 
 const WHY = "so i can say hi for you";
 
@@ -679,7 +684,7 @@ describe("actions", () => {
     });
 
     test("refuses to create a gadget that draws without saying so in its header", async () => {
-        const { ctx, cleanup } = await context(allow, async () => ({}));
+        const { ctx, cleanup } = await context(allow, { ui: async () => ({}) });
         const undeclared =
             '/**\n * name: pick\n * description: asks\n */\n\nexport default async (input: unknown, ui) => "hi"\n';
 
@@ -688,7 +693,7 @@ describe("actions", () => {
         expect(result).toEqual({
             ok: false,
             content:
-                'the export takes a second argument, so this gadget draws an interface: it needs `* ui: true` in its header, and action="load_ui" for the language',
+                'the export takes a second argument, so this gadget draws: it needs `* ui: true` for a widget tree or `* gui: true` for a react component in its header, and action="load_ui" for the language',
         });
         await cleanup();
     });
@@ -708,7 +713,7 @@ describe("actions", () => {
     });
 
     test("runs a gadget that draws when there is a ui to draw it on", async () => {
-        const { ctx, cleanup } = await context(allow, async () => ({ branch: "main" }));
+        const { ctx, cleanup } = await context(allow, { ui: async () => ({ branch: "main" }) });
 
         expect(
             await runAction("create_gadget", { reason: WHY, source: UI_GADGET }, ctx),
@@ -730,6 +735,93 @@ describe("actions", () => {
 
         expect(result.ok).toBe(false);
         expect(result.content).toContain("nowhere to show it");
+        await cleanup();
+    });
+
+    test("runs a gadget that draws a component when there is a window to draw it on", async () => {
+        const seen: string[] = [];
+        const { ctx, cleanup } = await context(allow, {
+            gui: async (file, props) => {
+                seen.push(file);
+                return { verdict: props.branch };
+            },
+        });
+
+        expect(
+            await runAction("create_gadget", { reason: WHY, source: GUI_GADGET }, ctx),
+        ).toMatchObject({ ok: true });
+
+        expect(
+            await runAction("run_gadget", { name: "review", input: { branch: "main" } }, ctx),
+        ).toEqual({
+            ok: true,
+            content: '{"verdict":"main"}',
+        });
+        expect(seen).toHaveLength(1);
+        await cleanup();
+    });
+
+    test("commits a gadget that draws a component as the tsx its header calls for", async () => {
+        const { ctx, dir, cleanup } = await context(allow, { gui: async () => ({}) });
+
+        await runAction("create_gadget", { reason: WHY, source: GUI_GADGET }, ctx);
+
+        expect(await Bun.file(join(dir, "gadgets", "review.tsx")).exists()).toBe(true);
+        await cleanup();
+    });
+
+    test("refuses to run a gadget that draws a component where there is no window", async () => {
+        const { ctx, dir, cleanup } = await context();
+        await Bun.write(join(dir, "gadgets", "review.tsx"), GUI_GADGET);
+        ctx.homes = [await loadHome(dir)];
+
+        const result = await runAction("run_gadget", { name: "review" }, ctx);
+
+        expect(result.ok).toBe(false);
+        expect(result.content).toContain("nowhere to show it");
+        await cleanup();
+    });
+
+    test("refuses to create a gadget that draws a component where there is no window", async () => {
+        const { ctx, cleanup } = await context();
+
+        const result = await runAction("create_gadget", { reason: WHY, source: GUI_GADGET }, ctx);
+
+        expect(result).toEqual({
+            ok: false,
+            content:
+                "this run has no window to draw a react component in, so one that draws would never be seen",
+        });
+        await cleanup();
+    });
+
+    test("refuses to run a widget gadget in a window, because a widget tree has no terminal to draw in", async () => {
+        const { ctx, dir, cleanup } = await context(allow, { gui: async () => ({}) });
+        await Bun.write(join(dir, "gadgets", "pick.ts"), UI_GADGET);
+        ctx.homes = [await loadHome(dir)];
+
+        const result = await runAction("run_gadget", { name: "pick" }, ctx);
+
+        expect(result.ok).toBe(false);
+        expect(result.content).toContain("nowhere to show it");
+        await cleanup();
+    });
+
+    test("describes a react component to a model that has a window", async () => {
+        const { ctx, cleanup } = await context(allow, { gui: async () => ({}) });
+
+        const result = await runAction("load_ui", {}, ctx);
+
+        expect(result.content).toContain("export function View");
+        await cleanup();
+    });
+
+    test("keeps describing a widget tree to a model with a terminal", async () => {
+        const { ctx, cleanup } = await context(allow, { ui: async () => ({}) });
+
+        const result = await runAction("load_ui", {}, ctx);
+
+        expect(result.content).toContain('kind: "select"');
         await cleanup();
     });
 

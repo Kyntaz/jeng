@@ -8,6 +8,8 @@ const PROTOCOL =
     "---\nname: deploy-flow\ndescription: how we ship\nwhen: deploying\n---\n\nrun make then push\n";
 const GADGET =
     '/**\n * name: greet\n * description: greets\n */\n\nexport default async () => "hi"\n';
+const GUI_GADGET =
+    '/**\n * name: review\n * gui: true\n * description: asks for a look\n */\n\nexport function View() {\n    return null;\n}\n\nexport default async () => "looked"\n';
 
 describe("validate", () => {
     test("accepts a well formed protocol", () => {
@@ -42,7 +44,10 @@ describe("validate", () => {
     });
 
     test("accepts a well formed gadget", () => {
-        expect(validateGadget(GADGET)).toEqual({ ok: true });
+        expect(validateGadget(GADGET)).toEqual({
+            ok: true,
+            header: { name: "greet", description: "greets", when: "", ui: "", gui: "" },
+        });
     });
 
     test("rejects a gadget without a header", () => {
@@ -60,6 +65,42 @@ describe("validate", () => {
         );
 
         expect(result).toEqual({ ok: false, error: "gadget must `export default` a function" });
+    });
+
+    test("accepts a gadget that draws a react component", () => {
+        expect(validateGadget(GUI_GADGET).ok).toBe(true);
+    });
+
+    test("rejects a gadget that claims a window without exporting a component to draw", () => {
+        const result = validateGadget(GUI_GADGET.replace("export function View()", "const View ="));
+
+        expect(result).toEqual({
+            ok: false,
+            error: "header declares `gui: true` but there is no `export function View` to draw",
+        });
+    });
+
+    test("rejects a gadget that claims both surfaces at once", () => {
+        const result = validateGadget(
+            GUI_GADGET.replace(" * gui: true", " * ui: true\n * gui: true"),
+        );
+
+        expect(result).toEqual({
+            ok: false,
+            error: "header declares both `ui` and `gui`: a gadget draws either a widget tree or a react component, not both",
+        });
+    });
+
+    test("compiles a gadget that draws jsx, because its header gave it a tsx file", async () => {
+        const dir = await mkdtemp(join(tmpdir(), "jeng-validate-"));
+        const file = join(dir, "review.tsx");
+        await Bun.write(
+            file,
+            '/**\n * name: review\n * gui: true\n * description: asks\n */\n\nexport function View() {\n    return <p>look</p>;\n}\n\nexport default async () => "looked"\n',
+        );
+
+        expect(await validateGadgetSyntax(file)).toEqual({ ok: true });
+        await rm(dir, { recursive: true, force: true });
     });
 
     test("accepts a gadget that compiles", async () => {

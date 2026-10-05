@@ -26,6 +26,7 @@ function stubAgent(
         inject: (text) => sent.push(text),
         setApprove: () => {},
         setUi: () => {},
+        setGui: () => {},
         setMode: (next) => {
             mode = next;
             switched.push(next);

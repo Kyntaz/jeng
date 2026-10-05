@@ -1,6 +1,6 @@
 import type { Choice, Mode } from "@jeng/core";
+import type { Entry } from "@jeng/view";
 import { SyntaxStyle } from "@opentui/core";
-import type { Entry } from "./entries";
 
 // A mode is told apart by its colour, so the word and the boxes around it have to
 // agree: gold is the agent that grows, blue the one that has already grown.

@@ -1,13 +1,9 @@
 import { describe, expect, test } from "bun:test";
-import type { Widget } from "@jeng/core";
-import { append, approvalText, blank, type Entry, QUIET } from "../../../src/tui/entries";
+import type { Draw, Widget } from "@jeng/core";
 
-const GADGET = {
-    kind: "create gadget",
-    name: "greet",
-    source: "/**\n * name: greet\n */\n\nexport default async () => 'hi'\n",
-    reason: "so i can say hi",
-} as const;
+import { append, blank, type Entry, QUIET } from "../../src/transcript";
+
+const drawn = (widget: Widget): Draw => ({ surface: "tui", widget });
 
 describe("entries", () => {
     test("keeps a run of streamed text as one jeng entry", () => {
@@ -78,11 +74,11 @@ describe("entries", () => {
         ]);
     });
 
-    test("keeps a widget a gadget drew as an entry of its own", () => {
-        const widget: Widget = { kind: "select", name: "branch", question: "which?", options: [] };
+    test("keeps what a gadget drew as an entry of its own", () => {
+        const draw = drawn({ kind: "select", name: "branch", question: "which?", options: [] });
 
-        expect(append([], { type: "view", widget }, "learn")).toEqual([
-            { kind: "view", widget, mode: "learn" },
+        expect(append([], { type: "view", draw }, "learn")).toEqual([
+            { kind: "view", draw, mode: "learn" },
         ]);
     });
 
@@ -144,42 +140,6 @@ describe("entries", () => {
         expect(append(entries, { type: "usage", promptTokens: 12 }, "learn")).toEqual(entries);
     });
 
-    test("shows the user the whole source they are being asked to allow", () => {
-        expect(approvalText(GADGET)).toContain("export default async () => 'hi'");
-    });
-
-    test("names the gadget and the reason it is wanted", () => {
-        const text = approvalText(GADGET);
-
-        expect(text).toContain("create gadget `greet`");
-        expect(text).toContain("why: so i can say hi");
-    });
-
-    test("says so when a gadget is being rewritten rather than created", () => {
-        expect(approvalText({ ...GADGET, kind: "rewrite gadget" })).toContain(
-            "rewrite gadget `greet`",
-        );
-    });
-
-    test("says so when what is on the stake is going away", () => {
-        expect(approvalText({ ...GADGET, kind: "delete gadget" })).toContain(
-            "delete gadget `greet`",
-        );
-    });
-
-    test("leaves out a reason a protocol does not need", () => {
-        const text = approvalText({ ...GADGET, kind: "create protocol", reason: "" });
-
-        expect(text).toContain("create protocol `greet`");
-        expect(text).not.toContain("why:");
-    });
-
-    test("says so when memory the user already approved is being replaced", () => {
-        expect(approvalText({ ...GADGET, kind: "rewrite protocol", reason: "" })).toContain(
-            "rewrite protocol `greet`",
-        );
-    });
-
     test("reads a message that is nothing but spaces as no message", () => {
         expect(blank({ kind: "jeng", text: " \n ", mode: "learn" })).toBe(true);
     });
@@ -189,21 +149,33 @@ describe("entries", () => {
     });
 
     test("reads a gadget that only draws blank content as nothing to draw", () => {
-        const widget: Widget = {
+        const draw = drawn({
             kind: "box",
             direction: "col",
             children: [
                 { kind: "markdown", content: "" },
                 { kind: "box", direction: "col", children: [{ kind: "code", content: "  " }] },
             ],
-        };
+        });
 
-        expect(blank({ kind: "view", widget, mode: "learn" })).toBe(true);
+        expect(blank({ kind: "view", draw, mode: "learn" })).toBe(true);
     });
 
     test("reads a gadget that asks something as something to draw", () => {
-        const widget: Widget = { kind: "input", name: "message", question: "which?" };
+        const draw = drawn({ kind: "input", name: "message", question: "which?" });
 
-        expect(blank({ kind: "view", widget, mode: "learn" })).toBe(false);
+        expect(blank({ kind: "view", draw, mode: "learn" })).toBe(false);
+    });
+
+    test("never reads a component as blank, since there is no telling what it draws", () => {
+        const draw: Draw = { surface: "gui", file: "/gadgets/review.tsx", props: { diff: "" } };
+
+        expect(blank({ kind: "view", draw, mode: "learn" })).toBe(false);
+    });
+
+    test("never reads an approval as blank, since the user has to read it", () => {
+        const approval = { kind: "create gadget", name: "g", source: "", reason: "" } as const;
+
+        expect(blank({ kind: "approval", approval })).toBe(false);
     });
 });

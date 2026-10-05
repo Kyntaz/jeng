@@ -5,11 +5,10 @@
         "module": "ESNext",
         "moduleResolution": "bundler",
         "jsx": "react-jsx",
-        "jsxImportSource": "@opentui/react",
         "strict": true,
         "skipLibCheck": true,
         "noEmit": true,
         "types": ["bun"]
     },
-    "include": ["scripts", "packages/*/src", "packages/*/test"]
+    "include": ["scripts", "packages/jeng-core", "packages/jeng-view"]
 }

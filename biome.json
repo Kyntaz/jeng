@@ -1,7 +1,17 @@
 {
     "$schema": "https://biomejs.dev/schemas/2.5.15/schema.json",
     "files": {
-        "includes": ["**", "!**/node_modules", "!bun.lock", "!.bench", "!.jeng"]
+        "includes": [
+            "**",
+            "!**/node_modules",
+            "!bun.lock",
+            "!.bench",
+            "!.jeng",
+            "!.hutch",
+            "!.jeng-gadgets",
+            "!build",
+            "!artifacts"
+        ]
     },
     "formatter": {
         "enabled": true,

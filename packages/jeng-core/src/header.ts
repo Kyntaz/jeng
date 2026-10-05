@@ -2,8 +2,10 @@ export interface Header {
     name: string;
     description: string;
     when: string;
-    /** Whether a gadget draws and asks, which a run with no UI to draw on cannot do. */
+    /** Whether a gadget draws a widget tree, which a run with no terminal cannot do. */
     ui: string;
+    /** Whether a gadget draws a react component, which a run with no window cannot do. */
+    gui: string;
 }
 
 const FENCE = /^---\r?\n([\s\S]*?)\r?\n---[ \t]*\r?\n?/;
@@ -20,6 +22,7 @@ function fields(block: string): Header {
         description: values.description ?? "",
         when: values.when ?? "",
         ui: values.ui ?? "",
+        gui: values.gui ?? "",
     };
 }
 
@@ -33,9 +36,13 @@ export function parseGadget(source: string): Header | null {
     return match ? fields(match[1]) : null;
 }
 
-export function writeProtocol(header: Omit<Header, "ui">, body: string): string {
+export function writeProtocol(header: Omit<Header, "ui" | "gui">, body: string): string {
     const lines = Object.entries(header)
         .filter(([, value]) => value)
         .map(([key, value]) => `${key}: ${value}`);
     return `---\n${lines.join("\n")}\n---\n\n${body.trim()}\n`;
 }
+
+// A gadget that draws a react component is jsx, which bun will not parse in a `.ts`
+// file, so the header decides the extension rather than the other way round.
+export const extension = (header: Header): "ts" | "tsx" => (header.gui === "true" ? "tsx" : "ts");

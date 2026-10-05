@@ -2,6 +2,7 @@ import type { AgentsFile } from "./agents";
 import type { Home } from "./home";
 import { DEFAULT_MODE, identity, type Mode } from "./mode";
 import { prompt } from "./prompts";
+import type { Surface } from "./ui";
 
 export interface Memory {
     name: string;
@@ -29,11 +30,24 @@ export function loadedAgents(homes: Home[], agentsFiles: AgentsFile[]): AgentsFi
     ];
 }
 
+// A gadget is offered only where it can be drawn: a widget tree needs a terminal, a react
+// component needs a window, and a gadget that draws nothing is offered everywhere.
+function drawable(gadget: Home["gadgets"][number], surface?: Surface): boolean {
+    if (gadget.ui) return surface === "tui";
+    if (gadget.gui) return surface === "gui";
+    return true;
+}
+
 export function buildContext(
     homes: Home[],
     agentsFiles: AgentsFile[],
     memory: Memory[] = [],
-    session?: { tokens: number; contextWindow: number; ui?: boolean; mode?: Mode },
+    session?: {
+        tokens: number;
+        contextWindow: number;
+        surface?: Surface;
+        mode?: Mode;
+    },
 ): string {
     const agents = section(
         "Always loaded instructions",
@@ -46,7 +60,7 @@ export function buildContext(
         "Gadgets",
         homes.flatMap((home) =>
             home.gadgets
-                .filter((gadget) => session?.ui || !gadget.ui)
+                .filter((gadget) => drawable(gadget, session?.surface))
                 .map((gadget) => `- \`${gadget.name}\`: ${gadget.description}`),
         ),
     );

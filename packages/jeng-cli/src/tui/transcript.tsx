@@ -1,6 +1,7 @@
 import type { Mode } from "@jeng/core";
+import { blank, type Entry, QUIET } from "@jeng/view";
 import { memo } from "react";
-import type { Entry } from "./entries";
+import { approvalText } from "./entries";
 import { COLORS, color, MODE_COLOR, type Owner, owner, SELECTION } from "./theme";
 import { GadgetView } from "./view";
 
@@ -10,6 +11,8 @@ export interface Block {
     mode?: Mode;
     entries: Entry[];
 }
+
+export { blank, QUIET };
 
 const modeOf = (entry: Entry) => ("mode" in entry ? entry.mode : undefined);
 
@@ -50,24 +53,34 @@ function Row({ entry, mode }: { entry: Entry; mode: Mode | undefined }) {
     // An empty map rather than none, because the transcript is a record: a widget
     // that asked nothing was drawn once and must not leave a live control behind.
     if (entry.kind === "view")
-        return <GadgetView widget={entry.widget} answers={entry.answers ?? {}} />;
+        return entry.draw.surface === "gui" ? (
+            <text fg={COLORS.output} content="a react interface, which is for the desktop app" />
+        ) : (
+            <GadgetView widget={entry.draw.widget} answers={entry.answers ?? {}} />
+        );
+    if (entry.kind === "approval")
+        return <Marked icon="⚑" text={approvalText(entry.approval)} color={COLORS.approval} />;
     const tint = entry.kind === "tool" ? MODE_COLOR[mode ?? "learn"] : COLORS[entry.kind];
     if (!("icon" in entry))
         return <text fg={tint} selectionBg={SELECTION} wrapMode="word" content={entry.text} />;
-    // The icon is a column of its own, so a wrapped line hangs off what is being
-    // written about rather than off the marker in front of it.
+    return <Marked icon={entry.icon} text={entry.text} color={tint} />;
+}
+
+// The icon is a column of its own, so a wrapped line hangs off what is being
+// written about rather than off the marker in front of it.
+function Marked({ icon, text, color }: { icon: string; text: string; color?: string }) {
     return (
         <box flexDirection="row" gap={2}>
-            <text fg={tint} content={entry.icon} />
+            <text fg={color} content={icon} />
             <text
-                fg={tint}
+                fg={color}
                 selectionBg={SELECTION}
                 wrapMode="word"
                 // A text beside another in a row measures against the row's height
                 // rather than its own, so a long result would claim to be one screen
                 // tall and the transcript could not scroll to the rest of it.
                 flexGrow={1}
-                content={entry.text}
+                content={text}
             />
         </box>
     );

@@ -17,6 +17,7 @@ function stubAgent(answer: string): Agent {
         inject: () => {},
         setApprove: () => {},
         setUi: () => {},
+        setGui: () => {},
         setMode: () => {},
         send: async () => answer,
     };

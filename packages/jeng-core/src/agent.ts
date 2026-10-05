@@ -1,15 +1,16 @@
-import { type ActionContext, runAction } from "./actions";
+import { type ActionContext, runAction, surfaceOf } from "./actions";
 import { loadAgentsFiles } from "./agents";
 import type { Approve } from "./approve";
 import { defaultHome, defaultModel } from "./config";
 import { buildContext, loadedAgents, type Memory } from "./context";
+import type { Gui } from "./gui";
 import { type Home, loadHomes } from "./home";
 import { DEFAULT_MODE, type Mode } from "./mode";
 import { chatWithRetry, type Message, type ModelConfig } from "./model";
 import { prompt } from "./prompts";
 import { sessionState } from "./state";
 import { jengTool } from "./tool";
-import type { Ui, Widget } from "./ui";
+import type { Draw, Ui } from "./ui";
 
 const NUDGE = prompt("nudge");
 
@@ -17,7 +18,7 @@ export type AgentEvent =
     | { type: "text"; text: string }
     | { type: "reasoning"; text: string }
     | { type: "tool"; action: string; args: Record<string, unknown> }
-    | { type: "view"; widget: Widget }
+    | { type: "view"; draw: Draw }
     | { type: "result"; content: string; ok: boolean }
     | { type: "usage"; promptTokens: number };
 
@@ -34,8 +35,10 @@ export interface Agent {
     clear: () => void;
     inject: (text: string) => void;
     setApprove: (approve: Approve) => void;
-    // Handing over an interface is what makes a run anything but headless.
+    // Handing over an interface is what makes a run anything but headless. Which of
+    // the two is taken is what the run draws in.
     setUi: (ui: Ui) => void;
+    setGui: (gui: Gui) => void;
     setMode: (mode: Mode) => void;
     send(
         text: string,
@@ -61,12 +64,14 @@ export async function createAgent(options: AgentOptions): Promise<Agent> {
     const agents = loadedAgents(homes, agentsFiles).map((file) => file.dir);
     let approve = options.approve;
     let hostUi: Ui | undefined;
+    let hostGui: Gui | undefined;
     let mode = options.mode ?? DEFAULT_MODE;
     const ctx: ActionContext = {
         homes,
         cwd,
         approve: (request) => approve(request),
         ui: undefined,
+        gui: undefined,
         session: sessionState(),
         get mode() {
             return mode;
@@ -83,13 +88,21 @@ export async function createAgent(options: AgentOptions): Promise<Agent> {
         sendOptions: { signal?: AbortSignal; onEvent?: (event: AgentEvent) => void } = {},
     ): Promise<string> {
         const { signal, onEvent } = sendOptions;
-        const owned = hostUi;
-        // The interface belongs to the host and outlives the turn, while the widgets
-        // it draws belong to this turn's stream, so the two are joined here.
-        ctx.ui = owned
+        const ownedUi = hostUi;
+        const ownedGui = hostGui;
+        // The interface belongs to the host and outlives the turn, while what it draws
+        // belongs to this turn's stream, so the two are joined here. Which one it is
+        // was decided when the host took it, not here.
+        ctx.ui = ownedUi
             ? async (widget) => {
-                  onEvent?.({ type: "view", widget });
-                  return await owned(widget);
+                  onEvent?.({ type: "view", draw: { surface: "tui", widget } });
+                  return await ownedUi(widget);
+              }
+            : undefined;
+        ctx.gui = ownedGui
+            ? async (file, props) => {
+                  onEvent?.({ type: "view", draw: { surface: "gui", file, props } });
+                  return await ownedGui(file, props);
               }
             : undefined;
         for (const injected of pending.splice(0)) history.push({ role: "user", content: injected });
@@ -109,7 +122,7 @@ export async function createAgent(options: AgentOptions): Promise<Agent> {
             messages[0].content = buildContext(ctx.homes, agentsFiles, memory, {
                 tokens: promptTokens,
                 contextWindow: config.contextWindow,
-                ui: Boolean(ctx.ui),
+                surface: surfaceOf(ctx),
                 mode: speaking,
             });
 
@@ -255,6 +268,9 @@ export async function createAgent(options: AgentOptions): Promise<Agent> {
         },
         setUi: (next) => {
             hostUi = next;
+        },
+        setGui: (next) => {
+            hostGui = next;
         },
         setMode: (next) => {
             mode = next;

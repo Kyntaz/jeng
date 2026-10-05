@@ -12,6 +12,7 @@ const HOME: Home = {
             when: "",
             file: "/home/jeng/gadgets/greet.ts",
             ui: false,
+            gui: false,
         },
         {
             name: "pick",
@@ -19,6 +20,15 @@ const HOME: Home = {
             when: "",
             file: "/home/jeng/gadgets/pick.ts",
             ui: true,
+            gui: false,
+        },
+        {
+            name: "review",
+            description: "asks for a look at a diff",
+            when: "",
+            file: "/home/jeng/gadgets/review.tsx",
+            ui: false,
+            gui: true,
         },
     ],
     protocols: [
@@ -28,6 +38,7 @@ const HOME: Home = {
             when: "deploying",
             file: "/home/jeng/protocols/deploy.md",
             ui: false,
+            gui: false,
         },
     ],
 };
@@ -74,12 +85,44 @@ describe("context", () => {
 
     test("lists a gadget that draws when there is a ui to draw it on", () => {
         expect(
-            buildContext([HOME], [], [], { tokens: 0, contextWindow: 8192, ui: true }),
+            buildContext([HOME], [], [], { tokens: 0, contextWindow: 8192, surface: "tui" }),
         ).toContain("- `pick`: asks which branch");
     });
 
+    test("lists a gadget that draws a component when there is a window to draw it on", () => {
+        expect(
+            buildContext([HOME], [], [], { tokens: 0, contextWindow: 8192, surface: "gui" }),
+        ).toContain("- `review`: asks for a look at a diff");
+    });
+
+    test("leaves each surface's gadgets out of the other one", () => {
+        const tui = buildContext([HOME], [], [], {
+            tokens: 0,
+            contextWindow: 8192,
+            surface: "tui",
+        });
+        const gui = buildContext([HOME], [], [], {
+            tokens: 0,
+            contextWindow: 8192,
+            surface: "gui",
+        });
+
+        expect(tui).not.toContain("`review`");
+        expect(gui).not.toContain("`pick`");
+    });
+
+    test("offers a gadget that draws nothing on every surface", () => {
+        for (const surface of ["tui", "gui"] as const)
+            expect(
+                buildContext([HOME], [], [], { tokens: 0, contextWindow: 8192, surface }),
+            ).toContain("- `greet`: says hi");
+    });
+
     test("leaves out a gadget that draws when there is nowhere to draw it", () => {
-        expect(buildContext([HOME], [])).not.toContain("`pick`");
+        const context = buildContext([HOME], []);
+
+        expect(context).not.toContain("`pick`");
+        expect(context).not.toContain("`review`");
     });
 
     test("tells a learning jeng how to grow by default", () => {

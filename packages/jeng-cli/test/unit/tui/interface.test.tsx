@@ -20,13 +20,14 @@ function stubAgent(widgets: Widget[]): { agent: Agent; answered: Answers[] } {
         clear: () => {},
         inject: () => {},
         setApprove: () => {},
+        setGui: () => {},
         setUi: (next) => {
             ui = next;
         },
         setMode: () => {},
         send: async (_prompt, options) => {
             for (const widget of widgets) {
-                options?.onEvent?.({ type: "view", widget });
+                options?.onEvent?.({ type: "view", draw: { surface: "tui", widget } });
                 answered.push(await ui(widget));
             }
             return "done";
@@ -55,13 +56,14 @@ function stubTurn(turn: (ask: (widget: Widget) => Promise<Answers>) => Promise<v
         clear: () => {},
         inject: () => {},
         setApprove: () => {},
+        setGui: () => {},
         setUi: (next) => {
             ui = next;
         },
         setMode: () => {},
         send: async (_prompt, options) => {
             const ask = async (widget: Widget) => {
-                options?.onEvent?.({ type: "view", widget });
+                options?.onEvent?.({ type: "view", draw: { surface: "tui", widget } });
                 return await ui(widget);
             };
             await turn(ask);

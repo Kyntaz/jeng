@@ -35,6 +35,7 @@ function stubAgent(decided: ApprovalDecision[]): Agent {
             approve = next;
         },
         setUi: () => {},
+        setGui: () => {},
         setMode: () => {},
         send: async () => {
             const decision = await approve(GADGET);
@@ -304,6 +305,7 @@ describe("approving a gadget", () => {
                 approve = next;
             },
             setUi: () => {},
+            setGui: () => {},
             setMode: () => {},
             send: async (prompt, options) => {
                 prompts.push(prompt);

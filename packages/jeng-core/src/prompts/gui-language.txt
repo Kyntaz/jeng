@@ -1,0 +1,56 @@
+A gadget may take a second argument, `ui`, to put an interface of its own in front of the user.
+
+This is the desktop app, so `ui` takes props and draws a react component. In a terminal the same
+argument takes a widget tree instead, and a gadget is only ever offered where its own header says
+it fits, so write the flavour you were asked for.
+
+Export a component named `View` from the same file, and hand it your props:
+
+    import { useState } from "react";
+
+    export function View(props: { repo: string; options: string[] }) {
+        const [picked, setPicked] = useState<string>();
+        return (
+            <div className="card">
+                <h3>{props.repo}</h3>
+                {props.options.map((option) => (
+                    <button key={option} onClick={() => props.answer({ branch: option })}>
+                        {option}
+                    </button>
+                ))}
+            </div>
+        );
+    }
+
+    export default async (input: { repo: string }, ui) => {
+        const answers = await ui({ repo: input.repo, options: await branches(input.repo) });
+        return answers.branch ? await checkout(input.repo, answers.branch) : "the user changed their mind";
+    }
+
+`ui` resolves to whatever the component handed to `answer`, which may be any json, so a checkbox can
+answer `true`. Your return value is still what Jeng reads; `ui` only decides what the user sees.
+
+Two extra props arrive on top of whatever you passed:
+
+  answer(answers)  how a live form is answered. It is gone once the form has been answered, which is
+                   how the component knows to stop offering controls.
+  answers          what the user gave, on the second draw. Your component is drawn once live and then
+                   again carrying this, so draw yourself read-only when it is set, the way the example
+                   above would show `picked: main` rather than its buttons.
+
+There is no submit key: call `answer` when the user has decided something. A form the user walks away
+from resolves to `{}`, so check before you use an answer. If your component will not compile or throws
+while it mounts, `ui` rejects with the reason rather than waiting forever.
+
+Two worlds, one file. The component runs in the window, so `react` and the dom are there; the rest of
+the file runs in bun, so `Bun.$`, `Bun.file` and `state` are there. Anything you import from `node:`
+is dropped from the window bundle, so keep it out of the component.
+
+Import nothing to style with. The window already defines these, and a component that uses only them
+and plain elements looks like part of the app:
+
+  var(--jeng-accent)   var(--jeng-user)    var(--jeng-muted)   var(--jeng-border)
+  var(--jeng-danger)   var(--jeng-surface) var(--jeng-radius)  var(--jeng-mono)
+
+A gadget that draws needs `* gui: true` in its header and is written to a `.tsx` file, because it is
+jsx. One without a window cannot run it at all, so it is not listed there either.

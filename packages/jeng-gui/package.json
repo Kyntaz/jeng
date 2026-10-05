@@ -1,0 +1,11 @@
+{
+    "name": "@jeng/gui",
+    "version": "0.1.0",
+    "type": "module",
+    "main": "./src/index.ts",
+    "dependencies": {
+        "@jeng/core": "workspace:*",
+        "@jeng/view": "workspace:*",
+        "react-dom": "latest"
+    }
+}

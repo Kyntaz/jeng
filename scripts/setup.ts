@@ -58,5 +58,18 @@ const added = windows ? await addToWindowsPath(target) : await addToUnixPath();
 
 console.log(`${name} installed to ${exe}`);
 console.log(
-    added ? `Added ${target} to PATH, open a new terminal.` : `${target} is already in PATH.`,
+    added ? `Added ${target} to PATH, open a new terminal.` : `${target} is already on PATH.`,
 );
+
+// The desktop app needs Hutch to build and launch, and nothing else here does, so a
+// missing one is a note rather than a failure: the terminal is the whole of Jeng
+// without it.
+const hutch = Bun.spawnSync(["hutch", "--version"], { stdout: "ignore", stderr: "ignore" });
+if (hutch.exitCode !== 0)
+    console.log(
+        "\nThe GUI (bun run gui) also needs Hutch, which is not installed:\n" +
+            (windows
+                ? "  & ([scriptblock]::Create((irm https://hutch.blackboard.sh/hutch/install.ps1)))"
+                : "  curl -fsSL https://hutch.blackboard.sh/hutch/install.sh | sh") +
+            "\nthen run hutch electrobun prepare in this folder. The terminal needs none of it.",
+    );

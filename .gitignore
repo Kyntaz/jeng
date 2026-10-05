@@ -5,3 +5,8 @@ dist
 .bench
 .jeng
 jeng.json
+.hutch
+.cottontail-tmp
+build
+artifacts
+.jeng-gadgets

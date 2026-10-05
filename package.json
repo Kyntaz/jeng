@@ -7,10 +7,11 @@
     ],
     "scripts": {
         "jeng": "bun run packages/jeng-cli/src/index.ts",
+        "gui": "hutch electrobun dev --watch",
         "build": "bun build --compile --outfile dist/jeng packages/jeng-cli/src/index.ts",
         "setup": "bun run build && bun run scripts/setup.ts",
         "test": "bun test",
-        "typecheck": "tsc --noEmit",
+        "typecheck": "tsc --noEmit && tsc -p packages/jeng-cli && tsc -p packages/jeng-gui",
         "format": "biome format --write .",
         "lint": "biome lint .",
         "check": "biome check ."
@@ -19,6 +20,7 @@
         "@biomejs/biome": "^2.5.15",
         "@types/bun": "latest",
         "@types/react": "latest",
+        "@types/react-dom": "^19.3.0",
         "typescript": "^5.9.0"
     },
     "dependencies": {

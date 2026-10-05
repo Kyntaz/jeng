@@ -1,14 +1,15 @@
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { type ApprovalKind, type Approve, review } from "./approve";
 import { prepareGadget } from "./draft";
-import { runGadget } from "./gadget";
+import { type Ports, runGadget } from "./gadget";
+import { GUI_LANGUAGE, type Gui } from "./gui";
 import { writeProtocol } from "./header";
-import { type GadgetRef, type Home, loadHome } from "./home";
+import { type GadgetRef, gadgetFile, type Home, loadHome } from "./home";
 import { DEFAULT_MODE, GROWS, type Mode } from "./mode";
 import { prompt } from "./prompts";
 import { persistentState, type State, type StateMap } from "./state";
 import { actionsFor } from "./tool";
-import { UI_LANGUAGE, type Ui } from "./ui";
+import { type Surface, UI_LANGUAGE, type Ui } from "./ui";
 import { validateProtocol } from "./validate";
 
 export type ActionResult = { ok: boolean; content: string };
@@ -19,9 +20,29 @@ export interface ActionContext {
     approve: Approve;
     /** Absent wherever there is no interface to draw on, which is what makes a run headless. */
     ui?: Ui;
+    /** The same, for a gadget that draws a react component rather than a widget tree. */
+    gui?: Gui;
     mode?: Mode;
     session: StateMap;
 }
+
+/**
+ * Which surface a run can draw in, which is whichever port the host took. Absent is a
+ * headless run, and a headless run draws nothing at all.
+ */
+export const surfaceOf = (ctx: ActionContext): Surface | undefined =>
+    ctx.gui ? "gui" : ctx.ui ? "tui" : undefined;
+
+// A gadget is offered, and run, only where the surface it declared can show it.
+const drawsElsewhere = (ref: GadgetRef, surface: Surface | undefined): boolean =>
+    ref.ui ? surface !== "tui" : ref.gui ? surface !== "gui" : false;
+
+/**
+ * The one port a gadget is handed. Which one is not a matter of taste at run time: the
+ * header already said, and the gates above have refused anything the surface cannot show.
+ */
+const portsFor = (ctx: ActionContext, gui: boolean): Ports =>
+    gui ? { gui: ctx.gui } : { ui: ctx.ui };
 
 const primaryHome = (ctx: ActionContext) => ctx.homes[0]?.dir ?? join(ctx.cwd, ".jeng");
 
@@ -36,13 +57,11 @@ const stateFor = (ctx: ActionContext, dir: string): State => ({
 async function commit(
     ctx: ActionContext,
     dir: string,
-    folder: "gadgets" | "protocols",
-    name: string,
+    file: string,
     source: string,
 ): Promise<void> {
-    const path = join(dir, folder);
-    await Bun.$`mkdir -p ${path}`.quiet();
-    await Bun.write(join(path, `${name}.${folder === "gadgets" ? "ts" : "md"}`), source);
+    await Bun.$`mkdir -p ${dirname(file)}`.quiet();
+    await Bun.write(file, source);
     await refresh(ctx, dir);
 }
 
@@ -113,13 +132,18 @@ async function runGadgetAction(
     const found = findIn(ctx, "gadget", name);
     if (!found) return { ok: false, content: `no gadget named "${name}"` };
 
-    if (found.ref.ui && !ctx.ui)
+    if (drawsElsewhere(found.ref, surfaceOf(ctx)))
         return {
             ok: false,
             content: prompt("gadget-draws", { name }),
         };
 
-    const result = await runGadget(found.ref.file, input, ctx.ui, stateFor(ctx, found.dir));
+    const result = await runGadget(
+        found.ref.file,
+        input,
+        portsFor(ctx, found.ref.gui),
+        stateFor(ctx, found.dir),
+    );
     return { ok: result.ok, content: result.ok ? result.output : result.error };
 }
 
@@ -154,7 +178,7 @@ async function createProtocolAction(
     const approved = await review(ctx.approve, { kind, name, source, reason: "" });
     if (!approved.ok) return { ok: false, content: approved.error };
 
-    await commit(ctx, home, "protocols", name, source);
+    await commit(ctx, home, join(home, "protocols", `${name}.md`), source);
 
     return {
         ok: true,
@@ -168,7 +192,7 @@ async function createGadgetAction(
 ): Promise<ActionResult> {
     const source = String(args.source ?? "");
     const reason = String(args.reason ?? "");
-    const prepared = await prepareGadget(source, reason, "create_gadget", ctx.ui);
+    const prepared = await prepareGadget(source, reason, "create_gadget", surfaceOf(ctx));
     if (!prepared.ok) return prepared;
     const { draft } = prepared;
 
@@ -180,11 +204,12 @@ async function createGadgetAction(
         if (!approved.ok) return { ok: false, content: approved.error };
 
         const home = primaryHome(ctx);
-        await commit(ctx, home, "gadgets", draft.name, source);
+        const file = gadgetFile(home, draft.name, draft.header);
+        await commit(ctx, home, file, source);
 
         return {
             ok: true,
-            content: `gadget "${draft.name}" ${existing ? "rewritten" : "created"} at ${join(home, "gadgets", `${draft.name}.ts`)}`,
+            content: `gadget "${draft.name}" ${existing ? "rewritten" : "created"} at ${file}`,
         };
     } finally {
         await draft.dispose();
@@ -200,7 +225,7 @@ async function testGadgetAction(
 
     const source = String(args.source ?? "");
     const reason = String(args.reason ?? "");
-    const prepared = await prepareGadget(source, reason, "test_gadget", ctx.ui);
+    const prepared = await prepareGadget(source, reason, "test_gadget", surfaceOf(ctx));
     if (!prepared.ok) return prepared;
     const { draft } = prepared;
 
@@ -216,7 +241,7 @@ async function testGadgetAction(
         const result = await runGadget(
             draft.file,
             input.value,
-            ctx.ui,
+            portsFor(ctx, draft.header.gui === "true"),
             stateFor(ctx, primaryHome(ctx)),
         );
         if (!result.ok) return { ok: false, content: result.error };
@@ -277,7 +302,10 @@ export async function runAction(
         case "load_protocol":
             return await loadAction(ctx, args, "protocol");
         case "load_ui":
-            return { ok: true, content: UI_LANGUAGE };
+            return {
+                ok: true,
+                content: surfaceOf(ctx) === "gui" ? GUI_LANGUAGE : UI_LANGUAGE,
+            };
         case "create_protocol":
             return await createProtocolAction(ctx, args);
         case "create_gadget":

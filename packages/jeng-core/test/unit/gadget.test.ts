@@ -54,7 +54,35 @@ describe("gadget", () => {
 
         const ui: Ui = async () => ({ branch: "main" });
 
-        expect(await runGadget(file, {}, ui)).toEqual({ ok: true, output: "on main" });
+        expect(await runGadget(file, {}, { ui })).toEqual({ ok: true, output: "on main" });
+        await rm(dir, { recursive: true, force: true });
+    });
+
+    test("hands a gui gadget its own file, because that is where its component is exported from", async () => {
+        const dir = await mkdtemp(join(tmpdir(), "jeng-gadget-"));
+        const file = join(dir, "review.tsx");
+        await Bun.write(
+            file,
+            "/**\n * name: review\n * gui: true\n * description: asks\n */\n\nexport function View() {\n    return null\n}\n\nexport default async (_input: unknown, ui: (props: object) => Promise<object>) => {\n    const answers = await ui({ diff: 'x' })\n    return JSON.stringify(answers)\n}\n",
+        );
+
+        const seen: string[] = [];
+        const result = await runGadget(
+            file,
+            {},
+            {
+                gui: async (gadgetFile, props) => {
+                    seen.push(gadgetFile);
+                    return { verdict: "ship it", diff: props.diff };
+                },
+            },
+        );
+
+        expect(seen).toEqual([file]);
+        expect(result).toEqual({
+            ok: true,
+            output: '{"verdict":"ship it","diff":"x"}',
+        });
         await rm(dir, { recursive: true, force: true });
     });
 

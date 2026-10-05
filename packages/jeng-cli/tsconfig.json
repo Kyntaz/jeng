@@ -1,0 +1,10 @@
+{
+    "extends": "../../tsconfig.json",
+    "compilerOptions": {
+        // The TUI is opentui, whose elements are not react's, so this package is the
+        // one that asks for a different jsx runtime. Nothing else in the repo does,
+        // because a gadget's jsx has to resolve to react wherever it happens to run.
+        "jsxImportSource": "@opentui/react"
+    },
+    "include": ["src", "test"]
+}

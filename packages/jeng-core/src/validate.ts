@@ -2,6 +2,9 @@ import { type Header, parseGadget, parseProtocol } from "./header";
 
 export type Validation = { ok: true } | { ok: false; error: string };
 
+/** The header comes back with it, because the caller needs the name and the extension too. */
+export type GadgetValidation = { ok: true; header: Header } | { ok: false; error: string };
+
 const NAME = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 
 function checkHeader(header: Header, required: (keyof Header)[]): Validation {
@@ -38,7 +41,7 @@ export function validateProtocol(source: string): Validation {
     return { ok: true };
 }
 
-export function validateGadget(source: string): Validation {
+export function validateGadget(source: string): GadgetValidation {
     const header = parseGadget(source);
     if (!header)
         return {
@@ -51,7 +54,24 @@ export function validateGadget(source: string): Validation {
     if (!/export\s+default|as\s+default/.test(source))
         return { ok: false, error: "gadget must `export default` a function" };
 
-    return { ok: true };
+    if (header.ui === "true" && header.gui === "true")
+        return {
+            ok: false,
+            error: "header declares both `ui` and `gui`: a gadget draws either a widget tree or a react component, not both",
+        };
+
+    // The component is found by name in the gadget's own file, so a header that claims
+    // one and an export that does not have it is an interface nobody could ever draw.
+    if (
+        header.gui === "true" &&
+        !/export\s+(?:async\s+)?(?:function|const|let|var)\s+View\b/.test(source)
+    )
+        return {
+            ok: false,
+            error: "header declares `gui: true` but there is no `export function View` to draw",
+        };
+
+    return { ok: true, header };
 }
 
 export async function validateGadgetSyntax(file: string): Promise<Validation> {

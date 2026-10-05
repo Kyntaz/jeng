@@ -19,7 +19,7 @@ This should make Jeng particularly well suited to work with local or weaker mode
     - **Delete Gadget** and **Delete Protocol** remove memory for good. There is no undo and no backup, so both require a reason and put the bytes that are going away to the user.
     - **Load Protocol** pulls a Protocol's body into context when its `when` matches the task.
     - **Load Gadget** hands back a Gadget's whole source, which is otherwise described by its header alone. A gadget the model wrote earlier has left its context, so this is the only way to see what one actually does before rewriting it, and it is learn-only because a work run would have nothing to do with the source.
-    - **Load UI** hands over the language a Gadget's `ui` argument is written in, and is the only description of an interface that costs nothing until it is asked for.
+    - **Load UI** hands over the language a Gadget's `ui` argument is written in, and is the only description of an interface that costs nothing until it is asked for. Which of the two languages it hands over is decided by what the run can draw in.
     - **End** hands control back to the user. It is the only way a turn finishes, so an answer is a call rather than text.
     - **Compact** replaces the transcript with a summary the model writes, so a long turn can keep going instead of running out of context.
 - **Config file** is a JSON file named through `-c`/`--config`, holding the homes to load and the model to talk to.
@@ -64,48 +64,63 @@ The user is not held back while Jeng works, in either direction.
 
 ## Gadget UI
 
-A gadget may take a second argument, `ui`, draw a tree of widgets with it and await what the user
-answers. It is how Jeng puts an interaction in front of someone that it could not have written as
-prose.
+A gadget may take a second argument, `ui`, draw something with it and await what the user answers. It is
+how Jeng puts an interaction in front of someone that it could not have written as prose.
 
-- `ui` is a port, not an implementation. Core defines the vocabulary of widgets and the shape of an
-  answer, and the host that runs Jeng draws them and collects the answers, because core has no idea
-  what a terminal is. `setUi` is how a host takes over, for the same reason `setApprove` exists: a UI
-  cannot hand one over before it has rendered.
+- `ui` is a port, not an implementation. Core defines the vocabulary of what can be drawn and the shape
+  of an answer, and the host that runs Jeng draws them and collects the answers, because core has no
+  idea what a terminal or a window is. There are two of those ports, `setUi` and `setGui`, for the same
+  reason `setApprove` exists: an interface cannot hand one over before it has rendered.
+- **Which port a host took is what the run can draw.** A gadget that draws a widget tree needs the
+  first, one that draws a react component needs the second, and a run with neither is headless. So the
+  surface is not a flag anybody sets but a consequence of what the host installed, and the three gates
+  that depend on it — what a gadget is offered, what it may be run, and what it may be created — all
+  read the same one value.
+- **A draw is one thing in the vocabulary of the surface that will show it.** Core carries a `Draw`
+  rather than a widget, because a react component is named in a file rather than described by data, and
+  the host is the only thing that can turn a file into something on a screen. Both frontends draw the
+  same transcript entries and differ only in what they do with that one variant.
 - **One call is one round trip.** A tree of widgets is one thing to be asked, and it resolves to
   `{ name: answer }` for every field filled in. Named fields are what make composition worth anything:
   a gadget can ask three things at once instead of three times, which is the difference between an
   interface shaped for the task and a questionnaire.
 - **A field the user walked away from is missing, not empty.** Absent rather than blank, because the
-  model has one check to write and it cannot get it wrong.
+  model has one check to write and it cannot get it wrong. The same is true of a form the user closed,
+  and of a widget tree that only drew something.
 - **No submit key.** `enter` answers the focused field, and the form is sent when the last one has an
   answer, so no key has to outrank a control's own `enter`. `esc` abandons the form, which is the same
-  answer `esc` already gives an approval.
+  answer `esc` already gives an approval. A react component has no such rule to keep: it calls `answer`
+  when the user has decided something, because it is the one holding the keys.
 - **A field the user cannot answer is not a field.** A `select` with no options is a drawing, because
   offering it would take the focus and hold the keys while being impossible to answer — the form would
   come up, promise `enter answer`, and swallow every keystroke. What is reported as a field and what is
   drawn as one form are the same `fields()`, so they cannot drift.
 - **A form is one at a time, and it keeps its own answers.** A gadget that asks without waiting can
-  leave more than one up; the rest wait rather than reaching for the keys. Each form is keyed by the
-  ask that opened it, so a form never answers itself with the answers given to the one before it.
+  leave more than one up; the rest wait rather than reaching for the keys. Each form is keyed by what
+  the gadget handed the port, not by the wrapper around it, because the wrapper is built twice — once
+  for the transcript and once by the host — and only what the gadget passed is the same object in both.
 - **An interface is drawn once, in the transcript.** A form being filled in is part of the scroll
   region rather than a panel below it, so a tall one scrolls with everything else instead of taking
   rows the prompt needs and being the one thing on screen that cannot be scrolled through. Drawn
-  twice, once live and once in the transcript, it is only reachable in the copy nobody can move.
-  The live tree is left out of the transcript and put back carrying its answers, so what was asked
+  twice, once live and once in the transcript, it is only reachable in the copy nobody can move. The
+  live tree is left out of the transcript and put back carrying its answers, so what was asked
   and what was answered stays in place and scrolling back shows the decision the gadget went on to
   make.
-- **A gadget that draws is declared in its header** with `ui: true`, because whether it has an
-  interface has to be known before it runs rather than discovered while it runs.
-- **No UI means no such gadget.** Absence of a `ui` is what makes a run headless, and a headless run
-  leaves those gadgets out of the context, refuses to create one and refuses to run one. Offering
-  something that cannot work would spend a turn to say so.
+- **A gadget that draws is declared in its header**, with `ui: true` for a widget tree or `gui: true`
+  for a react component, because whether it has an interface has to be known before it runs rather
+  than discovered while it runs. The header also decides the extension, because a gadget that writes
+  jsx has to be a `.tsx` file for anything to parse it.
+- **No UI means no such gadget.** Absence of a `ui` or a `gui` is what makes a run headless, and a
+  headless run leaves both kinds out of the context, refuses to create one and refuses to run one.
+  Offering something that cannot work would spend a turn to say so.
 - **The language is disclosed, not assumed.** It is fetched with `load_ui` and lives beside the types
-  it describes so the two cannot drift. Nothing else in the tool describes an interface, so a model
-  that never writes one never pays for the vocabulary.
+  it describes so the two cannot drift, and which of the two it hands over depends on the surface the
+  run is in. Nothing else in the tool describes an interface, so a model that never writes one never
+  pays for the vocabulary.
 - **The vocabulary is what the runtime can actually draw**, and that is checked rather than assumed:
   `text`, `markdown`, `code`, `diff`, `box`, `select`, `input` and `textarea` each have a test that waits
-  for the frame that proves they drew.
+  for the frame that proves they drew. A react component is checked the other way round, by refusing a
+  `gui: true` gadget that exports no component to draw.
     - Highlighting is a tree-sitter parser warming up in a worker, so the first markdown or diff takes a
       moment to appear. The grammars are bundled, so nothing is downloaded, but a test that reads a frame
       immediately proves nothing and has to wait for the draw it wants.
@@ -113,9 +128,31 @@ prose.
       description are both worked out from the options it was given, and capped so a long list scrolls
       inside the transcript instead of pushing the prompt off the screen.
     - A diff has to be a real unified diff, because a malformed one is reported in the frame rather than
-    - refused. `git diff` output is already one.
+      refused. `git diff` output is already one.
     - `image` is left out because it fails the whole native frame render rather than drawing nothing,
       which in a transcript means a corrupted screen rather than a missing picture.
+
+### Two halves of one file
+
+A gadget that draws a component is a single file that is both run in bun and drawn in a window, which
+is the whole of its cost and most of its rules.
+
+- **The component is found by name in the gadget's own source.** The host is told which file, not which
+  component, so the header is the only thing that decides what a gadget draws and a new export cannot
+  quietly change what an existing one shows.
+- **Each half is bundled for the world it runs in.** The bun half because a home folder is a folder of
+  scripts with no `node_modules` in it for a jsx runtime or react to be resolved from, and the window
+  half because a react component is not a thing a terminal can be given. The file is compiled per run
+  rather than per install, because which gadgets exist is decided by a model writing them.
+- **The component brings its own react and is given its own root.** React is inlined into a gadget's
+  chunk rather than shared with the window's, so two copies can never end up inside one tree; and
+  anything a component imports from `node:` is replaced with an empty module rather than refused, so a
+  gadget whose bun half needs it still draws.
+- **A component that will not build rejects `ui` with the reason.** The alternative is a gadget waiting
+  forever on a form that is never going to appear.
+- **A component needs nothing to look like part of the app.** The window's stylesheet is on the
+  document, so a component that uses its custom properties and plain elements is already consistent,
+  and there is no component library for a gadget to have to agree to.
 
 ## Gadget State
 
@@ -189,11 +226,12 @@ export default async (input: { who: string }) => `hi ${input.who}`
 ```
 
 A gadget's default export takes the action's `input` and its return value becomes the action's result.
-A gadget may take a second argument, `ui`, which draws widgets and answers with what the user filled
+A gadget may take a second argument, `ui`, which draws something and answers with what the user filled
 in; its return value is still the action's result, because what the user sees and what Jeng reads are
-two different things. A third argument, `state`, is what a gadget uses to leave something for another
-gadget or for a later session, and needs no declaration, because unlike an interface there is no run in
-which having state is a claim that cannot be kept.
+two different things. What it draws is a widget tree in a terminal and a react component in a window,
+and `* ui: true` or `* gui: true` in the header is which. A third argument, `state`, is what a gadget
+uses to leave something for another gadget or for a later session, and needs no declaration, because
+unlike an interface there is no run in which having state is a claim that cannot be kept.
 
 ## Validation
 
@@ -206,15 +244,59 @@ which having state is a claim that cannot be kept.
 - A Gadget or Protocol whose name already exists is overwritten rather than rejected, because the model has no way to edit a file it is unhappy with. It is still validated first, so a rewrite cannot be a way in either, and it is still approved, so a rewrite cannot be a way around being read.
 - An approval names the verb as well as the thing, because "rewrite" and "delete" are not the same decision as "create" even when the bytes are identical. The user is always shown the bytes at stake, whether they are about to land or about to go.
 
+```ts
+/**
+ * name: greet
+ * description: greets
+ * gui: true
+ */
+
+export function View(props: { who: string }) { /* ... */ }
+
+export default async (input: { who: string }) => `hi ${input.who}`
+```
+
 ## Stack
 
 - **bun** is used as the runtime that powers Jeng.
 - **TypeScript** is the main programming language for Jeng.
 - **OpenTUI** powers the CLI's TUI.
+- **Electrobun** with **Hutch** builds and runs the desktop app, on **Chromium** through the system
+  webview.
 - **commander** to simplify declaration of the CLI itself.
 - **React** and **JSX** powers Jeng's UIs, reactivity and state management.
 - **Biome** for linting and formatting (`bun run check`).
 - **git** for version management.
+
+## Packages
+
+Four packages, in one direction of dependence: `jeng-core` ← `jeng-view` ← {`jeng-cli`, `jeng-gui`}.
+
+- **jeng-core** is the harness and nothing else. It has no pixels, no dom and no react of its own
+  except the one copy it needs to compile a gadget that draws a component. Everything a frontend can
+  vary — what a draw looks like, which port it takes, which keys it answers to — is a parameter here.
+- **jeng-view** is the conversation as state: the transcript log, the queue of forms waiting to be
+  answered, and the approval waiting to be decided. It draws nothing and imports no framework, which
+  is what lets a terminal and a window agree about what a turn was without either of them having read
+  the other's code.
+- **jeng-cli** is the terminal: the executable, the one-shot and piped runs, and the TUI.
+- **jeng-gui** is the window: an Electrobun main process that runs the agent in bun, and a react-dom
+  view that is a pure function of the state it is sent.
+
+## The window
+
+The desktop app is a second frontend rather than a mode, because a gadget that draws a component cannot
+run in a terminal and pretending otherwise would mean offering it somewhere it cannot work.
+
+- **The conversation lives in bun and the window is told about it.** There is one copy of the state and
+  the view holds none, so nothing in the browser can disagree with the agent about what happened. The
+  bridge carries that state whole, on every change, and the handful of requests a user can make.
+- **The window is served over a loopback socket rather than bundled into the app.** One `bun build`
+  path then covers a dev run and a packaged app, and the view can be rebuilt without relaunching the
+  native side.
+- **A gadget's component is compiled when the window asks for it**, because which gadgets exist is
+  decided by a model writing them and not by anything that ships with the app. This is also why the
+  app runs from source: compiling needs react on disk to compile against.
 
 ## File Structure
 
@@ -223,6 +305,7 @@ The following structure includes only the most relevant files and paths of the p
 - `.` (the root of the project)
     - `/package.json` (top level workspace package)
     - `/biome.json` (linter and formatter configuration)
+    - `/hutch.config.ts`, `/electrobun.config.ts` (the desktop app's build)
     - `/README.md`
     - `/ARCHITECTURE.md`
     - `/AGENTS.md`
@@ -233,12 +316,20 @@ The following structure includes only the most relevant files and paths of the p
             - `/test`
                 `/unit` (unit tests; structure mirrors `../src`)
                 `/e2e` (tests mirroring realistic uses of this library)
-        - `/jeng-cli` (the CLI to interact with jeng)
+        - `/jeng-view` (the conversation as state, shared by both frontends)
+            - `/package.json`
+            - `/src` (the transcript log and the queue of things waiting on a user)
+            - `/test/unit` (unit tests; structure mirrors `../src`)
+        - `/jeng-cli` (the CLI and the TUI)
             - `/package.json`
             - `/src` (the TypeScript files with the CLI and TUI used to interact with Jeng through a console)
             - `/test`
                 - `/unit` (unit tests; structure mirrors `../src`)
                 - `/e2e` (tests simulating user journeys interacting with Jeng's CLI)
+        - `/jeng-gui` (the desktop app)
+            - `/package.json`
+            - `/src` (`main` is the bun main process, `view` is the react-dom window, and `rpc.ts` is the contract between them)
+            - `/test/unit` (unit tests; structure mirrors `../src`)
 
 ## Code organization
 

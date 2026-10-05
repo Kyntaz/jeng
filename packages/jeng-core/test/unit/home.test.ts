@@ -27,6 +27,7 @@ describe("home", () => {
                     when: "",
                     file: join(dir, "gadgets", "greet.ts"),
                     ui: false,
+                    gui: false,
                 },
             ],
             protocols: [
@@ -36,6 +37,7 @@ describe("home", () => {
                     when: "deploying",
                     file: join(dir, "protocols", "deploy.md"),
                     ui: false,
+                    gui: false,
                 },
             ],
         });
@@ -57,6 +59,17 @@ describe("home", () => {
         );
 
         expect((await loadHome(dir)).gadgets[0].ui).toBe(true);
+        await rm(dir, { recursive: true, force: true });
+    });
+
+    test("picks up a gadget that draws jsx, because it is written as tsx", async () => {
+        const dir = await mkdtemp(join(tmpdir(), "jeng-home-"));
+        await Bun.write(
+            join(dir, "gadgets", "review.tsx"),
+            "/**\n * name: review\n * gui: true\n * description: asks\n */\n\nexport function View() { return null }\n\nexport default () => 'ok'\n",
+        );
+
+        expect((await loadHome(dir)).gadgets[0]).toMatchObject({ name: "review", gui: true });
         await rm(dir, { recursive: true, force: true });
     });
 });
