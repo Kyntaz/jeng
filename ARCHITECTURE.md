@@ -186,6 +186,7 @@ one works against the other.
 `config` is the single definition of where Jeng's homes and model come from, so a caller never has to know how they were chosen.
 
 - Resolution is one function, because homes and model are decided together and disagreeing with each other would be the confusing case.
+- A resolved config names the file it came from, so a host that was never given one can still say which config it is running.
 - A config file that cannot be read, parsed or understood is an error rather than a silent fallback, because an agent quietly running on the wrong model or the wrong memory is worse than one that refuses to start.
 - `createAgent` never reads config itself; it takes homes and a model as given. A library should not depend on the caller's working directory, and the CLI is the only place that knows about `-c`.
 - The context window is configured rather than assumed, because a wrong guess is what makes an agent compact too late to be useful.
@@ -291,9 +292,21 @@ run in a terminal and pretending otherwise would mean offering it somewhere it c
 - **The conversation lives in bun and the window is told about it.** There is one copy of the state and
   the view holds none, so nothing in the browser can disagree with the agent about what happened. The
   bridge carries that state whole, on every change, and the handful of requests a user can make.
+- **The window owns its config and its working directory, and applies either by building another
+  agent.** A window started from an app launcher was never handed either, and homes, model and the
+  `AGENTS.md` chain are all settled when an agent is built, so there is nothing to change but the
+  agent itself. The mode carries across, because dropping from work to learn would quietly hand back
+  the ability to write to a home.
+- **What it picked is a plain text file rather than another store.** `~/.jeng/knownconfigs` is a list
+  of paths a person is meant to read, edit and delete, which is the same promise `jeng.json` makes.
 - **The window is served over a loopback socket rather than bundled into the app.** One `bun build`
   path then covers a dev run and a packaged app, and the view can be rebuilt without relaunching the
   native side.
+- **Anything the view shares with the terminal has to be importable by a browser.** `node:` is swapped
+  for an empty module on the way into the window, which builds cleanly and throws the first time
+  anything is called off it. `place` is the rule about how a path is said, and it is written without
+  `node:path` so both frontends can hold to the same one; `server.test.ts` runs what comes out of that
+  build, because nothing about the build itself would say so.
 - **A gadget's component is compiled when the window asks for it**, because which gadgets exist is
   decided by a model writing them and not by anything that ships with the app. This is also why the
   app runs from source: compiling needs react on disk to compile against.
@@ -318,7 +331,7 @@ The following structure includes only the most relevant files and paths of the p
                 `/e2e` (tests mirroring realistic uses of this library)
         - `/jeng-view` (the conversation as state, shared by both frontends)
             - `/package.json`
-            - `/src` (the transcript log and the queue of things waiting on a user)
+            - `/src` (the transcript log, the queue of things waiting on a user, and `place.ts`, which is how a path is said)
             - `/test/unit` (unit tests; structure mirrors `../src`)
         - `/jeng-cli` (the CLI and the TUI)
             - `/package.json`
@@ -328,7 +341,7 @@ The following structure includes only the most relevant files and paths of the p
                 - `/e2e` (tests simulating user journeys interacting with Jeng's CLI)
         - `/jeng-gui` (the desktop app)
             - `/package.json`
-            - `/src` (`main` is the bun main process, `view` is the react-dom window, and `rpc.ts` is the contract between them)
+            - `/src` (`main` is the bun main process, `view` is the react-dom window, `picker.tsx` is what the window is pointed at, and `rpc.ts` is the contract between the two halves)
             - `/test/unit` (unit tests; structure mirrors `../src`)
 
 ## Code organization

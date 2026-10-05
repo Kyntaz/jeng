@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
-import { loadConfig } from "../../src/config";
+import { configPaths, loadConfig } from "../../src/config";
 
 async function scratch(config?: unknown): Promise<string> {
     const dir = await mkdtemp(join(tmpdir(), "jeng-config-"));
@@ -87,6 +87,7 @@ describe("config", () => {
                 model: "qwen",
                 contextWindow: 4096,
             },
+            path: join(cwd, "jeng.json"),
         });
         await rm(cwd, { recursive: true, force: true });
     });
@@ -146,11 +147,37 @@ describe("config", () => {
 
         const config = await loadConfig({ cwd, env: {} });
 
-        expect(config.homes).toEqual([
-            join(require("node:os").homedir(), ".jeng"),
-            join(cwd, "nested"),
-        ]);
+        expect(config.homes).toEqual([join(homedir(), ".jeng"), join(cwd, "nested")]);
         await rm(cwd, { recursive: true, force: true });
+    });
+
+    test("names the file it read, because a window has to say which config it is on", async () => {
+        const cwd = await scratch({ model: { model: "from-file" } });
+
+        const config = await loadConfig({ cwd, env: {} });
+
+        expect(config.path).toBe(join(cwd, "jeng.json"));
+        await rm(cwd, { recursive: true, force: true });
+    });
+
+    test("has no file to name when the environment was read instead", async () => {
+        const cwd = await scratch();
+
+        const config = await loadConfig({ cwd, env: {} });
+
+        expect(config.path).toBeUndefined();
+        await rm(cwd, { recursive: true, force: true });
+    });
+
+    test("lists every config there is in the order they are looked for", async () => {
+        const cwd = await scratch({ model: { model: "here" } });
+        const home = await scratch({ model: { model: "there" } });
+
+        const found = await configPaths(cwd, home);
+
+        expect(found).toEqual([join(cwd, "jeng.json"), join(home, "jeng.json")]);
+        await rm(cwd, { recursive: true, force: true });
+        await rm(home, { recursive: true, force: true });
     });
 
     test("throws when a home is the whole home folder rather than a folder inside it", async () => {

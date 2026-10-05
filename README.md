@@ -96,7 +96,8 @@ The TUI starts in whichever mode `--mode` named, and `tab` moves between the two
 
 ## The TUI
 
-The TUI shows the context size the model is actually working with, and has a few keys of its own:
+The TUI's header says what it is and where: the model, the mode, the directory it is working in, the
+homes it can reach and the context size the model is actually working with. Its keys are:
 
 | Key           | Does                                        |
 | ------------- | ------------------------------------------- |
@@ -142,13 +143,41 @@ one thing. What the window has that the TUI does not:
 - Gadget interfaces are react components, so a gadget can draw whatever it likes rather than a widget
   tree.
 - An approval is answered in a card next to the source, with room to say why not.
-- The header carries the homes, the model, the context size and the mode, and the mode is a button.
+- The config file and the working directory are a click rather than a flag, because a window started
+  from an app launcher was never handed either.
+
+Click the working directory or the config file at the left of the header to open the picker. Choosing
+either one starts a new conversation, since the homes, the model and the `AGENTS.md` files all come
+from them and cannot change under a run that is already going. The picker stays open while you do it,
+so a directory and a config can be picked together; `esc` or `close` puts it away.
+
+Paths are said relative to the working directory wherever they sit inside it, in the window as much as
+in the terminal, so a home two folders down reads `agents/.jeng` rather than a whole drive spelled out.
+A path somewhere else is left in full, because it has to say where it is.
+
+The picker lists the configs it knows about, marks the one in force, and will add one through the
+system's own file dialog: `add a config file…` asks for a file and `change…` asks for a directory.
+Neither filters by extension, because a config is not obliged to be called `.json` and a picker that hides
+the file you wanted is worse than one showing a few extra. Anything that is not a config says so rather
+than running on it. Everything the window remembers is kept in `~/.jeng/knownconfigs`, as plain text so
+you can edit it yourself:
+
+```
+cwd: C:/work/jeng
+* C:/Users/you/.jeng/jeng.json
+C:/Users/you/agents/researcher.json
+```
+
+`cwd:` is where it works, the `*` marks the config in force, and every other line is one it has been
+shown. Paths are absolute, because that is what a file dialog hands over. With no `*`, Jeng reads the
+environment and the defaults instead of a file. `forget` drops a line from the file; the file it
+named is left alone.
 
 | Key            | Does                                                            |
 | -------------- | --------------------------------------------------------------- |
 | `enter`        | send the prompt                                                  |
 | `shift+enter`  | break a line in the prompt                                       |
-| `esc`          | abandon a form, turn down an approval, or stop a turn            |
+| `esc`          | close the picker, abandon a form, turn down an approval, or stop a turn |
 | `F2`           | show or hide the detail behind a turn: what the model is thinking |
 
 The window is built by [Hutch](https://hutch.blackboard.sh) and [Electrobun](https://electrobun.dev), and

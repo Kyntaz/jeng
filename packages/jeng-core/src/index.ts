@@ -11,7 +11,7 @@ export {
     type Approve,
     isDelete,
 } from "./approve";
-export { type Config, defaultHome, defaultModel, loadConfig } from "./config";
+export { type Config, configPaths, defaultHome, defaultModel, loadConfig } from "./config";
 export type { Gui, GuiAnswers, GuiProps } from "./gui";
 export type { Home } from "./home";
 export { isMode, MODES, type Mode } from "./mode";

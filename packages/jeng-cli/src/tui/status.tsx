@@ -1,18 +1,10 @@
-import { relative } from "node:path";
 import type { Mode } from "@jeng/core";
+import { place } from "@jeng/view";
 import type { ReactNode } from "react";
 import { BORDER, MODE_COLOR, MUTED } from "./theme";
 
 export const compact = (tokens: number) =>
     tokens >= 1000 ? `${(tokens / 1000).toFixed(1)}k` : String(tokens);
-
-// A file the cwd walk found is only ever the cwd itself or one of its parents, so
-// only the cwd is worth shortening; a home elsewhere has to say where it is.
-function place(dir: string, cwd: string): string {
-    const closer = relative(cwd, dir);
-    if (closer === "") return ".";
-    return closer.startsWith("..") ? dir : closer;
-}
 
 export function Instructions({ agents, cwd }: { agents: string[]; cwd: string }) {
     if (!agents.length) return null;
@@ -47,11 +39,13 @@ function Bar({ children, mode }: { children: ReactNode[]; mode?: Mode }) {
 }
 
 export function Header({
+    cwd,
     homes,
     model,
     tokens,
     mode,
 }: {
+    cwd: string;
     homes: string[];
     model: string;
     tokens: number;
@@ -63,7 +57,12 @@ export function Header({
         <Bar mode={mode}>
             <text fg={MUTED} wrapMode="none" content={`jeng ${model}`} />
             <text fg={MUTED} wrapMode="none" content={mode} />
-            <text fg={MUTED} wrapMode="none" content={homes.join(", ")} />
+            <text fg={MUTED} wrapMode="none" content={cwd} />
+            <text
+                fg={MUTED}
+                wrapMode="none"
+                content={homes.map((home) => place(home, cwd)).join(", ")}
+            />
             <text fg={MUTED} wrapMode="none" content={`ctx ${compact(tokens)}`} />
         </Bar>
     );

@@ -29,7 +29,7 @@ function stubAgent() {
     const agent = {
         homes: [{ dir: "/home/jeng", agents: undefined, gadgets: [], protocols: [] }],
         agents: [],
-        cwd: process.cwd(),
+        cwd: "/work/jeng",
         model: "test-model",
         history: [],
         memory: [],
@@ -76,9 +76,9 @@ function stubAgent() {
     };
 }
 
-function harness() {
+function harness(config?: string) {
     const stub = stubAgent();
-    return { ...stub, talk: createConversation(stub.agent) };
+    return { ...stub, talk: createConversation(stub.agent, config) };
 }
 
 const question = (name: string): Widget => ({ kind: "input", name, question: `${name}?` });
@@ -357,6 +357,26 @@ describe("a turn", () => {
 
         release("never mind");
         await turn;
+    });
+});
+
+describe("which agent this is", () => {
+    test("names the directory it is working in", () => {
+        const { talk } = harness();
+
+        expect(talk.get().cwd).toBe("/work/jeng");
+    });
+
+    test("names the config file behind the homes and the model", () => {
+        const { talk } = harness("/home/jeng/jeng.json");
+
+        expect(talk.get().config).toBe("/home/jeng/jeng.json");
+    });
+
+    test("has no config to name when the environment was read instead", () => {
+        const { talk } = harness();
+
+        expect(talk.get().config).toBeUndefined();
     });
 });
 

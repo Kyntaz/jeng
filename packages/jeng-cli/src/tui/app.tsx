@@ -170,6 +170,7 @@ export function App({ agent, onExit }: { agent: Agent; onExit: () => void }) {
              top of the screen. */}
             <box position="absolute" top={0} left={0} width="100%" zIndex={1}>
                 <Header
+                    cwd={agent.cwd}
                     homes={agent.homes.map((home) => home.dir)}
                     model={agent.model}
                     tokens={state.tokens}

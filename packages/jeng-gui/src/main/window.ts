@@ -1,11 +1,15 @@
 import type { ApprovalDecision, Mode } from "@jeng/core";
 import type { State } from "@jeng/view";
 import { BrowserView, BrowserWindow } from "electrobun/main";
-import type { JengRPC } from "../rpc";
+import type { Applied, JengRPC } from "../rpc";
 
 /** Everything the window is allowed to do to the conversation. */
 export interface Handle {
-    ready: () => State;
+    ready: () => { state: State; configs: string[] };
+    set: (next: { config?: string; cwd: string }) => Promise<Applied>;
+    forget: (path: string) => Applied;
+    browseConfig: () => Promise<Applied>;
+    browseCwd: () => Promise<Applied>;
     send: (text: string) => { sent: boolean };
     interrupt: () => void;
     clear: () => void;
@@ -26,6 +30,11 @@ export function openWindow(url: string, handle: Handle) {
         handlers: {
             requests: {
                 ready: () => handle.ready(),
+                set: async ({ config, cwd }) =>
+                    await handle.set({ config: config ?? undefined, cwd }),
+                forget: ({ path }) => handle.forget(path),
+                browseConfig: async () => await handle.browseConfig(),
+                browseCwd: async () => await handle.browseCwd(),
                 send: ({ text }) => handle.send(text),
                 interrupt: () => handle.interrupt(),
                 clear: () => handle.clear(),

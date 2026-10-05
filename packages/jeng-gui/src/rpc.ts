@@ -10,6 +10,17 @@ import type { RPCSchema } from "electrobun/main";
 type Nothing = void;
 
 /**
+ * What every request that touches the window's own settings answers with. A config that
+ * cannot be read has to be said rather than swallowed, and the list comes back with every
+ * answer so the picker never has to ask twice for the same thing.
+ */
+export interface Applied {
+    ok: boolean;
+    error?: string;
+    configs: string[];
+}
+
+/**
  * The conversation lives in the main process and the window is a pure function of it,
  * so there is exactly one copy of it and nothing in the browser can decide anything.
  *
@@ -21,7 +32,15 @@ type Nothing = void;
 export type JengRPC = {
     bun: RPCSchema<{
         requests: {
-            ready: { params: Nothing; response: State };
+            ready: { params: Nothing; response: { state: State; configs: string[] } };
+            /**
+             * Both halves are always sent, because a key that is missing would read the
+             * same as one asking for no config at all.
+             */
+            set: { params: { config: string | null; cwd: string }; response: Applied };
+            forget: { params: { path: string }; response: Applied };
+            browseConfig: { params: Nothing; response: Applied };
+            browseCwd: { params: Nothing; response: Applied };
             send: { params: { text: string }; response: { sent: boolean } };
             interrupt: { params: Nothing; response: Nothing };
             clear: { params: Nothing; response: Nothing };

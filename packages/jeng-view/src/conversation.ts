@@ -24,6 +24,10 @@ export interface State {
     /** Which agent this is, which is the one thing a window cannot work out for itself. */
     homes: string[];
     model: string;
+    /** Where it is working, which decides the AGENTS.md chain a run is given. */
+    cwd: string;
+    /** The config file behind the homes and the model, or none when the environment is. */
+    config?: string;
 }
 
 export const decided = (decision: ApprovalDecision): string =>
@@ -37,8 +41,11 @@ const asks = (draw: Draw): boolean => draw.surface === "gui" || fields(draw.widg
  * The conversation as state, with nothing in it about how any of it is drawn. A terminal
  * and a window have very little in common past this, which is the point: the rules below
  * are the ones that were hardest to get right, so they are written down once.
+ *
+ * `config` is only ever said out loud, so a terminal that was pointed at a file with
+ * `-c` leaves it out.
  */
-export function createConversation(agent: Agent) {
+export function createConversation(agent: Agent, config?: string) {
     let state: State = {
         entries: [],
         asks: [],
@@ -49,6 +56,8 @@ export function createConversation(agent: Agent) {
         thinking: false,
         homes: agent.homes.map((home) => home.dir),
         model: agent.model,
+        cwd: agent.cwd,
+        config,
     };
     let numbered = 0;
     let running: AbortController | undefined;

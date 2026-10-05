@@ -5,6 +5,8 @@ import type { ModelConfig } from "./model";
 export interface Config {
     homes: string[];
     model: ModelConfig;
+    /** The file it was read from, so a window can say which config it is on. */
+    path?: string;
 }
 
 interface FileConfig {
@@ -125,14 +127,17 @@ async function loadConfigFile(path: string): Promise<FileConfig> {
     };
 }
 
-async function findConfig(cwd: string, home: string): Promise<string | undefined> {
+/** Every config file there is, in the order one is looked for. */
+export async function configPaths(cwd: string, home: string): Promise<string[]> {
     const candidates = [
         join(cwd, FILE_NAME),
         join(home, FILE_NAME),
         join(defaultHome(), FILE_NAME),
     ];
-    for (const candidate of candidates) if (await Bun.file(candidate).exists()) return candidate;
-    return undefined;
+    const found: string[] = [];
+    for (const candidate of candidates)
+        if (await Bun.file(candidate).exists()) found.push(candidate);
+    return found;
 }
 
 export async function loadConfig(
@@ -146,7 +151,7 @@ export async function loadConfig(
     const env = options.env ?? process.env;
     const cwd = options.cwd ?? process.cwd();
     const fromArgs = options.homeArgs ?? [];
-    const path = options.path ?? (await findConfig(cwd, resolveHomes(fromArgs, env)[0]));
+    const path = options.path ?? (await configPaths(cwd, resolveHomes(fromArgs, env)[0]))[0];
 
     if (!path) return { homes: resolveHomes(fromArgs, env), model: resolveConfig(env) };
 
@@ -154,5 +159,6 @@ export async function loadConfig(
     return {
         homes: fromArgs.length > 0 ? fromArgs : (file.homes ?? [defaultHome()]),
         model: withDefaults(file.model ?? {}),
+        path,
     };
 }

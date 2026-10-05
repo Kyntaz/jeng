@@ -78,6 +78,41 @@ body {
     white-space: nowrap;
 }
 
+/* The window's first two header items are buttons that read as text, because a config
+ * and a directory are where it is rather than something it does. */
+.header button.where {
+    max-width: 32ch;
+    padding: 0;
+    border: none;
+    background: none;
+    font: inherit;
+    text-align: left;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: inherit;
+}
+
+.header button.where:hover {
+    color: var(--jeng-accent);
+    text-decoration: underline;
+}
+
+/*
+ * The picker sits over the window rather than beside it. It is a thing you do and then
+ * are done with, and a layout that reflowed to make room would move the conversation out
+ * from under whoever opened it.
+ */
+.sheet {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    padding: 7vh 20px 20px;
+    background: rgb(59 52 43 / 28%);
+}
+
 .header .grow {
     flex: 1;
 }
@@ -211,6 +246,75 @@ pre.card {
     font-family: var(--jeng-mono);
     font-size: 13px;
     white-space: pre;
+}
+
+/*
+ * The picker is a card that happens to be the whole of the window while it is up, so it
+ * keeps the paper and grows to hold a list rather than being a slip on the page.
+ */
+.picker {
+    width: min(720px, 100%);
+    max-height: 100%;
+    overflow: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    box-shadow: 0 8px 32px rgb(90 72 48 / 25%);
+}
+
+.picker h3 {
+    margin: 10px 0 0;
+    font-size: 14px;
+}
+
+.picker .ask {
+    margin-bottom: 4px;
+}
+
+.picker .rows,
+.picker .row {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.picker .row {
+    flex-direction: row;
+    align-items: center;
+}
+
+/* A path is a path: monospaced, wrapped rather than cut off, and filling the row so the
+ * whole of it is what gets clicked. */
+.picker .pick {
+    flex: 1;
+    text-align: left;
+    font-family: var(--jeng-mono);
+    font-size: 13px;
+    overflow-wrap: anywhere;
+}
+
+.picker .pick.picked {
+    border-color: var(--jeng-accent);
+    background: var(--jeng-accent-tint);
+}
+
+/* The one in force is said by its edge rather than by a word next to it. */
+.picker .pick.picked::before {
+    content: "● ";
+    color: var(--jeng-accent);
+}
+
+.picker .aside {
+    flex: none;
+    padding: 7px 12px;
+    color: var(--jeng-muted);
+}
+
+.picker .failed {
+    margin: 0;
+    font-family: var(--jeng-mono);
+    font-size: 13px;
+    color: var(--jeng-danger);
 }
 
 .approval {

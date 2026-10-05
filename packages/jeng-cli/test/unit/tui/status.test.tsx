@@ -33,33 +33,39 @@ describe("status bars", () => {
         expect(frame).not.toContain("AGENTS.md");
     });
 
-    test("names jeng, its mode and the homes it can reach", async () => {
+    test("names jeng, its mode, where it works and the homes it can reach", async () => {
         const { renderer, captureCharFrame, flush } = await testRender(
-            <Header homes={["~/work", "~/notes"]} model="gpt-4o-mini" tokens={0} mode="learn" />,
+            <Header
+                cwd="/work"
+                homes={["/work/.jeng", "/elsewhere"]}
+                model="gpt-4o-mini"
+                tokens={0}
+                mode="learn"
+            />,
+            { width: 80, height: 1 },
+        );
+        await flush();
+        const frame = captureCharFrame();
+        act(() => renderer.destroy());
+
+        expect(frame).toContain("jeng gpt-4o-mini  learn  /work  .jeng, /elsewhere");
+    });
+
+    test("says which model it is speaking for", async () => {
+        const { renderer, captureCharFrame, flush } = await testRender(
+            <Header cwd="/work" homes={[]} model="space-bunny-free" tokens={0} mode="work" />,
             { width: 60, height: 1 },
         );
         await flush();
         const frame = captureCharFrame();
         act(() => renderer.destroy());
 
-        expect(frame).toContain("jeng gpt-4o-mini  learn  ~/work, ~/notes");
-    });
-
-    test("says which model it is speaking for", async () => {
-        const { renderer, captureCharFrame, flush } = await testRender(
-            <Header homes={[]} model="space-bunny-free" tokens={0} mode="work" />,
-            { width: 40, height: 1 },
-        );
-        await flush();
-        const frame = captureCharFrame();
-        act(() => renderer.destroy());
-
-        expect(frame).toContain("jeng space-bunny-free  work");
+        expect(frame).toContain("jeng space-bunny-free  work  /work");
     });
 
     test("shortens a context that overflows a thousand tokens", async () => {
         const { renderer, captureCharFrame, flush } = await testRender(
-            <Header homes={[]} model="gpt-4o-mini" tokens={1500} mode="learn" />,
+            <Header cwd="" homes={[]} model="gpt-4o-mini" tokens={1500} mode="learn" />,
             { width: 40, height: 1 },
         );
         await flush();

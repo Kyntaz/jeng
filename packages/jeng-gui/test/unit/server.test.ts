@@ -87,6 +87,43 @@ describe("the window's own files", () => {
         }
     });
 
+    test("brings no `node:` import with it, which the browser would find empty", async () => {
+        // `node:` is swapped for an empty module on the way in, which builds cleanly and
+        // throws the first time anything is called off it. Nothing about the build says so,
+        // so the only honest check is to run what came out of it.
+        const EMPTY = "module.exports = {};";
+        const noNode: Bun.BunPlugin = {
+            name: "jeng-no-node",
+            setup(build) {
+                build.onResolve({ filter: /^node:/ }, () => ({
+                    path: "jeng:empty",
+                    namespace: "empty",
+                }));
+                build.onLoad({ filter: /.*/, namespace: "empty" }, () => ({
+                    contents: EMPTY,
+                    loader: "js",
+                }));
+            },
+        };
+
+        const built = await Bun.build({
+            entrypoints: [join(import.meta.dir, "../../../jeng-view/src/place.ts")],
+            format: "esm",
+            plugins: [noNode],
+            target: "browser",
+        });
+        const dir = await mkdtemp(join(tmpdir(), "jeng-place-"));
+        const file = join(dir, "place.mjs");
+        await writeFile(file, await built.outputs[0].text());
+        try {
+            const { place } = (await import(file)) as { place: (a: string, b: string) => string };
+
+            expect(place("/work/jeng/.jeng", "/work/jeng")).toBe(".jeng");
+        } finally {
+            await rm(dir, { recursive: true, force: true });
+        }
+    });
+
     test("gives a gadget the same stylesheet the window uses", async () => {
         const site = serve();
         try {

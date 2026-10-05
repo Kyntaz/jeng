@@ -16,6 +16,8 @@ const quiet: State = {
     thinking: false,
     homes: ["/home/jeng"],
     model: "test-model",
+    cwd: "/work/jeng",
+    config: "/home/jeng/jeng.json",
 };
 
 /** A window that is only ever looked at, because nothing here has a transport. */
@@ -23,7 +25,11 @@ const still = (state: State): Bridge =>
     ({
         get: () => state,
         subscribe: () => () => {},
-        hello: async () => state,
+        hello: async () => [],
+        set: async () => ({ ok: true, configs: [] }),
+        forget: async () => ({ ok: true, configs: [] }),
+        browseConfig: async () => ({ ok: true, configs: [] }),
+        browseCwd: async () => ({ ok: true, configs: [] }),
         send: async () => ({ sent: true }),
         interrupt: async () => {},
         clear: async () => {},
@@ -42,6 +48,29 @@ describe("the window", () => {
 
         expect(markup).toContain("/home/jeng");
         expect(markup).toContain("test-model");
+    });
+
+    test("says which directory it is working in and which config says so", () => {
+        const markup = shown(quiet);
+
+        expect(markup).toContain("/work/jeng");
+        expect(markup).toContain("/home/jeng/jeng.json");
+    });
+
+    test("says it is reading the environment when there is no config file", () => {
+        expect(shown({ ...quiet, config: undefined })).toContain("environment");
+    });
+
+    test("says a config and a home inside the cwd relative to it, because it just said where that is", () => {
+        const inside = shown({
+            ...quiet,
+            config: "/work/jeng/jeng.json",
+            homes: ["/work/jeng/.jeng"],
+        });
+
+        expect(inside).not.toContain("/work/jeng/jeng.json");
+        expect(inside).toContain(">jeng.json</button>");
+        expect(inside).toContain(">.jeng</span>");
     });
 
     test("says which mode it is in, because that decides what jeng may do", () => {

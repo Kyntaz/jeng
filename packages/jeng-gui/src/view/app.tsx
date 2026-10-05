@@ -1,7 +1,11 @@
+// The deep import is deliberate: the barrel drags in the conversation and with it
+// `@jeng/core`, whose `node:` imports this view's build drops on the floor.
+import { place } from "@jeng/view/place";
 import type { CSSProperties } from "react";
-import { useEffect, useRef, useSyncExternalStore } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { ApprovalCard } from "./approval";
 import { Composer } from "./composer";
+import { Picker } from "./picker";
 import type { Bridge } from "./rpc";
 import { Transcript } from "./transcript";
 
@@ -14,12 +18,14 @@ export function App({ bridge }: { bridge: Bridge }) {
     // thing that ever reads this, and it reads the same value.
     const state = useSyncExternalStore(bridge.subscribe, bridge.get, bridge.get);
     const scroller = useRef<HTMLDivElement>(null);
+    const [picking, setPicking] = useState(false);
+    const [configs, setConfigs] = useState<string[]>([]);
 
     // The window asks for the state once it is listening, because there is no telling
-    // when a listener is attached.
+    // when a listener is attached. The configs it has been shown come back with it.
     useEffect(() => {
-        void bridge.hello();
-    }, []);
+        void bridge.hello().then(setConfigs);
+    }, [bridge]);
 
     useEffect(() => {
         const element = scroller.current;
@@ -34,7 +40,10 @@ export function App({ bridge }: { bridge: Bridge }) {
         const keys = (event: KeyboardEvent) => {
             if (event.key === "Escape") {
                 event.preventDefault();
-                void bridge.interrupt();
+                // Escape closes the picker rather than interrupting behind it, which is
+                // the one thing about it that is not a turn.
+                if (picking) setPicking(false);
+                else void bridge.interrupt();
             }
             if (event.key === "F2") {
                 event.preventDefault();
@@ -43,7 +52,7 @@ export function App({ bridge }: { bridge: Bridge }) {
         };
         window.addEventListener("keydown", keys);
         return () => window.removeEventListener("keydown", keys);
-    }, []);
+    }, [bridge, picking]);
 
     if (!state) return <div className="app" />;
 
@@ -56,7 +65,17 @@ export function App({ bridge }: { bridge: Bridge }) {
             style={{ "--jeng-accent": MODE_COLOR[state.mode] } as CSSProperties}
         >
             <header className="header">
-                <span className="where">{state.homes.join(", ")}</span>
+                {/* The two things the window can be pointed elsewhere are its first two
+                 * items, and they are buttons that read as text. */}
+                <button type="button" className="where" onClick={() => setPicking(true)}>
+                    {state.cwd}
+                </button>
+                <button type="button" className="where" onClick={() => setPicking(true)}>
+                    {state.config ? place(state.config, state.cwd) : "environment"}
+                </button>
+                <span className="where">
+                    {state.homes.map((home) => place(home, state.cwd)).join(", ")}
+                </span>
                 <span>{state.model}</span>
                 <span className="grow" />
                 <span>{state.tokens} tokens</span>
@@ -108,6 +127,16 @@ export function App({ bridge }: { bridge: Bridge }) {
                     onInterrupt={() => void bridge.interrupt()}
                 />
             </div>
+
+            {picking && (
+                <Picker
+                    bridge={bridge}
+                    configs={configs}
+                    state={state}
+                    onConfigs={setConfigs}
+                    onClose={() => setPicking(false)}
+                />
+            )}
         </div>
     );
 }
