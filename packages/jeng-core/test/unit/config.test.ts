@@ -18,13 +18,29 @@ const defaults = {
 };
 
 describe("config", () => {
-    test("falls back to the default home and model when nothing is configured", async () => {
+    test("falls back to the default model when nothing is configured", async () => {
         const cwd = await scratch();
 
         const config = await loadConfig({ cwd, env: {} });
 
         expect(config.model).toEqual(defaults);
+        await rm(cwd, { recursive: true, force: true });
+    });
+
+    test("falls back to the default home when nothing is configured", async () => {
+        const cwd = await scratch();
+
+        const config = await loadConfig({ cwd, env: {} });
+
         expect(config.homes).toHaveLength(1);
+        await rm(cwd, { recursive: true, force: true });
+    });
+
+    test("names the default home inside the user's own home folder", async () => {
+        const cwd = await scratch();
+
+        const config = await loadConfig({ cwd, env: {} });
+
         expect(config.homes[0]).toEndWith(".jeng");
         await rm(cwd, { recursive: true, force: true });
     });

@@ -13,8 +13,6 @@ export const MODE_TINT = { learn: "#3a3018", work: "#1d3340" };
 // The user is never either mode, so they get the one colour that is neither.
 export const USER = "#98c379";
 
-// Chrome the user is looking at rather than something either of them said, so it
-// keeps one colour of its own instead of taking the mode's.
 export const BORDER = MODE_COLOR.learn;
 
 // What the mouse is holding, which is neither an answer nor chrome. Nothing in
@@ -22,8 +20,6 @@ export const BORDER = MODE_COLOR.learn;
 // cannot be seen.
 export const SELECTION = "#3f5b73";
 
-// An action keeps its owner's colour because it is its owner's, so the box around
-// it rather than the colour of it is what tells an action from Jeng's words.
 export type Owner = "user" | "jeng" | "tool";
 
 export const MUTED = "#606070";
@@ -49,9 +45,6 @@ export const SYNTAX = SyntaxStyle.fromTheme([
 // so a long list scrolls inside the panel instead of pushing the prompt off screen.
 const CHOICE_HEIGHT = 10;
 
-// Everything a select needs to know about its own contents, in one place: it has
-// no height of its own, and it spends a second row on a description only when
-// there is one to spend it on.
 export function choiceList(options: Choice[]) {
     const described = options.some((option) => option.description);
     return {
@@ -65,8 +58,7 @@ export function choiceList(options: Choice[]) {
 }
 
 // Jeng's thinking and words belong in its box, an action in a box of its own, and
-// an error in neither speaker's. The owner is what decides which box an entry
-// shares, so the mode has to be carried separately rather than folded into it.
+// an error in neither speaker's.
 export function owner(entry: Entry): Owner | undefined {
     switch (entry.kind) {
         case "user":
@@ -86,21 +78,16 @@ export function owner(entry: Entry): Owner | undefined {
 }
 
 export function color(owner: Owner, mode: Mode = "learn"): string {
-    switch (owner) {
-        case "user":
-            return USER;
-        default:
-            return MODE_COLOR[mode];
-    }
+    return owner === "user" ? USER : MODE_COLOR[mode];
 }
 
 // The output of an action is drawn in the same muted gray as the chrome, so the
-// call it answers rather than its answer is what the eye lands on.
-export const COLORS: Record<Entry["kind"], string | undefined> = {
+// call it answers rather than its answer is what the eye lands on. A call itself
+// wears its mode's colour, so the box around it is what tells it from Jeng's words.
+export const COLORS: Partial<Record<Entry["kind"], string | undefined>> = {
     user: USER,
     jeng: undefined,
     think: "#6c6c80",
-    tool: MODE_COLOR.learn,
     output: MUTED,
     failure: "#e06c75",
     approval: "#d19a66",

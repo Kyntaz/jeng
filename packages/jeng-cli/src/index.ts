@@ -23,10 +23,14 @@ async function piped(): Promise<string> {
     return await Bun.stdin.text();
 }
 
+function die(message: string): never {
+    process.stderr.write(`${message}\n`);
+    process.exit(1);
+}
+
 // One-shot has no modal, so the whole request goes to stderr and the answer comes
 // back as a single line: nothing typed approves, anything typed is why it was
-// turned down. The interface lives as long as the run because a turn can ask more
-// than once.
+// turned down.
 let ask: Interface | undefined;
 
 async function askOnStdin(request: Approval): Promise<ApprovalDecision> {
@@ -61,8 +65,6 @@ const yes: Approve = async (request) =>
 
 async function once(agent: Agent, prompt: string): Promise<void> {
     try {
-        // Text streamed before `end` is progress, not the answer, so it goes out as
-        // it arrives and the answer is only appended when it is not already there.
         let streamed = "";
         const reply = await agent.send(prompt, {
             onEvent: (event) => {
@@ -124,28 +126,21 @@ await new Command()
         ) => {
             // A mode that is not one is a typo rather than a mode, and quietly
             // falling back to learn would hand the user an agent that writes.
-            if (options.mode !== undefined && !isMode(options.mode)) {
-                process.stderr.write(`mode must be learn or work, not ${options.mode}\n`);
-                process.exit(1);
-            }
+            if (options.mode !== undefined && !isMode(options.mode))
+                die(`mode must be learn or work, not ${options.mode}`);
             const mode = options.mode as Mode | undefined;
 
             // A limit is the user taking the ability to interrupt back, so a
             // nonsense one has to be said rather than clamped.
             const maxTurns = options.maxTurns;
-            if (maxTurns !== undefined && (!Number.isInteger(maxTurns) || maxTurns < 1)) {
-                process.stderr.write(
-                    `max-turns must be a whole number above zero, not ${maxTurns}\n`,
-                );
-                process.exit(1);
-            }
+            if (maxTurns !== undefined && (!Number.isInteger(maxTurns) || maxTurns < 1))
+                die(`max-turns must be a whole number above zero, not ${maxTurns}`);
 
             let config: Awaited<ReturnType<typeof loadConfig>>;
             try {
                 config = await loadConfig({ path: options.config, homeArgs: options.home });
             } catch (error) {
-                process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
-                process.exit(1);
+                die(error instanceof Error ? error.message : String(error));
             }
 
             const agent = await createAgent({
@@ -160,10 +155,7 @@ await new Command()
             const text = prompt.length ? prompt.join(" ") : await piped();
             if (text.trim()) await once(agent, text);
             else if (process.stdin.isTTY) await renderTui(agent);
-            else {
-                process.stderr.write("no prompt given, on the argument or on stdin\n");
-                process.exit(1);
-            }
+            else die("no prompt given, on the argument or on stdin");
         },
     )
     .parseAsync();

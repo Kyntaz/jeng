@@ -16,7 +16,6 @@ export interface State {
 
 const FILE = ".state";
 
-/** Any value at all, gone when the session is: what one gadget leaves for the next. */
 export function sessionState(): StateMap {
     const values = new Map<string, unknown>();
     return {
@@ -41,8 +40,6 @@ async function read(dir: string): Promise<Record<string, unknown>> {
     }
 }
 
-// Json.stringify drops whatever it cannot write rather than complaining, so a
-// function stored under a key would be read back as a null and never explained.
 function checkJson(value: unknown, key: string, ancestors: Set<object>): void {
     if (value === null || typeof value === "string" || typeof value === "boolean") return;
     if (typeof value === "number") {
@@ -57,7 +54,6 @@ function checkJson(value: unknown, key: string, ancestors: Set<object>): void {
     ancestors.delete(value);
 }
 
-/** The keys a home has committed, readable from any session that later loads it. */
 export function persistentState(dir: string): StateMap {
     return {
         get: async (key) => (await read(dir))[key],

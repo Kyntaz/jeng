@@ -15,8 +15,6 @@ export const ACTIONS = [
     "compact",
 ];
 
-// Work mode is not offered the actions that change the home, so a model that only
-// reads the tool never learns the words for them.
 export function actionsFor(mode: Mode): string[] {
     return mode === "work" ? ACTIONS.filter((action) => !GROWS.includes(action)) : ACTIONS;
 }

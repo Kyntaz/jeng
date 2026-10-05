@@ -12,8 +12,6 @@ const NO = "#e06c75";
 // first, and what is written into the turn-down underneath them.
 const STOPS = ["approve", "reject", "reason"] as const;
 
-// A third of the screen is as much of the reason as may take it, because the buttons
-// above it are how the decision is made and cannot scroll away.
 const SHARE = 3;
 
 export function ApprovalBar({ onDecide }: { onDecide: (decision: ApprovalDecision) => void }) {
@@ -32,8 +30,8 @@ export function ApprovalBar({ onDecide }: { onDecide: (decision: ApprovalDecisio
         // where a reason gets written, so a keystroke that lands here while the box
         // holds the keys belongs to the box rather than to the decision.
         if (stop === "approve") onDecide({ approved: true });
-        // The reason belongs to the reject button whether or not one was written, so
-        // a turn-down is never held up waiting for an explanation.
+        // A turn-down never waits on an explanation, so the reason is taken whether
+        // or not one was written.
         else if (stop === "reject")
             onDecide({ approved: false, reason: reason.current?.plainText.trim() ?? "" });
     });
@@ -43,8 +41,7 @@ export function ApprovalBar({ onDecide }: { onDecide: (decision: ApprovalDecisio
             <Button label="approve" focused={stop === "approve"} color={YES} />
             <Button label="reject" focused={stop === "reject"} color={NO} />
             {/* The reason is a box rather than a row because turning something down is
-                the one answer worth more than a line, and a paragraph that has to be
-                scrolled sideways cannot be read to decide on. */}
+                the one answer worth more than a line. */}
             <box border borderColor={stop === "reason" ? NO : BORDER} paddingX={1} flexShrink={0}>
                 <textarea
                     ref={reason}

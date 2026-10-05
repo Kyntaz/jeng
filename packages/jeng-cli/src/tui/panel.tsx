@@ -30,8 +30,8 @@ export function Panel({ widget, onDone }: { widget: Widget; onDone: (answers: An
                 onAnswer={(name, value) => {
                     const answered = { ...answers, [name]: value };
                     setAnswers(answered);
-                    // The next field the user has not answered takes the focus, so a
-                    // form is walkable in order without reaching for tab at all.
+                    // The next unanswered field takes the focus, so a form is
+                    // walkable in order without reaching for tab at all.
                     setFocused(asked.find((field) => !(field.name in answered))?.name ?? name);
                 }}
             />

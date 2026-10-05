@@ -14,21 +14,33 @@ interface FileConfig {
 
 const FILE_NAME = "jeng.json";
 
-const NUMERIC_MODEL_FIELDS = ["contextWindow"] as const;
+const MODEL_DEFAULTS = {
+    baseUrl: "http://localhost:11434/v1",
+    apiKey: undefined,
+    model: "gpt-4o-mini",
+    contextWindow: 8192,
+} as const;
 
-const DEFAULT_CONTEXT_WINDOW = 8192;
+const MODEL_FIELDS = {
+    baseUrl: "string",
+    apiKey: "string",
+    model: "string",
+    contextWindow: "number",
+} as const;
+
+const withDefaults = (model: Partial<ModelConfig>): ModelConfig => ({
+    baseUrl: (model.baseUrl ?? MODEL_DEFAULTS.baseUrl).replace(/\/$/, ""),
+    apiKey: model.apiKey ?? MODEL_DEFAULTS.apiKey,
+    model: model.model ?? MODEL_DEFAULTS.model,
+    contextWindow: model.contextWindow ?? MODEL_DEFAULTS.contextWindow,
+});
 
 export function defaultHome(): string {
     return join(homedir(), ".jeng");
 }
 
 export function defaultModel(): ModelConfig {
-    return {
-        baseUrl: "http://localhost:11434/v1",
-        apiKey: undefined,
-        model: "gpt-4o-mini",
-        contextWindow: DEFAULT_CONTEXT_WINDOW,
-    };
+    return { ...MODEL_DEFAULTS };
 }
 
 export function resolveHomes(
@@ -41,14 +53,13 @@ export function resolveHomes(
 }
 
 export function resolveConfig(env: Record<string, string | undefined> = process.env): ModelConfig {
-    const baseUrl = env.JENG_BASE_URL ?? defaultModel().baseUrl;
     const window = Number(env.JENG_CONTEXT);
-    return {
-        baseUrl: baseUrl.replace(/\/$/, ""),
+    return withDefaults({
+        baseUrl: env.JENG_BASE_URL,
         apiKey: env.JENG_API_KEY ?? env.OPENAI_API_KEY,
-        model: env.JENG_MODEL ?? defaultModel().model,
-        contextWindow: Number.isFinite(window) && window > 0 ? window : DEFAULT_CONTEXT_WINDOW,
-    };
+        model: env.JENG_MODEL,
+        contextWindow: Number.isFinite(window) && window > 0 ? window : undefined,
+    });
 }
 
 function fail(path: string, reason: string): never {
@@ -90,21 +101,15 @@ async function loadConfigFile(path: string): Promise<FileConfig> {
     }
 
     const fields = (model ?? {}) as Record<string, unknown>;
-    for (const key of Object.keys(fields)) {
-        const numeric = NUMERIC_MODEL_FIELDS.includes(key as (typeof NUMERIC_MODEL_FIELDS)[number]);
-        if (key !== "baseUrl" && key !== "apiKey" && key !== "model" && !numeric)
-            fail(path, `unknown model key ${key}`);
-        if (fields[key] === undefined) continue;
-        if (numeric ? typeof fields[key] !== "number" : typeof fields[key] !== "string")
-            fail(path, `model.${key} must be ${numeric ? "a number" : "a string"}`);
+    for (const [key, value] of Object.entries(fields)) {
+        const kind = MODEL_FIELDS[key as keyof typeof MODEL_FIELDS];
+        if (!kind) fail(path, `unknown model key ${key}`);
+        if (value !== undefined && typeof value !== kind)
+            fail(path, `model.${key} must be a ${kind}`);
     }
 
     return {
         homes: (homes as string[] | undefined)?.map((home) =>
-            // A bare `~` is the whole home folder rather than a jeng folder,
-            // and jeng writes gadgets and protocols into whatever home it is
-            // given. Anything pointed at a home is something a cleanup step may
-            // later delete, so refuse the one value that means "all of it".
             home === "~"
                 ? fail(
                       path,
@@ -146,14 +151,8 @@ export async function loadConfig(
     if (!path) return { homes: resolveHomes(fromArgs, env), model: resolveConfig(env) };
 
     const file = await loadConfigFile(path);
-    const baseUrl = file.model?.baseUrl ?? defaultModel().baseUrl;
     return {
         homes: fromArgs.length > 0 ? fromArgs : (file.homes ?? [defaultHome()]),
-        model: {
-            baseUrl: baseUrl.replace(/\/$/, ""),
-            apiKey: file.model?.apiKey,
-            model: file.model?.model ?? defaultModel().model,
-            contextWindow: file.model?.contextWindow ?? DEFAULT_CONTEXT_WINDOW,
-        },
+        model: withDefaults(file.model ?? {}),
     };
 }

@@ -22,14 +22,10 @@ export type ApprovalDecision = { approved: true } | { approved: false; reason: s
 
 export type Approve = (request: Approval) => Promise<ApprovalDecision>;
 
-export type Review = { ok: true } | { ok: false; error: string };
+type Review = { ok: true } | { ok: false; error: string };
 
 export const isDelete = (kind: ApprovalKind) => kind.startsWith("delete");
 
-// A rejection is the model's result to read, so it goes back as an instruction
-// to try again rather than as a bare refusal. A deletion has nothing to change,
-// so telling the model to change it would send it off rewriting something that
-// was never on the table.
 export async function review(approve: Approve, request: Approval): Promise<Review> {
     const decision = await approve(request);
     if (decision.approved) return { ok: true };

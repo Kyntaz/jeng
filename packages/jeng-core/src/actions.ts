@@ -20,7 +20,6 @@ export interface ActionContext {
     /** Absent wherever there is no interface to draw on, which is what makes a run headless. */
     ui?: Ui;
     mode?: Mode;
-    /** One scratch for every gadget of the session, so they can hand each other objects. */
     session: StateMap;
 }
 
@@ -33,8 +32,20 @@ const stateFor = (ctx: ActionContext, dir: string): State => ({
     persistent: persistentState(dir),
 });
 
-// Models often send `input` as a json string rather than an object; a gadget
-// written against an object signature would otherwise receive a string.
+// The home is only ever written to once the user has agreed.
+async function commit(
+    ctx: ActionContext,
+    dir: string,
+    folder: "gadgets" | "protocols",
+    name: string,
+    source: string,
+): Promise<void> {
+    const path = join(dir, folder);
+    await Bun.$`mkdir -p ${path}`.quiet();
+    await Bun.write(join(path, `${name}.${folder === "gadgets" ? "ts" : "md"}`), source);
+    await refresh(ctx, dir);
+}
+
 function coerceInput(input: unknown): { bad: string } | { bad: undefined; value: unknown } {
     if (input === undefined || input === null) return { bad: undefined, value: {} };
     if (typeof input !== "string") return { bad: undefined, value: input };
@@ -49,9 +60,7 @@ function coerceInput(input: unknown): { bad: string } | { bad: undefined; value:
 const NAME_KEYS = ["name", "gadget", "gadget_name"];
 
 // A model reading only a gadget's description tends to hand its name back as one
-// more input field, so the name is taken back out when the call left it empty. An
-// explicit name is never overridden, and one that matches no gadget is left alone
-// for the error to name.
+// more input field, so the name is taken back out when the call left it empty.
 function liftName(
     ctx: ActionContext,
     name: string,
@@ -104,8 +113,6 @@ async function runGadgetAction(
     const found = findIn(ctx, "gadget", name);
     if (!found) return { ok: false, content: `no gadget named "${name}"` };
 
-    // Offering a gadget that draws and then refusing it to run would be a waste of
-    // a turn, so the run without a UI says so rather than pretending the call can work.
     if (found.ref.ui && !ctx.ui)
         return {
             ok: false,
@@ -141,21 +148,13 @@ async function createProtocolAction(
     if (!valid.ok) return { ok: false, content: valid.error };
 
     const home = primaryHome(ctx);
-    const dir = join(home, "protocols");
-
-    // The model cannot edit files, so rewriting a protocol it has come to doubt is
-    // the only way it can correct one. Validation has already passed either way.
     const existing = findIn(ctx, "protocol", name);
     const kind: ApprovalKind = existing ? "rewrite protocol" : "create protocol";
 
-    // A protocol is only text, so there is nothing to justify; the user is
-    // confirming the memory is right rather than judging how it worded itself.
     const approved = await review(ctx.approve, { kind, name, source, reason: "" });
     if (!approved.ok) return { ok: false, content: approved.error };
 
-    await Bun.$`mkdir -p ${dir}`.quiet();
-    await Bun.write(join(dir, `${name}.md`), source);
-    await refresh(ctx, home);
+    await commit(ctx, home, "protocols", name, source);
 
     return {
         ok: true,
@@ -174,8 +173,6 @@ async function createGadgetAction(
     const { draft } = prepared;
 
     try {
-        // The model cannot edit files, so rewriting a gadget it is unhappy with is
-        // the only way it can fix one. Validation has already passed either way.
         const existing = findIn(ctx, "gadget", draft.name);
         const kind: ApprovalKind = existing ? "rewrite gadget" : "create gadget";
 
@@ -183,16 +180,11 @@ async function createGadgetAction(
         if (!approved.ok) return { ok: false, content: approved.error };
 
         const home = primaryHome(ctx);
-        const dir = join(home, "gadgets");
-        await Bun.$`mkdir -p ${dir}`.quiet();
-        await Bun.write(join(dir, `${draft.name}.ts`), source);
-        await refresh(ctx, home);
+        await commit(ctx, home, "gadgets", draft.name, source);
 
         return {
             ok: true,
-            content: existing
-                ? `gadget "${draft.name}" rewritten at ${join(dir, `${draft.name}.ts`)}`
-                : `gadget "${draft.name}" created at ${join(dir, `${draft.name}.ts`)}`,
+            content: `gadget "${draft.name}" ${existing ? "rewritten" : "created"} at ${join(home, "gadgets", `${draft.name}.ts`)}`,
         };
     } finally {
         await draft.dispose();
@@ -203,8 +195,6 @@ async function testGadgetAction(
     ctx: ActionContext,
     args: Record<string, unknown>,
 ): Promise<ActionResult> {
-    // Asked about before anyone is, because a run that cannot happen is not worth
-    // a user's time to read a gadget over.
     const input = coerceInput(args.input);
     if (input.bad !== undefined) return { ok: false, content: input.bad };
 
@@ -249,8 +239,6 @@ async function deleteAction(
     const found = findIn(ctx, noun, name);
     if (!found) return { ok: false, content: `no ${noun} named "${name}"` };
 
-    // Nothing else about a deletion can be undone, so a model that cannot say why
-    // this one should go is turned down before the user is asked to weigh in.
     const reason = String(args.reason ?? "").trim();
     if (!reason)
         return {
@@ -273,8 +261,6 @@ export async function runAction(
     args: Record<string, unknown>,
     ctx: ActionContext,
 ): Promise<ActionResult> {
-    // Work mode never offers these, so a call that names one anyway is a model
-    // reaching for something this run has no way to give it.
     if (ctx.mode === "work" && GROWS.includes(action))
         return {
             ok: false,

@@ -6,9 +6,6 @@ export type Mode = (typeof MODES)[number];
 
 export const DEFAULT_MODE: Mode = "learn";
 
-// Everything that changes the home, plus the two that only exist to help write one:
-// load_ui, the language of a gadget that draws, and load_gadget, which is worth
-// nothing to a run that cannot rewrite what it reads.
 export const GROWS: readonly string[] = [
     "create_gadget",
     "test_gadget",

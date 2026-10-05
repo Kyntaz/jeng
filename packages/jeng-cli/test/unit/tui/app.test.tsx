@@ -57,7 +57,7 @@ async function render(
     );
 }
 
-describe("transcript", () => {
+describe("app", () => {
     test("keeps a long answer off the header row that it scrolls under", async () => {
         const long = Array.from({ length: 60 }, (_, at) => `line ${at}`).join("\n");
         const { renderer, mockInput, flush, captureCharFrame, waitFor } = await render(
@@ -281,9 +281,7 @@ describe("transcript", () => {
             loud: true,
         });
     });
-});
 
-describe("prompt box", () => {
     test("sends what was typed when enter is pressed", async () => {
         const sent: string[] = [];
         const { renderer, mockInput, flush } = await render(sent);
@@ -408,9 +406,7 @@ describe("prompt box", () => {
 
         expect(frame).toContain("▪ ./AGENTS.md");
     });
-});
 
-describe("modes", () => {
     test("starts in the mode the agent was built with", async () => {
         const { renderer, mockInput, flush, captureCharFrame } = await render([]);
 

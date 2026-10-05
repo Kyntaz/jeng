@@ -6,8 +6,6 @@ export interface Header {
     ui: string;
 }
 
-export const EMPTY: Header = { name: "", description: "", when: "", ui: "" };
-
 const FENCE = /^---\r?\n([\s\S]*?)\r?\n---[ \t]*\r?\n?/;
 const COMMENT = /^\s*\/\*\*([\s\S]*?)\*\//;
 

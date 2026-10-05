@@ -63,12 +63,24 @@ describe("actions", () => {
         );
 
         expect(result.ok).toBe(true);
+        await cleanup();
+    });
+
+    test("offers a protocol it committed to the next turn", async () => {
+        const { ctx, cleanup } = await context();
+
+        await runAction(
+            "create_protocol",
+            { name: "deploy", description: "how we ship", when: "deploying", content: "run make" },
+            ctx,
+        );
+
         expect(ctx.homes[0].protocols.map((protocol) => protocol.name)).toEqual(["deploy"]);
         await cleanup();
     });
 
     test("lets a protocol be rewritten, since the model cannot edit files itself", async () => {
-        const { ctx, dir, cleanup } = await context();
+        const { ctx, cleanup } = await context();
         await runAction(
             "create_protocol",
             { name: "deploy", description: "how we ship", when: "deploying", content: "run make" },
@@ -86,11 +98,54 @@ describe("actions", () => {
             ctx,
         );
 
-        expect(result.ok).toBe(true);
         expect(result.content).toContain('protocol "deploy" rewritten');
+        await cleanup();
+    });
+
+    test("puts the rewritten body in place of the old one", async () => {
+        const { ctx, dir, cleanup } = await context();
+        await runAction(
+            "create_protocol",
+            { name: "deploy", description: "how we ship", when: "deploying", content: "run make" },
+            ctx,
+        );
+
+        await runAction(
+            "create_protocol",
+            {
+                name: "deploy",
+                description: "how we ship",
+                when: "deploying",
+                content: "run make --fast",
+            },
+            ctx,
+        );
+
         expect(await Bun.file(join(dir, "protocols", "deploy.md")).text()).toContain(
             "run make --fast",
         );
+        await cleanup();
+    });
+
+    test("does not keep the old protocol alongside the rewritten one", async () => {
+        const { ctx, cleanup } = await context();
+        await runAction(
+            "create_protocol",
+            { name: "deploy", description: "how we ship", when: "deploying", content: "run make" },
+            ctx,
+        );
+
+        await runAction(
+            "create_protocol",
+            {
+                name: "deploy",
+                description: "how we ship",
+                when: "deploying",
+                content: "run make --fast",
+            },
+            ctx,
+        );
+
         expect(ctx.homes[0].protocols.length).toBe(1);
         await cleanup();
     });
@@ -140,6 +195,23 @@ describe("actions", () => {
             ok: false,
             content: 'header `name` must be kebab-case (got "Deploy Flow"), e.g. `deploy-flow`',
         });
+        await cleanup();
+    });
+
+    test("commits nothing when the protocol it was given is invalid", async () => {
+        const { ctx, cleanup } = await context();
+
+        await runAction(
+            "create_protocol",
+            {
+                name: "Deploy Flow",
+                description: "how we ship",
+                when: "deploying",
+                content: "run make",
+            },
+            ctx,
+        );
+
         expect(ctx.homes[0].protocols).toEqual([]);
         await cleanup();
     });
@@ -154,6 +226,18 @@ describe("actions", () => {
         );
 
         expect(result).toEqual({ ok: false, content: "header is missing a non-empty `when`" });
+        await cleanup();
+    });
+
+    test("commits nothing when the protocol is missing a header field", async () => {
+        const { ctx, cleanup } = await context();
+
+        await runAction(
+            "create_protocol",
+            { name: "deploy", description: "how we ship", content: "run make" },
+            ctx,
+        );
+
         expect(ctx.homes[0].protocols).toEqual([]);
         await cleanup();
     });
@@ -170,12 +254,22 @@ describe("actions", () => {
         );
 
         expect(result.ok).toBe(true);
+        await cleanup();
+    });
+
+    test("lists a gadget it committed", async () => {
+        const { ctx, cleanup } = await context();
+        const source =
+            '/**\n * name: greet\n * description: says hi\n */\n\nexport default () => "hi"\n';
+
+        await runAction("create_gadget", { name: "greet", reason: WHY, source }, ctx);
+
         expect(ctx.homes[0].gadgets.map((gadget) => gadget.name)).toEqual(["greet"]);
         await cleanup();
     });
 
     test("create_gadget rejects a gadget that does not compile and leaves no trace", async () => {
-        const { ctx, dir, cleanup } = await context();
+        const { ctx, cleanup } = await context();
         const source =
             "/**\n * name: broken\n * description: nope\n */\n\nexport default () => {\n";
 
@@ -186,8 +280,17 @@ describe("actions", () => {
         );
 
         expect(result.ok).toBe(false);
+        await cleanup();
+    });
+
+    test("leaves no gadget file behind when it would not compile", async () => {
+        const { ctx, dir, cleanup } = await context();
+        const source =
+            "/**\n * name: broken\n * description: nope\n */\n\nexport default () => {\n";
+
+        await runAction("create_gadget", { name: "broken", reason: WHY, source }, ctx);
+
         expect(await Bun.file(join(dir, "gadgets", "broken.ts")).exists()).toBe(false);
-        expect(ctx.homes[0].gadgets).toEqual([]);
         await cleanup();
     });
 
@@ -331,7 +434,7 @@ describe("actions", () => {
     });
 
     test("names a gadget after its own header, not the name the model passed", async () => {
-        const { ctx, dir, cleanup } = await context();
+        const { ctx, cleanup } = await context();
 
         const result = await runAction(
             "create_gadget",
@@ -344,13 +447,29 @@ describe("actions", () => {
         );
 
         expect(result.ok).toBe(true);
+        await cleanup();
+    });
+
+    test("files a gadget that had no name from the model under its own header", async () => {
+        const { ctx, cleanup } = await context();
+
+        await runAction("create_gadget", { name: "", reason: WHY, source: GADGET }, ctx);
+
         expect(ctx.homes[0].gadgets.map((gadget) => gadget.name)).toEqual(["greet"]);
+        await cleanup();
+    });
+
+    test("writes that same gadget to the name its header asks for", async () => {
+        const { ctx, dir, cleanup } = await context();
+
+        await runAction("create_gadget", { name: "", reason: WHY, source: GADGET }, ctx);
+
         expect(await Bun.file(join(dir, "gadgets", "greet.ts")).exists()).toBe(true);
         await cleanup();
     });
 
     test("lets a gadget be rewritten, since the model cannot edit files itself", async () => {
-        const { ctx, dir, cleanup } = await context();
+        const { ctx, cleanup } = await context();
         const broken = GADGET;
         const fixed =
             "/**\n * name: greet\n * description: says hi properly\n */\n\nexport default async () => 'hello'\n";
@@ -358,9 +477,30 @@ describe("actions", () => {
         await runAction("create_gadget", { reason: WHY, source: broken }, ctx);
         const result = await runAction("create_gadget", { reason: WHY, source: fixed }, ctx);
 
-        expect(result.ok).toBe(true);
         expect(result.content).toContain('gadget "greet" rewritten');
+        await cleanup();
+    });
+
+    test("puts the rewritten gadget source in place of the old one", async () => {
+        const { ctx, dir, cleanup } = await context();
+        const fixed =
+            "/**\n * name: greet\n * description: says hi properly\n */\n\nexport default async () => 'hello'\n";
+
+        await runAction("create_gadget", { reason: WHY, source: GADGET }, ctx);
+        await runAction("create_gadget", { reason: WHY, source: fixed }, ctx);
+
         expect(await Bun.file(join(dir, "gadgets", "greet.ts")).text()).toBe(fixed);
+        await cleanup();
+    });
+
+    test("does not keep the old gadget alongside the rewritten one", async () => {
+        const { ctx, cleanup } = await context();
+        const fixed =
+            "/**\n * name: greet\n * description: says hi properly\n */\n\nexport default async () => 'hello'\n";
+
+        await runAction("create_gadget", { reason: WHY, source: GADGET }, ctx);
+        await runAction("create_gadget", { reason: WHY, source: fixed }, ctx);
+
         expect(ctx.homes[0].gadgets.length).toBe(1);
         await cleanup();
     });
@@ -426,7 +566,7 @@ describe("actions", () => {
 
     test("writes nothing when the user turns the gadget down, and tells the model why", async () => {
         const user = turnsDownFirst("it deletes files");
-        const { ctx, dir, cleanup } = await context(user.approve);
+        const { ctx, cleanup } = await context(user.approve);
 
         const result = await runAction("create_gadget", { reason: WHY, source: GADGET }, ctx);
 
@@ -435,8 +575,16 @@ describe("actions", () => {
             content:
                 'the user rejected create gadget "greet": it deletes files. Change it and ask again.',
         });
+        await cleanup();
+    });
+
+    test("leaves no gadget file behind when the user turns it down", async () => {
+        const user = turnsDownFirst("it deletes files");
+        const { ctx, dir, cleanup } = await context(user.approve);
+
+        await runAction("create_gadget", { reason: WHY, source: GADGET }, ctx);
+
         expect(await Bun.file(join(dir, "gadgets", "greet.ts")).exists()).toBe(false);
-        expect(ctx.homes[0].gadgets).toEqual([]);
         await cleanup();
     });
 
@@ -503,6 +651,19 @@ describe("actions", () => {
         );
 
         expect(result.content).toContain("that is wrong, we use make ship");
+        await cleanup();
+    });
+
+    test("leaves the home empty when the user rejects the protocol", async () => {
+        const user = turnsDownFirst("that is wrong, we use make ship");
+        const { ctx, cleanup } = await context(user.approve);
+
+        await runAction(
+            "create_protocol",
+            { name: "deploy", description: "how we ship", when: "deploying", content: "run make" },
+            ctx,
+        );
+
         expect(ctx.homes[0].protocols).toEqual([]);
         await cleanup();
     });
@@ -611,7 +772,7 @@ describe("actions", () => {
     });
 
     test("test_gadget runs a gadget and leaves nothing behind to run it again", async () => {
-        const { ctx, dir, cleanup } = await context();
+        const { ctx, cleanup } = await context();
         const source =
             '/**\n * name: greet\n * description: says hi\n */\n\nexport default async (input: { who: string }) => "hi " + input.who\n';
 
@@ -622,8 +783,42 @@ describe("actions", () => {
         );
 
         expect(result.ok).toBe(true);
+        await cleanup();
+    });
+
+    test("hands the tested gadget's output back to the model", async () => {
+        const { ctx, cleanup } = await context();
+        const source =
+            '/**\n * name: greet\n * description: says hi\n */\n\nexport default async (input: { who: string }) => "hi " + input.who\n';
+
+        const result = await runAction(
+            "test_gadget",
+            { reason: WHY, source, input: { who: "world" } },
+            ctx,
+        );
+
         expect(result.content).toContain("hi world");
+        await cleanup();
+    });
+
+    test("saves nothing when a gadget was only tested", async () => {
+        const { ctx, cleanup } = await context();
+        const source =
+            '/**\n * name: greet\n * description: says hi\n */\n\nexport default async (input: { who: string }) => "hi " + input.who\n';
+
+        await runAction("test_gadget", { reason: WHY, source, input: { who: "world" } }, ctx);
+
         expect(ctx.homes[0].gadgets).toEqual([]);
+        await cleanup();
+    });
+
+    test("leaves no gadget file behind after a test", async () => {
+        const { ctx, dir, cleanup } = await context();
+        const source =
+            '/**\n * name: greet\n * description: says hi\n */\n\nexport default async (input: { who: string }) => "hi " + input.who\n';
+
+        await runAction("test_gadget", { reason: WHY, source, input: { who: "world" } }, ctx);
+
         expect(await Bun.file(join(dir, "gadgets", "greet.ts")).exists()).toBe(false);
         await cleanup();
     });
@@ -697,9 +892,9 @@ describe("actions", () => {
     });
 
     test("delete_gadget takes the gadget out of the home", async () => {
-        const { ctx, dir, cleanup } = await context();
-        await Bun.write(join(dir, "gadgets", "greet.ts"), GADGET);
-        ctx.homes = [await loadHome(dir)];
+        const { ctx, cleanup } = await context();
+        await Bun.write(join(ctx.cwd, "gadgets", "greet.ts"), GADGET);
+        ctx.homes = [await loadHome(ctx.cwd)];
 
         const result = await runAction(
             "delete_gadget",
@@ -708,7 +903,27 @@ describe("actions", () => {
         );
 
         expect(result.ok).toBe(true);
-        expect(await Bun.file(join(dir, "gadgets", "greet.ts")).exists()).toBe(false);
+        await cleanup();
+    });
+
+    test("leaves no gadget file behind after a deletion", async () => {
+        const { ctx, cleanup } = await context();
+        await Bun.write(join(ctx.cwd, "gadgets", "greet.ts"), GADGET);
+        ctx.homes = [await loadHome(ctx.cwd)];
+
+        await runAction("delete_gadget", { name: "greet", reason: "it does nothing i want" }, ctx);
+
+        expect(await Bun.file(join(ctx.cwd, "gadgets", "greet.ts")).exists()).toBe(false);
+        await cleanup();
+    });
+
+    test("stops offering a gadget that was deleted", async () => {
+        const { ctx, cleanup } = await context();
+        await Bun.write(join(ctx.cwd, "gadgets", "greet.ts"), GADGET);
+        ctx.homes = [await loadHome(ctx.cwd)];
+
+        await runAction("delete_gadget", { name: "greet", reason: "it does nothing i want" }, ctx);
+
         expect(ctx.homes[0].gadgets).toEqual([]);
         await cleanup();
     });

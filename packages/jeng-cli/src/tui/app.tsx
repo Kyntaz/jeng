@@ -30,16 +30,13 @@ interface Ask {
     resolve: (answers: Answers) => void;
 }
 
-const decided = (decision: ApprovalDecision): string => {
-    if (decision.approved) return "approved";
-    return decision.reason ? `rejected: ${decision.reason}` : "rejected";
-};
+const decided = (decision: ApprovalDecision): string =>
+    decision.approved ? "approved" : decision.reason ? `rejected: ${decision.reason}` : "rejected";
 
 const END = Number.MAX_SAFE_INTEGER;
 
 // A scroll is a number of screens from wherever the transcript already is rather
-// than an absolute row, because the region clamps to its own extent and a row
-// number would have to come from a height that is still being measured.
+// than an absolute row, because the region clamps to its own extent.
 function scroll(region: ScrollBoxRenderable | null, screens: number): void {
     region?.scrollBy(screens, screens === END ? "content" : "viewport");
 }
@@ -73,8 +70,7 @@ export function App({ agent, onExit }: { agent: Agent; onExit: () => void }) {
 
     // The agent cannot have a UI approver until there is a UI, so it is handed one
     // here rather than at construction. The same goes for the interface a gadget
-    // draws on, which is why handing this over is what makes the run anything but
-    // headless.
+    // draws on.
     useEffect(() => {
         agent.setApprove(
             (request) =>
@@ -104,8 +100,7 @@ export function App({ agent, onExit }: { agent: Agent; onExit: () => void }) {
 
     const answer = useCallback((decision: ApprovalDecision) => {
         setAwaiting(false);
-        // An answer is the user talking, so it wears the user's green rather than
-        // sitting in the margin as chrome the model wrote.
+        // An answer is the user talking, so it wears the user's green.
         setEntries((current) => [...current, { kind: "user", text: decided(decision) }]);
         deciding.current?.(decision);
         deciding.current = undefined;
@@ -126,28 +121,19 @@ export function App({ agent, onExit }: { agent: Agent; onExit: () => void }) {
     }, []);
 
     useKeyboard((key) => {
-        // The transcript is read by scrolling it, and the prompt holds the focus, so
-        // the keys that scroll are taken here rather than left to the scroll region,
-        // which never sees one. `end` alone is the prompt's own, so the jump to the
-        // bottom is the modified one.
+        // The prompt holds the focus, so the keys that scroll the transcript are
+        // taken here rather than left to the scroll region, which never sees one.
         if (key.ctrl && key.name === "end") scroll(scroller.current, END);
         else if (key.name === "pageup") scroll(scroller.current, -1);
         else if (key.name === "pagedown") scroll(scroller.current, 1);
         if (key.ctrl && key.name === "escape") onExit();
-        // A pending ask is the one place escape cannot mean abort, because the
-        // turn is waiting on a human rather than on the model.
-        if (!key.ctrl && key.name === "escape" && asking.length) {
-            settle(asking[0], {});
-            return;
-        }
-        if (!key.ctrl && key.name === "escape" && awaiting) {
+        // An ask or an approval is the one place escape cannot mean abort, because
+        // the turn is waiting on a human rather than on the model.
+        else if (!key.ctrl && key.name === "escape" && asking.length) settle(asking[0], {});
+        else if (!key.ctrl && key.name === "escape" && awaiting)
             answer({ approved: false, reason: "the user interrupted" });
-            return;
-        }
-        // Focus is set declaratively from the `focused` prop, which the prompt box
-        // gives up while a gadget's interface is up. Escape means nothing when
-        // idle, which keeps it from eating a keystroke the user meant to type.
-        if (!key.ctrl && key.name === "escape" && busy) running.current?.abort();
+        // Escape means nothing when idle, which keeps it from eating a keystroke.
+        else if (!key.ctrl && key.name === "escape" && busy) running.current?.abort();
         if (key.ctrl && key.name === "l") {
             // Anything still waiting on an answer would wait forever once the
             // transcript it was drawn in is gone.
@@ -159,8 +145,7 @@ export function App({ agent, onExit }: { agent: Agent; onExit: () => void }) {
         }
         if (key.ctrl && key.name === "r") setShowThinking((value) => !value);
         // Tab walks the answers of an interface or an approval, so it only changes
-        // the mode when the prompt holds the keys. The switch takes hold at the
-        // next model call, which is what leaves a turn in one piece.
+        // the mode when the prompt holds the keys.
         if (!key.shift && !key.ctrl && key.name === "tab" && !asking.length && !awaiting)
             setMode((current) => {
                 const next = MODES[(MODES.indexOf(current) + 1) % MODES.length];
@@ -176,8 +161,6 @@ export function App({ agent, onExit }: { agent: Agent; onExit: () => void }) {
 
         setEntries((current) => [...current, { kind: "user", text: prompt }]);
 
-        // The prompt box stays focused while jeng works, so a message typed here
-        // reaches it between its calls rather than interrupting one.
         if (busy) {
             agent.inject(prompt);
             return;
@@ -185,8 +168,8 @@ export function App({ agent, onExit }: { agent: Agent; onExit: () => void }) {
 
         setBusy(true);
         running.current = new AbortController();
-        // Read once per turn rather than per event, so a mode switched while
-        // Jeng works stamps the whole turn rather than splitting it in two.
+        // Read once per turn rather than per event, so a mode switched mid-turn
+        // stamps the whole turn rather than splitting it in two.
         const speaking = mode;
         try {
             let streamed = "";
@@ -214,9 +197,7 @@ export function App({ agent, onExit }: { agent: Agent; onExit: () => void }) {
         }
     }, [agent, busy, fail, mode]);
 
-    // The transcript is the record, so an interface is only drawn here once it has
-    // been answered. While it is still waiting, the panel below is the one and only
-    // copy, and drawing a second one here is what made the form unscrollable.
+    // The transcript is the record, so an interface is only drawn here once answered.
     const visible = useMemo(
         () =>
             entries.filter(
@@ -229,7 +210,7 @@ export function App({ agent, onExit }: { agent: Agent; onExit: () => void }) {
     const groups = useMemo(() => blocks(visible), [visible]);
 
     // An approval and a gadget's interface are the same thing to the user: Jeng has
-    // stopped to be answered. One flag is what lets the footer say so once.
+    // stopped to be answered.
     const waiting = useMemo(
         () =>
             asking.length
@@ -241,8 +222,7 @@ export function App({ agent, onExit }: { agent: Agent; onExit: () => void }) {
     );
 
     // The bars only ever draw inside the viewport, so hiding them is what keeps
-    // messages from being written over. Pin them shut because a bar re-shows
-    // itself whenever the scroll range changes.
+    // messages from being written over.
     useEffect(() => {
         for (const bar of [
             scroller.current?.verticalScrollBar,
@@ -258,15 +238,14 @@ export function App({ agent, onExit }: { agent: Agent; onExit: () => void }) {
                 stickyScroll
                 stickyStart="bottom"
                 flexGrow={1}
-                // A zero basis keeps the scroll region from claiming rows the
-                // input and footer need, which is what squashed the line onto
-                // its own bottom border.
+                // A zero basis keeps the scroll region from claiming the rows the
+                // input and footer need.
                 flexBasis={0}
                 minHeight={0}
                 scrollX={false}
                 viewportCulling
                 // The header is laid over this region's first row, so the transcript
-                // keeps a row of its own clear of it rather than being sliced by it.
+                // keeps a row of its own clear of it.
                 paddingTop={1}
                 verticalScrollbarOptions={{ visible: false }}
                 horizontalScrollbarOptions={{ visible: false }}
@@ -283,8 +262,7 @@ export function App({ agent, onExit }: { agent: Agent; onExit: () => void }) {
                     </box>
                 )}
                 {/* The form is drawn here rather than below the transcript, so a tall
-                    interface scrolls with everything else instead of claiming rows the
-                    prompt needs and cannot be scrolled through. */}
+                 interface scrolls with everything else. */}
                 {asking.length > 0 && (
                     <Panel
                         widget={asking[0].widget}
@@ -304,10 +282,9 @@ export function App({ agent, onExit }: { agent: Agent; onExit: () => void }) {
             />
             <Footer busy={busy} showThinking={showThinking} spinner={spinner} waiting={waiting} />
 
-            {/* The header is laid over the transcript's first row rather than
-                pushing it down, because a scroll region that starts below another
-                row is clipped against the top of the screen instead of against
-                itself, and the transcript lands on the header. */}
+            {/* Laid over the transcript's first row rather than pushing it down, because a
+                 scroll region that starts below another row is clipped against the
+                 top of the screen. */}
             <box position="absolute" top={0} left={0} width="100%" zIndex={1}>
                 <Header
                     homes={agent.homes.map((home) => home.dir)}

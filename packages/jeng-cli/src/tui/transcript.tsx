@@ -1,7 +1,7 @@
 import type { Mode } from "@jeng/core";
 import { memo } from "react";
 import type { Entry } from "./entries";
-import { COLORS, color, type Owner, owner, SELECTION } from "./theme";
+import { COLORS, color, MODE_COLOR, type Owner, owner, SELECTION } from "./theme";
 import { GadgetView } from "./view";
 
 export interface Block {
@@ -14,12 +14,11 @@ export interface Block {
 const modeOf = (entry: Entry) => ("mode" in entry ? entry.mode : undefined);
 
 // A call opens a box of its own, and whatever it returned joins it. Everything else
-// carries on in the box it is already in, because one person's turn is one box even
-// when it is written in more than one piece.
+// carries on in the box it is already in.
 const calls = (entry: Entry) => entry.kind === "tool" || entry.kind === "approval";
 
 // Blocks are keyed by owner rather than by colour, because an action wears its
-// owner's colour. The mode is part of the key as well, because a box that changed
+// owner's colour. The mode is part of the key too, because a box that changed
 // colour halfway through would claim to be the same conversation.
 export function blocks(entries: Entry[]): Block[] {
     const result: Block[] = [];
@@ -34,9 +33,8 @@ export function blocks(entries: Entry[]): Block[] {
     return result;
 }
 
-// A box is named after the first entry in it rather than after where it sits, because
-// anything that opens or closes a box moves everything below it, and a box handed
-// another's place would keep the measurements of the box that used to be there.
+// Named by identity rather than by position, because anything that opens or closes
+// a box moves everything below it.
 const names = new WeakMap<Entry, number>();
 let named = 0;
 
@@ -48,25 +46,18 @@ export const nameOf = (block: Block): number => {
     return named;
 };
 
-function Row({ entry }: { entry: Entry }) {
+function Row({ entry, mode }: { entry: Entry; mode: Mode | undefined }) {
     if (entry.kind === "view") return <GadgetView widget={entry.widget} answers={entry.answers} />;
+    const tint = entry.kind === "tool" ? MODE_COLOR[mode ?? "learn"] : COLORS[entry.kind];
     if (!("icon" in entry))
-        return (
-            <text
-                fg={COLORS[entry.kind]}
-                selectionBg={SELECTION}
-                wrapMode="word"
-                content={entry.text}
-            />
-        );
+        return <text fg={tint} selectionBg={SELECTION} wrapMode="word" content={entry.text} />;
     // The icon is a column of its own, so a wrapped line hangs off what is being
-    // written about rather than off the marker in front of it. The gutter on the
-    // left of it belongs to the box, so an action lines up with the prose above it.
+    // written about rather than off the marker in front of it.
     return (
         <box flexDirection="row" gap={2}>
-            <text fg={COLORS[entry.kind]} content={entry.icon} />
+            <text fg={tint} content={entry.icon} />
             <text
-                fg={COLORS[entry.kind]}
+                fg={tint}
                 selectionBg={SELECTION}
                 wrapMode="word"
                 // A text beside another in a row measures against the row's height
@@ -95,7 +86,7 @@ export const BlockView = memo(function BlockView({ block }: { block: Block }) {
             width="100%"
         >
             {block.entries.map((entry, row) => (
-                <Row key={row} entry={entry} />
+                <Row key={row} entry={entry} mode={block.mode} />
             ))}
         </box>
     );

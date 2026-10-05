@@ -1,5 +1,6 @@
 import { relative } from "node:path";
 import type { Mode } from "@jeng/core";
+import type { ReactNode } from "react";
 import { BORDER, MODE_COLOR, MUTED } from "./theme";
 
 export const compact = (tokens: number) =>
@@ -14,7 +15,6 @@ function place(dir: string, cwd: string): string {
 }
 
 export function Instructions({ agents, cwd }: { agents: string[]; cwd: string }) {
-    // The model cannot see its own context, so this says what is in it.
     if (!agents.length) return null;
     return (
         <box flexDirection="column" paddingLeft={2} marginBottom={1}>
@@ -30,6 +30,22 @@ export function Instructions({ agents, cwd }: { agents: string[]; cwd: string })
     );
 }
 
+// The header and footer stay on one line however narrow the terminal gets, so
+// the scroll region is the only one that gives up rows.
+function Bar({ children, mode }: { children: ReactNode[]; mode?: Mode }) {
+    return (
+        <box
+            flexDirection="row"
+            flexWrap="no-wrap"
+            gap={2}
+            paddingLeft={1}
+            backgroundColor={mode ? MODE_COLOR[mode] : undefined}
+        >
+            {children}
+        </box>
+    );
+}
+
 export function Header({
     homes,
     model,
@@ -41,23 +57,15 @@ export function Header({
     tokens: number;
     mode: Mode;
 }) {
-    // The header and footer stay on one line however narrow the terminal gets,
-    // so the scroll region is the only one that gives up rows. The bar wears the
-    // mode rather than the word naming it, because the bar is also what has to
-    // cover the transcript row it is laid over.
+    // The header wears the mode rather than the word naming it, because it is
+    // also what has to cover the transcript row it is laid over.
     return (
-        <box
-            flexDirection="row"
-            flexWrap="no-wrap"
-            gap={2}
-            paddingLeft={1}
-            backgroundColor={MODE_COLOR[mode]}
-        >
+        <Bar mode={mode}>
             <text fg={MUTED} wrapMode="none" content={`jeng ${model}`} />
             <text fg={MUTED} wrapMode="none" content={mode} />
             <text fg={MUTED} wrapMode="none" content={homes.join(", ")} />
             <text fg={MUTED} wrapMode="none" content={`ctx ${compact(tokens)}`} />
-        </box>
+        </Bar>
     );
 }
 
@@ -77,20 +85,20 @@ export function Footer({
     // only thing the user can act on until they answer it.
     if (waiting)
         return (
-            <box flexDirection="row" flexWrap="no-wrap" gap={2} paddingLeft={1}>
+            <Bar>
                 <text fg={BORDER} wrapMode="none" content={waiting.enter} />
                 <text fg={MUTED} wrapMode="none" content={waiting.other} />
-            </box>
+            </Bar>
         );
 
     return (
-        <box flexDirection="row" flexWrap="no-wrap" gap={2} paddingLeft={1}>
+        <Bar>
             <text fg={MUTED} wrapMode="none" content="ctrl+esc quit" />
             <text fg={MUTED} wrapMode="none" content="ctrl+l clear" />
             <text fg={MUTED} wrapMode="none" content="esc interrupt" />
             <text fg={showThinking ? BORDER : MUTED} wrapMode="none" content="ctrl+r detail" />
             <text fg={MUTED} wrapMode="none" content="tab mode" />
             {busy && <text fg={BORDER} wrapMode="none" content={`${spinner} thinking`} />}
-        </box>
+        </Bar>
     );
 }

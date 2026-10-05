@@ -96,9 +96,7 @@ describe("context", () => {
         expect(context).not.toContain("How you grow:");
         expect(context).toContain("you cannot change it");
     });
-});
 
-describe("loaded agents files", () => {
     test("puts the home before the chain walked up from the cwd", () => {
         expect(
             loadedAgents(

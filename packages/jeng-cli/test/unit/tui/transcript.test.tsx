@@ -167,6 +167,27 @@ describe("transcript", () => {
         expect(border?.fg.equals(RGBA.fromHex("#5fb3d4"))).toBe(true);
     });
 
+    test("draws an action in the mode it was called in, not learn's", async () => {
+        const { renderer, captureSpans, flush } = await testRender(
+            <BlockView
+                block={{
+                    owner: "tool",
+                    mode: "work",
+                    entries: [{ kind: "tool", icon: "⚙", text: "read_file", mode: "work" }],
+                }}
+            />,
+            { width: 20, height: 5 },
+        );
+        await flush();
+
+        const call = captureSpans()
+            .lines.flatMap((line) => line.spans)
+            .find((span) => span.text.includes("read_file"));
+        act(() => renderer.destroy());
+
+        expect(call?.fg.equals(RGBA.fromHex("#5fb3d4"))).toBe(true);
+    });
+
     test("gives the user green, which is neither mode", async () => {
         const { renderer, captureSpans, flush } = await testRender(
             <BlockView block={{ owner: "user", entries: [{ kind: "user", text: "hi" }] }} />,

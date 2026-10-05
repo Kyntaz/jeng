@@ -20,11 +20,9 @@ export const PROMPT_KEYS: KeyBinding[] = [
 const SHARE = 2;
 
 // A box is as tall as what is in it, so what is being written is read while it is
-// being written rather than scrolled inside a row that cannot show it.
-// `virtualLineCount` only counts the rows that are currently laid out, so a box one
-// row tall would never learn how tall it wants to be. This is the whole of it,
-// wrapped the way the box is wrapping it. `share` is how much of the screen it may
-// take, so a long one scrolls inside itself instead of pushing the rest off screen.
+// being written. `virtualLineCount` only counts the rows currently laid out, so a box
+// one row tall would never learn how tall it wants to be; `share` is how much of the
+// screen it may take, so a long one scrolls inside itself.
 export function useGrowing(input: RefObject<TextareaRenderable | null>, share: number) {
     const [rows, setRows] = useState(1);
     const { height } = useTerminalDimensions();

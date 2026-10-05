@@ -24,8 +24,7 @@ export type AgentEvent =
 export interface Agent {
     homes: Home[];
     // Where an AGENTS.md sits, whether it came from a home or from the walk up
-    // from the working directory. The model cannot see its own context, so the
-    // interface says what is in it.
+    // from the working directory.
     agents: string[];
     cwd: string;
     model: string;
@@ -34,13 +33,9 @@ export interface Agent {
     mode: Mode;
     clear: () => void;
     inject: (text: string) => void;
-    // A UI has no approver until it has rendered, so this is how one takes over
-    // from the handler the agent was built with.
     setApprove: (approve: Approve) => void;
     // Handing over an interface is what makes a run anything but headless.
     setUi: (ui: Ui) => void;
-    // A mode changes the prompt and the tool rather than the conversation, so the
-    // next model call is the first thing that sees it.
     setMode: (mode: Mode) => void;
     send(
         text: string,
@@ -97,10 +92,8 @@ export async function createAgent(options: AgentOptions): Promise<Agent> {
                   return await owned(widget);
               }
             : undefined;
-        // Anything injected after the last turn ended never got read by the
-        // model, so it becomes part of the conversation before this prompt
-        // rather than an oddity trailing the next one.
         for (const injected of pending.splice(0)) history.push({ role: "user", content: injected });
+        // The system slot is refilled at the top of every turn, so it starts empty.
         const messages: Message[] = [
             { role: "system", content: "" },
             ...history,
@@ -112,9 +105,6 @@ export async function createAgent(options: AgentOptions): Promise<Agent> {
         let reported = false;
 
         for (let turn = 0; turn < maxTurns; turn++) {
-            // Read once per iteration rather than per call, so a mode the user
-            // switched mid-turn takes hold at the next boundary instead of
-            // leaving a half-learned turn behind.
             const speaking = mode;
             messages[0].content = buildContext(ctx.homes, agentsFiles, memory, {
                 tokens: promptTokens,
@@ -145,8 +135,6 @@ export async function createAgent(options: AgentOptions): Promise<Agent> {
                     promptTokens = tokens;
                     onEvent?.({ type: "usage", promptTokens: tokens });
                 },
-                // An outage that lasts an hour is one thing to read about, however
-                // many requests it takes, so the reason is given once per turn.
                 onRetry: (reason, delay) => {
                     if (reported) return;
                     reported = true;
@@ -204,10 +192,8 @@ export async function createAgent(options: AgentOptions): Promise<Agent> {
                     }
                     close("compacted");
 
-                    // The pending compact call goes with the rest of the
-                    // transcript, so nothing is left needing a result. history is
-                    // aliased onto the Agent, so it is emptied rather than
-                    // replaced; memory and homes are not the transcript.
+                    // history is the Agent's own array, so it is emptied rather
+                    // than replaced; memory and homes are not the transcript.
                     history.length = 0;
                     history.push({
                         role: "user",
@@ -219,10 +205,7 @@ export async function createAgent(options: AgentOptions): Promise<Agent> {
                 }
 
                 // A model that reissues the call it just made, having learned
-                // nothing in between, will never make progress; refuse it and say
-                // what to do instead, which is a nudge rather than a stop because
-                // only the user or an end interrupts. A retry after some other
-                // call is legitimate, because the context has changed.
+                // nothing in between, will never make progress.
                 const signature = `${name}:${JSON.stringify(args)}`;
                 if (signature === previous) {
                     const refusal = prompt("repeat-call", { name });
@@ -241,8 +224,8 @@ export async function createAgent(options: AgentOptions): Promise<Agent> {
                 continue;
             }
 
-            // Nothing you say ends a turn, so plain text is progress towards an
-            // answer you have not handed over yet. The next iteration nudges.
+            // Text on its own is progress towards an answer that has not been
+            // handed over yet, so the next iteration nudges.
             nudged = true;
         }
         return `stopped after ${maxTurns} turns without ending.`;
@@ -251,8 +234,8 @@ export async function createAgent(options: AgentOptions): Promise<Agent> {
     function clear(): void {
         history.length = 0;
         memory.length = 0;
-        // What one gadget left for the next is a scratch that only makes sense
-        // against what they talked about, so it goes with the conversation.
+        // What one gadget left for the next only means something against what
+        // they talked about, so the scratch goes with the conversation.
         ctx.session = sessionState();
     }
 

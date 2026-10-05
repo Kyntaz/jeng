@@ -12,8 +12,6 @@ function section(title: string, lines: string[]): string {
     return lines.length === 0 ? "" : `## ${title}\n\n${lines.join("\n")}`;
 }
 
-// The model cannot see its own context, so it is told. Past four fifths of the
-// window the line tells it to compact rather than leaving the choice to luck.
 function usageLine(usage?: { tokens: number; contextWindow: number }): string {
     if (!usage) return "";
     const urgent = usage.tokens >= usage.contextWindow * 0.8 ? " Compact now." : "";
@@ -24,8 +22,6 @@ function usageLine(usage?: { tokens: number; contextWindow: number }): string {
     });
 }
 
-// Everything the model is told on every turn, in the order it is told it, so what
-// the interface shows of it and what the model reads can never disagree.
 export function loadedAgents(homes: Home[], agentsFiles: AgentsFile[]): AgentsFile[] {
     return [
         ...homes.flatMap((home) => (home.agents ? [{ dir: home.dir, content: home.agents }] : [])),
@@ -49,8 +45,6 @@ export function buildContext(
     const gadgets = section(
         "Gadgets",
         homes.flatMap((home) =>
-            // A gadget that draws has nowhere to draw without a UI, so it is left
-            // out rather than offered and then refused.
             home.gadgets
                 .filter((gadget) => session?.ui || !gadget.ui)
                 .map((gadget) => `- \`${gadget.name}\`: ${gadget.description}`),

@@ -55,8 +55,6 @@ function retryAfter(response: Response): number | undefined {
     return Number.isNaN(at) ? undefined : Math.max(0, at - Date.now());
 }
 
-// A backoff the user has to sit through has to be interruptible, so a wait ends
-// the moment the turn does.
 function sleep(ms: number, signal: AbortSignal | undefined): Promise<void> {
     return new Promise((resolve, reject) => {
         if (signal?.aborted) return reject(signal.reason);
@@ -220,9 +218,6 @@ export async function chat(messages: Message[], options: ChatOptions): Promise<T
     };
 }
 
-// Nothing but the user interrupts a model, so a failed request is waited out
-// rather than given up on: a gateway that says how long to wait is believed, and
-// anything else backs off from a second up to half a minute and stays there.
 export async function chatWithRetry(
     messages: Message[],
     options: ChatOptions & { onRetry?: (reason: string, delay: number) => void },

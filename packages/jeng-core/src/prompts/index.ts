@@ -20,8 +20,6 @@ import TOOL_WORK from "./tool-work.txt" with { type: "text" };
 import UI_LANGUAGE from "./ui-language.txt" with { type: "text" };
 import UNTESTED_GADGET from "./untested-gadget.txt" with { type: "text" };
 
-// Bun reads a .txt into the module graph itself, so a prompt is part of the
-// program rather than a file it has to find at runtime.
 const ALL = {
     "compact-no-summary": COMPACT_NO_SUMMARY,
     "context-usage": CONTEXT_USAGE,
@@ -48,10 +46,6 @@ const ALL = {
 
 type Prompt = keyof typeof ALL;
 
-/**
- * A prompt is plain text with `${name}` slots filled in from `data`. An unfilled
- * slot is a mistake worth crashing on, because the prompt reads as written.
- */
 export function prompt(name: Prompt, data: Record<string, string> = {}): string {
     return ALL[name].trim().replace(/\$\{(\w+)\}/g, (_, slot: string) => {
         if (!(slot in data)) throw new Error(`${name} has no slot ${slot}`);

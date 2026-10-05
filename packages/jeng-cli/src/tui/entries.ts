@@ -17,8 +17,7 @@ export type Entry =
 export const QUIET: Entry["kind"][] = ["think", "output", "error"];
 
 // A box drawn around nothing is just a border, so a message that carries no words is
-// not one. Left in, it also breaks the turn in two, since a box of its own is what a
-// box of its own means.
+// not one.
 export const blank = (entry: Entry): boolean =>
     entry.kind === "view" ? blankWidget(entry.widget) : !entry.text.trim();
 
@@ -37,20 +36,18 @@ const blankWidget = (widget: Widget): boolean => {
     }
 };
 
+// A turn is written in more than one piece, so text and thinking both join the
+// entry they are already part of.
 export function append(entries: Entry[], event: AgentEvent, mode: Mode): Entry[] {
+    if (event.type === "text" || event.type === "reasoning") {
+        const kind = event.type === "text" ? "jeng" : "think";
+        const last = entries.at(-1);
+        if (last?.kind === kind)
+            return [...entries.slice(0, -1), { ...last, text: last.text + event.text }];
+        return [...entries, { kind, text: event.text, mode }];
+    }
+
     switch (event.type) {
-        case "text": {
-            const last = entries.at(-1);
-            if (last?.kind === "jeng")
-                return [...entries.slice(0, -1), { ...last, text: last.text + event.text }];
-            return [...entries, { kind: "jeng", text: event.text, mode }];
-        }
-        case "reasoning": {
-            const last = entries.at(-1);
-            if (last?.kind === "think")
-                return [...entries.slice(0, -1), { ...last, text: last.text + event.text }];
-            return [...entries, { kind: "think", text: event.text, mode }];
-        }
         case "tool": {
             // The answer an end carries is drawn in the box that follows it, so a
             // box of its own here would only say what that box already says.
@@ -85,9 +82,8 @@ export function append(entries: Entry[], event: AgentEvent, mode: Mode): Entry[]
     }
 }
 
-// The whole source goes in, because the point of the request is that the user
-// reads what they are being asked to allow rather than a summary of it. The
-// marker is the reader's to add, because each one lays its lines out differently.
+// The whole source goes in, because the point is that the user reads what they are
+// being asked to allow rather than a summary of it.
 export function approvalText(request: Approval): string {
     return [
         `${request.kind} \`${request.name}\``,

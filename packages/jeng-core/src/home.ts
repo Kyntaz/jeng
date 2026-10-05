@@ -65,7 +65,9 @@ async function collect(
 export async function loadHome(dir: string): Promise<Home> {
     const agents = join(dir, "AGENTS.md");
     const [agentsText, gadgets, protocols] = await Promise.all([
-        (await Bun.file(agents).exists()) ? Bun.file(agents).text() : Promise.resolve(undefined),
+        Bun.file(agents)
+            .exists()
+            .then((there) => (there ? Bun.file(agents).text() : undefined)),
         collect(dir, "gadgets", ".ts"),
         collect(dir, "protocols", ".md"),
     ]);
