@@ -1,8 +1,34 @@
+import { relative } from "node:path";
 import type { Mode } from "@jeng/core";
 import { BORDER, MODE_COLOR, MUTED } from "./theme";
 
 export const compact = (tokens: number) =>
     tokens >= 1000 ? `${(tokens / 1000).toFixed(1)}k` : String(tokens);
+
+// A file the cwd walk found is only ever the cwd itself or one of its parents, so
+// only the cwd is worth shortening; a home elsewhere has to say where it is.
+function place(dir: string, cwd: string): string {
+    const closer = relative(cwd, dir);
+    if (closer === "") return ".";
+    return closer.startsWith("..") ? dir : closer;
+}
+
+export function Instructions({ agents, cwd }: { agents: string[]; cwd: string }) {
+    // The model cannot see its own context, so this says what is in it.
+    if (!agents.length) return null;
+    return (
+        <box flexDirection="column" paddingLeft={2} marginBottom={1}>
+            {agents.map((dir) => (
+                <text
+                    key={dir}
+                    fg={MUTED}
+                    wrapMode="word"
+                    content={`▪ ${place(dir, cwd)}/AGENTS.md`}
+                />
+            ))}
+        </box>
+    );
+}
 
 export function Header({
     homes,

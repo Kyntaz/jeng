@@ -20,7 +20,7 @@ import { append, approvalText, blank, type Entry, QUIET } from "./entries";
 import { Panel } from "./panel";
 import { PromptInput } from "./prompt";
 import { useSpinner } from "./spinner";
-import { Footer, Header } from "./status";
+import { Footer, Header, Instructions } from "./status";
 import { MODE_COLOR, MUTED } from "./theme";
 import { BlockView, blocks, nameOf } from "./transcript";
 
@@ -272,6 +272,7 @@ export function App({ agent, onExit }: { agent: Agent; onExit: () => void }) {
                 horizontalScrollbarOptions={{ visible: false }}
                 style={{ width: "100%" }}
             >
+                <Instructions agents={agent.agents} cwd={agent.cwd} />
                 {groups.map((block) => (
                     <BlockView key={nameOf(block)} block={block} />
                 ))}

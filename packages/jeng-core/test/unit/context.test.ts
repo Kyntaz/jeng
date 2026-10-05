@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { buildContext } from "../../src/context";
+import { buildContext, loadedAgents } from "../../src/context";
 import type { Home } from "../../src/home";
 
 const HOME: Home = {
@@ -95,5 +95,25 @@ describe("context", () => {
 
         expect(context).not.toContain("How you grow:");
         expect(context).toContain("you cannot change it");
+    });
+});
+
+describe("loaded agents files", () => {
+    test("puts the home before the chain walked up from the cwd", () => {
+        expect(
+            loadedAgents(
+                [HOME],
+                [
+                    { dir: "/work", content: "root rules" },
+                    { dir: "/work/packages", content: "package rules" },
+                ],
+            ).map((file) => file.dir),
+        ).toEqual(["/home/jeng", "/work", "/work/packages"]);
+    });
+
+    test("leaves out a home that carries no instructions", () => {
+        expect(
+            loadedAgents([{ dir: "/empty", agents: undefined, gadgets: [], protocols: [] }], []),
+        ).toEqual([]);
     });
 });

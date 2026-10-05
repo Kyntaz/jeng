@@ -781,4 +781,24 @@ describe("a jeng session", () => {
         model.stop();
         await rm(home, { recursive: true, force: true });
     });
+
+    test("names every AGENTS.md the model is given, home first", async () => {
+        const home = await mkdtemp(join(tmpdir(), "jeng-e2e-"));
+        const cwd = await mkdtemp(join(tmpdir(), "jeng-cwd-"));
+        await Bun.write(join(home, "AGENTS.md"), "be brief\n");
+        await Bun.write(join(cwd, "AGENTS.md"), "answer in one line\n");
+
+        const agent = await createAgent({
+            cwd,
+            homes: [home],
+            config: CONFIG("http://localhost:1/v1"),
+            approve: allow,
+        });
+
+        // The walk goes above the cwd, so whatever a parent folder happens to carry
+        // is left out of what is being claimed here.
+        expect(agent.agents.filter((dir) => dir === home || dir === cwd)).toEqual([home, cwd]);
+        await rm(home, { recursive: true, force: true });
+        await rm(cwd, { recursive: true, force: true });
+    });
 });

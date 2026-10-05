@@ -23,6 +23,7 @@ function stubAgent(decided: ApprovalDecision[]): Agent {
     let approve: Approve = async () => ({ approved: false, reason: "nobody was asked" });
     return {
         homes: [],
+        agents: [],
         cwd: process.cwd(),
         model: "test-model",
         history: [],
@@ -291,6 +292,7 @@ describe("approving a gadget", () => {
         let approve: Approve = async () => ({ approved: false, reason: "nobody was asked" });
         const agent: Agent = {
             homes: [],
+            agents: [],
             cwd: process.cwd(),
             model: "test-model",
             history: [],

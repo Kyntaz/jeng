@@ -7,6 +7,7 @@ import { App } from "../../../src/tui/app";
 function stubAgent(answer: string): Agent {
     return {
         homes: [],
+        agents: [],
         cwd: process.cwd(),
         model: "test-model",
         history: [],

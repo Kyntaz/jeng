@@ -11,6 +11,7 @@ function stubAgent(widgets: Widget[]): { agent: Agent; answered: Answers[] } {
     let ui: Ui = async () => ({});
     const agent: Agent = {
         homes: [],
+        agents: [],
         cwd: process.cwd(),
         model: "test-model",
         history: [],

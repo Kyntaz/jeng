@@ -24,6 +24,15 @@ function usageLine(usage?: { tokens: number; contextWindow: number }): string {
     });
 }
 
+// Everything the model is told on every turn, in the order it is told it, so what
+// the interface shows of it and what the model reads can never disagree.
+export function loadedAgents(homes: Home[], agentsFiles: AgentsFile[]): AgentsFile[] {
+    return [
+        ...homes.flatMap((home) => (home.agents ? [{ dir: home.dir, content: home.agents }] : [])),
+        ...agentsFiles,
+    ];
+}
+
 export function buildContext(
     homes: Home[],
     agentsFiles: AgentsFile[],
@@ -32,11 +41,9 @@ export function buildContext(
 ): string {
     const agents = section(
         "Always loaded instructions",
-        homes
-            .flatMap((home) =>
-                home.agents ? [`### ${home.dir}/AGENTS.md\n${home.agents.trim()}`] : [],
-            )
-            .concat(agentsFiles.map((file) => `### ${file.dir}/AGENTS.md\n${file.content.trim()}`)),
+        loadedAgents(homes, agentsFiles).map(
+            (file) => `### ${file.dir}/AGENTS.md\n${file.content.trim()}`,
+        ),
     );
 
     const gadgets = section(

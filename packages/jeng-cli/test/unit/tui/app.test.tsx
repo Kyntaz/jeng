@@ -9,10 +9,12 @@ function stubAgent(
     switched: Mode[],
     answer = "done",
     events: AgentEvent[] = [],
+    agents: string[] = [],
 ): Agent {
     let mode: Mode = "learn";
     return {
         homes: [],
+        agents,
         cwd: process.cwd(),
         model: "test-model",
         history: [],
@@ -41,14 +43,18 @@ async function render(
     switched: Mode[] = [],
     answer = "done",
     events: AgentEvent[] = [],
+    agents: string[] = [],
 ) {
     // Shift+Enter only arrives as its own key when the terminal reports
     // modifiers, which is what the kitty keyboard protocol buys.
-    return testRender(<App agent={stubAgent(sent, switched, answer, events)} onExit={() => {}} />, {
-        width: 80,
-        height: 24,
-        kittyKeyboard: true,
-    });
+    return testRender(
+        <App agent={stubAgent(sent, switched, answer, events, agents)} onExit={() => {}} />,
+        {
+            width: 80,
+            height: 24,
+            kittyKeyboard: true,
+        },
+    );
 }
 
 describe("transcript", () => {
@@ -359,6 +365,48 @@ describe("prompt box", () => {
         act(() => renderer.destroy());
 
         expect(frame).not.toContain("done");
+    });
+
+    test("names the loaded AGENTS.md files above the first message", async () => {
+        const sent: string[] = [];
+        const { renderer, mockInput, flush, captureCharFrame, waitFor } = await render(
+            sent,
+            [],
+            "done",
+            [],
+            [process.cwd()],
+        );
+
+        await mockInput.typeText("hello");
+        act(() => mockInput.pressEnter());
+        await act(async () => await flush());
+        await waitFor(() => captureCharFrame().includes("done"));
+        // The list starts at the file, so whatever is drawn after this is a message.
+        const first = captureCharFrame().split("\n")[1].trim();
+        act(() => renderer.destroy());
+
+        expect(first).toBe("▪ ./AGENTS.md");
+    });
+
+    test("names the loaded AGENTS.md files again once the session is cleared", async () => {
+        const sent: string[] = [];
+        const { renderer, mockInput, flush, captureCharFrame } = await render(
+            sent,
+            [],
+            "done",
+            [],
+            [process.cwd()],
+        );
+
+        await mockInput.typeText("hello");
+        act(() => mockInput.pressEnter());
+        await act(async () => await flush());
+        act(() => mockInput.pressKey("l", { ctrl: true }));
+        await act(async () => await flush());
+        const frame = captureCharFrame();
+        act(() => renderer.destroy());
+
+        expect(frame).toContain("▪ ./AGENTS.md");
     });
 });
 

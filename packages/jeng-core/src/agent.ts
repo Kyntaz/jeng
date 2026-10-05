@@ -2,7 +2,7 @@ import { type ActionContext, runAction } from "./actions";
 import { loadAgentsFiles } from "./agents";
 import type { Approve } from "./approve";
 import { defaultHome, defaultModel } from "./config";
-import { buildContext, type Memory } from "./context";
+import { buildContext, loadedAgents, type Memory } from "./context";
 import { type Home, loadHomes } from "./home";
 import { DEFAULT_MODE, type Mode } from "./mode";
 import { chatWithRetry, type Message, type ModelConfig } from "./model";
@@ -23,6 +23,10 @@ export type AgentEvent =
 
 export interface Agent {
     homes: Home[];
+    // Where an AGENTS.md sits, whether it came from a home or from the walk up
+    // from the working directory. The model cannot see its own context, so the
+    // interface says what is in it.
+    agents: string[];
     cwd: string;
     model: string;
     history: Message[];
@@ -59,6 +63,7 @@ export async function createAgent(options: AgentOptions): Promise<Agent> {
     const config = options.config ?? defaultModel();
     const homes = await loadHomes(options.homes ?? [defaultHome()]);
     const agentsFiles = await loadAgentsFiles(cwd);
+    const agents = loadedAgents(homes, agentsFiles).map((file) => file.dir);
     let approve = options.approve;
     let hostUi: Ui | undefined;
     let mode = options.mode ?? DEFAULT_MODE;
@@ -253,6 +258,7 @@ export async function createAgent(options: AgentOptions): Promise<Agent> {
 
     return {
         homes: ctx.homes,
+        agents,
         cwd,
         model: config.model,
         history,
