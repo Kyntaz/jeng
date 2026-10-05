@@ -49,8 +49,11 @@ is dropped from the window bundle, so keep it out of the component.
 Import nothing to style with. The window already defines these, and a component that uses only them
 and plain elements looks like part of the app:
 
-  var(--jeng-accent)   var(--jeng-user)    var(--jeng-muted)   var(--jeng-border)
-  var(--jeng-danger)   var(--jeng-surface) var(--jeng-radius)  var(--jeng-mono)
+  var(--jeng-paper)    var(--jeng-surface)  var(--jeng-text)    var(--jeng-muted)
+  var(--jeng-border)   var(--jeng-shadow)  var(--jeng-radius)  var(--jeng-serif)
+  var(--jeng-mono)     var(--jeng-accent)  var(--jeng-accent-tint)
+  var(--jeng-user)     var(--jeng-user-tint)
+  var(--jeng-jeng)     var(--jeng-jeng-tint) var(--jeng-danger) var(--jeng-danger-tint)
 
 A gadget that draws needs `* gui: true` in its header and is written to a `.tsx` file, because it is
 jsx. One without a window cannot run it at all, so it is not listed there either.

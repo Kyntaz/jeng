@@ -71,7 +71,7 @@ export function Gadget({
             <div ref={host} />
             {failure && <div className="note failed">{failure}</div>}
             {answers === undefined && onAbandon && (
-                <div className="actions" style={{ marginTop: 10 }}>
+                <div className="actions abandon">
                     <button type="button" className="no" onClick={onAbandon}>
                         skip
                     </button>

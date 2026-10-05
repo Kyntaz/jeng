@@ -1,5 +1,6 @@
 import { type Approve, createAgent, loadConfig } from "@jeng/core";
 import { createConversation } from "@jeng/view";
+import { app } from "electrobun/main";
 import { serve } from "./server";
 import { openWindow } from "./window";
 
@@ -30,7 +31,8 @@ agent.setGui((file, props) => talk.ask({ surface: "gui", file, props }));
 // The window asks for the state once it is listening, because nothing before that would
 // have anywhere to go, and is handed every change after it.
 let listening = false;
-const window = openWindow(serve().url, {
+const site = serve();
+const window = openWindow(site.url, {
     ready: () => {
         listening = true;
         return talk.get();
@@ -53,3 +55,12 @@ const window = openWindow(serve().url, {
 talk.subscribe(() => {
     if (listening) window.state(talk.get());
 });
+
+// The server is the only thing in this process holding an event loop open, and
+// Electrobun waits for that loop to drain before letting the process exit, so a window
+// closed with the server still listening hangs on the way out rather than quitting.
+// Both the window closing and a quit from anywhere else go through here, and stopping a
+// server that has already stopped is a no-op, so the two overlap harmlessly.
+const stop = () => site.stop();
+window.onClose(stop);
+app.on("before-quit", stop);

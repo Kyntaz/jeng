@@ -52,7 +52,7 @@ export function Composer({
                     stop
                 </button>
             ) : (
-                <button type="button" className="yes" onClick={submit}>
+                <button type="button" className="send" onClick={submit}>
                     send
                 </button>
             )}

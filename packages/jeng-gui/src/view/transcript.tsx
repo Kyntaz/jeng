@@ -1,7 +1,7 @@
 import type { Ask } from "@jeng/view";
 // Reached past the barrel, because the window has no business loading the agent that
 // the conversation is a view of: `@jeng/view` is where the node half of jeng starts.
-import { blank, isAsk, QUIET, type Entry } from "@jeng/view/transcript";
+import { blank, type Entry, isAsk, QUIET } from "@jeng/view/transcript";
 import { Fragment } from "react";
 import { Gadget } from "./gadget";
 
@@ -50,7 +50,7 @@ function Turn({ entry, asks, onAnswer, onAbandon }: TurnProps) {
     switch (entry.kind) {
         case "user":
             return (
-                <div className="turn right">
+                <div className="turn">
                     <div className="speech user">{entry.text}</div>
                 </div>
             );

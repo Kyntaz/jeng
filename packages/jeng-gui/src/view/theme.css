@@ -3,18 +3,36 @@
  * file is served to gadgets as `/gadget.css`, so anything written here is in scope
  * inside a component too. A gadget that uses only these variables and plain elements
  * already looks like part of the app.
+ *
+ * The window is a desk of cream paper: the page is the desk, a turn is a slip of paper
+ * lying on it, and a speaker is told apart by the pastel its slip is printed in.
  */
 
 :root {
-    --jeng-accent: #d9a441;
-    --jeng-user: #98c379;
-    --jeng-muted: #606070;
-    --jeng-danger: #e06c75;
-    --jeng-border: #2a2a35;
-    --jeng-surface: #16161d;
-    --jeng-radius: 6px;
+    --jeng-paper: #f5efe3;
+    --jeng-surface: #fdfaf3;
+    --jeng-text: #3b342b;
+    --jeng-muted: #8b7f70;
+    --jeng-border: #e2d8c6;
+    --jeng-radius: 8px;
+    --jeng-shadow: 0 1px 2px rgb(90 72 48 / 6%), 0 4px 12px rgb(90 72 48 / 7%);
+    --jeng-serif:
+        "Times New Roman", Times, "Liberation Serif", "Nimbus Roman No9 L", Georgia, serif;
     --jeng-mono: ui-monospace, "Cascadia Code", "JetBrains Mono", Menlo, Consolas, monospace;
-    --jeng-text: #d6d6de;
+
+    --jeng-accent: #b5822f;
+    --jeng-accent-tint: #f8efdb;
+    --jeng-user: #6f8a5f;
+    --jeng-user-tint: #e9f0e2;
+    --jeng-jeng: #b0716a;
+    --jeng-jeng-tint: #f9ece7;
+    --jeng-think-tint: #efebdf;
+    --jeng-danger: #c4736b;
+    --jeng-danger-tint: #f9e6e1;
+
+    /* What a slip is printed in, and the colour of its edge. Set per speaker below. */
+    --jeng-tint: var(--jeng-surface);
+    --jeng-edge: var(--jeng-border);
 }
 
 * {
@@ -29,13 +47,11 @@ body,
 }
 
 body {
-    background: #0d0d12;
+    background:
+        repeating-linear-gradient(90deg, rgb(120 96 60 / 2%) 0 1px, transparent 1px 3px),
+        var(--jeng-paper);
     color: var(--jeng-text);
-    font:
-        14px / 1.55 system-ui,
-        -apple-system,
-        "Segoe UI",
-        sans-serif;
+    font: 16px / 1.6 var(--jeng-serif);
 }
 
 .app {
@@ -49,9 +65,10 @@ body {
     display: flex;
     gap: 16px;
     align-items: center;
-    padding: 10px 18px;
+    padding: 12px 20px;
     border-bottom: 1px solid var(--jeng-border);
-    font-size: 12px;
+    background: var(--jeng-surface);
+    font-size: 13px;
     color: var(--jeng-muted);
 }
 
@@ -65,23 +82,30 @@ body {
     flex: 1;
 }
 
-.chip {
-    border: 1px solid var(--jeng-border);
-    border-radius: 999px;
-    padding: 2px 10px;
-    background: none;
-    color: var(--jeng-accent);
+button {
     font: inherit;
     cursor: pointer;
+    padding: 7px 16px;
+    border: 1px solid var(--jeng-border);
+    border-radius: var(--jeng-radius);
+    background: var(--jeng-surface);
+    color: var(--jeng-text);
 }
 
-.chip:hover {
+button:hover {
     border-color: var(--jeng-accent);
+}
+
+.chip {
+    padding: 3px 12px;
+    border-radius: 999px;
+    background: var(--jeng-accent-tint);
+    color: var(--jeng-accent);
 }
 
 .scroll {
     overflow-y: auto;
-    padding: 18px;
+    padding: 20px;
     display: flex;
     flex-direction: column;
     gap: 14px;
@@ -90,36 +114,63 @@ body {
 .turn {
     display: flex;
     flex-direction: column;
-    gap: 6px;
-    max-width: 78ch;
+    gap: 8px;
+    /* Hugged to what is written, so a short question is a short slip, but no wider than
+     * a comfortable line's worth of reading. */
+    width: fit-content;
+    max-width: 70ch;
 }
 
-.turn.right {
-    align-self: flex-end;
-    align-items: flex-end;
+/*
+ * A turn is a slip of paper. Each kind picks its own print and edge, so a turn is read
+ * by its colour rather than by which side of the page it was pushed to.
+ */
+.speech,
+.call,
+.what,
+.note.failed,
+pre.card {
+    padding: 10px 14px;
+    border: 1px solid var(--jeng-border);
+    border-left: 3px solid var(--jeng-edge);
+    border-radius: var(--jeng-radius);
+    background: var(--jeng-tint);
+    box-shadow: var(--jeng-shadow);
 }
 
 .speech {
+    --jeng-tint: var(--jeng-jeng-tint);
+    --jeng-edge: var(--jeng-jeng);
     white-space: pre-wrap;
     overflow-wrap: anywhere;
 }
 
 .speech.user {
-    color: var(--jeng-user);
+    --jeng-tint: var(--jeng-user-tint);
+    --jeng-edge: var(--jeng-user);
+    color: var(--jeng-text);
 }
 
 .speech.think {
+    --jeng-tint: var(--jeng-think-tint);
     color: var(--jeng-muted);
     font-style: italic;
 }
 
 .call {
+    --jeng-tint: var(--jeng-accent-tint);
+    --jeng-edge: var(--jeng-accent);
     display: flex;
     gap: 10px;
     align-items: baseline;
     font-family: var(--jeng-mono);
-    font-size: 12px;
-    color: var(--jeng-accent);
+    font-size: 13px;
+}
+
+.call.failed,
+.note.failed {
+    --jeng-tint: var(--jeng-danger-tint);
+    --jeng-edge: var(--jeng-danger);
 }
 
 .call .note {
@@ -127,16 +178,20 @@ body {
     overflow-wrap: anywhere;
 }
 
-.call.failed .note,
-.note.failed {
-    color: var(--jeng-danger);
+.what {
+    display: flex;
+    gap: 10px;
+    align-items: baseline;
+    font-family: var(--jeng-mono);
+    font-size: 13px;
 }
 
 .card {
+    padding: 14px 16px;
     border: 1px solid var(--jeng-border);
     border-radius: var(--jeng-radius);
-    padding: 14px;
     background: var(--jeng-surface);
+    box-shadow: var(--jeng-shadow);
 }
 
 .card.pending {
@@ -145,7 +200,7 @@ body {
 
 .card .ask {
     color: var(--jeng-muted);
-    font-size: 12px;
+    font-size: 13px;
     margin-bottom: 10px;
 }
 
@@ -154,62 +209,86 @@ body {
     max-height: 320px;
     overflow: auto;
     font-family: var(--jeng-mono);
-    font-size: 12px;
+    font-size: 13px;
     white-space: pre;
 }
 
 .approval {
     border: 1px solid var(--jeng-accent);
     border-radius: var(--jeng-radius);
-    padding: 14px;
-    background: var(--jeng-surface);
+    padding: 16px;
+    background: var(--jeng-accent-tint);
+    box-shadow: var(--jeng-shadow);
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: 12px;
 }
 
-.approval .what {
-    display: flex;
-    gap: 10px;
-    align-items: baseline;
+.approval pre {
+    margin: 0;
+    padding: 10px 12px;
+    border: 1px solid var(--jeng-border);
+    border-radius: var(--jeng-radius);
+    background: var(--jeng-surface);
     font-family: var(--jeng-mono);
-    font-size: 12px;
+    font-size: 13px;
+    overflow: auto;
+}
+
+.approval textarea {
+    min-height: 60px;
+    padding: 8px 10px;
+    border: 1px solid var(--jeng-border);
+    border-radius: var(--jeng-radius);
+    background: var(--jeng-surface);
+    color: inherit;
+    font: inherit;
+    resize: vertical;
+    outline: none;
+}
+
+.approval textarea:focus {
+    border-color: var(--jeng-accent);
 }
 
 .approval .why {
     color: var(--jeng-muted);
 }
 
+/* The button is as tall as the box beside it, so the two read as one control. */
 .composer {
     display: flex;
     gap: 10px;
-    align-items: flex-end;
-    padding: 12px 18px;
+    align-items: stretch;
+    padding: 14px 20px;
     border-top: 1px solid var(--jeng-border);
     background: var(--jeng-surface);
+    box-shadow: 0 -4px 12px rgb(90 72 48 / 5%);
 }
 
 .composer textarea {
     flex: 1;
     resize: none;
-    min-height: 44px;
+    min-height: 48px;
     max-height: 30vh;
-    padding: 10px 12px;
+    padding: 12px 14px;
     border: 1px solid var(--jeng-border);
     border-radius: var(--jeng-radius);
-    background: #0d0d12;
+    background: var(--jeng-paper);
     color: var(--jeng-text);
     font: inherit;
     outline: none;
+    box-shadow: inset 0 1px 2px rgb(90 72 48 / 5%);
 }
 
 .composer textarea:focus {
     border-color: var(--jeng-accent);
+    background: var(--jeng-surface);
 }
 
-button {
-    font: inherit;
-    cursor: pointer;
+.composer textarea::placeholder {
+    color: var(--jeng-muted);
+    font-style: italic;
 }
 
 .actions {
@@ -217,24 +296,28 @@ button {
     gap: 8px;
 }
 
-.actions button {
-    border: 1px solid var(--jeng-border);
-    border-radius: var(--jeng-radius);
-    padding: 7px 14px;
-    background: none;
-    color: var(--jeng-text);
+.actions.abandon {
+    margin-top: 10px;
 }
 
-.actions button:hover {
-    border-color: var(--jeng-accent);
+/* Send is the one button that says the turn is about to start, so it wears the mode's
+ * own colour, deepened just enough to keep its label readable. */
+.send {
+    background: color-mix(in oklab, var(--jeng-accent), var(--jeng-text) 25%);
+    border-color: transparent;
+    color: var(--jeng-surface);
 }
 
-.actions .yes {
+.send:hover {
+    background: color-mix(in oklab, var(--jeng-accent), var(--jeng-text) 40%);
+}
+
+.yes {
     color: var(--jeng-user);
     border-color: var(--jeng-user);
 }
 
-.actions .no {
+.no {
     color: var(--jeng-danger);
     border-color: var(--jeng-danger);
 }
@@ -243,17 +326,22 @@ button {
     display: flex;
     gap: 10px;
     align-items: center;
-    padding: 0 18px 10px;
-    font-size: 12px;
+    padding: 8px 20px;
+    background: var(--jeng-surface);
+    font-size: 13px;
     color: var(--jeng-muted);
 }
 
 .status button {
+    padding: 0;
     border: none;
     background: none;
     color: var(--jeng-muted);
-    padding: 0;
     text-decoration: underline;
+}
+
+.status button:hover {
+    color: var(--jeng-accent);
 }
 
 .dot {

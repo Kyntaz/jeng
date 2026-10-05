@@ -5,9 +5,9 @@ import { Composer } from "./composer";
 import type { Bridge } from "./rpc";
 import { Transcript } from "./transcript";
 
-// A mode is told apart by its colour, and the window wears the same two the terminal
-// does, so the same sentence reads the same way in both.
-const MODE_COLOR = { learn: "#d9a441", work: "#5fb3d4" };
+// A mode is told apart by its colour. The window is cream paper rather than a terminal,
+// so it picks its own two: warm ochre and dusty blue, both light enough to read on paper.
+const MODE_COLOR = { learn: "#b5822f", work: "#6f93b8" };
 
 export function App({ bridge }: { bridge: Bridge }) {
     // The third argument is what a server renderer would ask for; the window is the only

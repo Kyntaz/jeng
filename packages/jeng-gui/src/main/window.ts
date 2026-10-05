@@ -48,6 +48,6 @@ export function openWindow(url: string, handle: Handle) {
 
     return {
         state: (next: State) => rpc.send.state(next),
-        stop: () => window.close(),
+        onClose: (handler: () => void) => window.on("close", handler),
     };
 }

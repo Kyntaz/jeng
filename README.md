@@ -307,8 +307,9 @@ Three things are worth knowing before writing one:
 - **It is drawn twice.** Live while the user is answering it, and again carrying `props.answers` once
   they have, which is how what was asked and what was decided stays on screen. Draw yourself read-only
   when `answers` is set, the way the example above does.
-- **It needs no stylesheet of its own.** The window already defines `--jeng-accent`, `--jeng-user`,
-  `--jeng-muted`, `--jeng-border`, `--jeng-danger`, `--jeng-surface`, `--jeng-radius` and `--jeng-mono`,
+- **It needs no stylesheet of its own.** The window already defines `--jeng-paper`, `--jeng-surface`,
+  `--jeng-text`, `--jeng-muted`, `--jeng-border`, `--jeng-shadow`, `--jeng-radius`, `--jeng-serif`,
+  `--jeng-mono`, and an accent, user, jeng and danger colour with a pastel tint to pair with each,
   and a component mounted into the window inherits them.
 
 A gadget that draws a component needs `* gui: true` in its header and is written to a `.tsx` file,

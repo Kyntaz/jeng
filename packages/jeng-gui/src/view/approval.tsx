@@ -27,16 +27,6 @@ export function ApprovalCard({
                 value={reason}
                 placeholder="why not, if you are turning it down"
                 onChange={(event) => setReason(event.target.value)}
-                style={{
-                    minHeight: 60,
-                    background: "#0d0d12",
-                    color: "inherit",
-                    border: "1px solid var(--jeng-border)",
-                    borderRadius: "var(--jeng-radius)",
-                    padding: "8px 10px",
-                    font: "inherit",
-                    resize: "vertical",
-                }}
             />
             <div className="actions">
                 <button type="button" className="yes" onClick={() => onDecide({ approved: true })}>
