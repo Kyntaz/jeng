@@ -4,35 +4,54 @@
  * inside a component too. A gadget that uses only these variables and plain elements
  * already looks like part of the app.
  *
- * The window is a desk of cream paper: the page is the desk, a turn is a slip of paper
- * lying on it, and a speaker is told apart by the pastel its slip is printed in.
+ * The window is a desk of dark taupe: the page is the desk, a turn is a slip of paper
+ * lying on it, and a speaker is told apart by the colour its slip is printed in.
+ *
+ * The colours are the terminal's, so the same sentence reads the same way in both: gold to
+ * learn in, blue to work in, and a coral that is the user's because they are neither mode.
+ * The desk and the paper are the window's own — Wada Sanzo's taupe brown, its cream, and one
+ * crimson borrowed from the same atlas for a failure, since a failure has to shout — and
+ * everything printed on the desk is lighter than the desk. Gold and blue are light enough
+ * to take dark type directly, so a mode is a solid block of its own colour, and the only
+ * thing invented for a mode is that colour a long way down again: a bright gold fills a
+ * block, but drawn as a line on the cream paper it is not there at all.
  */
 
 :root {
-    --jeng-paper: #f5efe3;
-    --jeng-surface: #fdfaf3;
-    --jeng-text: #3b342b;
-    --jeng-muted: #8b7f70;
-    --jeng-border: #e2d8c6;
-    --jeng-radius: 8px;
-    --jeng-shadow: 0 1px 2px rgb(90 72 48 / 6%), 0 4px 12px rgb(90 72 48 / 7%);
+    --jeng-paper: #45232f;
+    --jeng-surface: #fdf7ee;
+    --jeng-text: #3a1f28;
+    --jeng-muted: #7a5765;
+    /* The muted colour again, for the only two lines the window draws straight onto the desk
+     * rather than onto a slip. A colour can only be dimmed against one ground. */
+    --jeng-dim: #c9a8b4;
+    --jeng-border: #7a4456;
+    --jeng-radius: 0px;
+    --jeng-shadow: 6px 6px 0 rgb(217 164 65 / 60%);
     --jeng-serif:
         "Times New Roman", Times, "Liberation Serif", "Nimbus Roman No9 L", Georgia, serif;
     --jeng-mono: ui-monospace, "Cascadia Code", "JetBrains Mono", Menlo, Consolas, monospace;
 
-    --jeng-accent: #b5822f;
-    --jeng-accent-tint: #f8efdb;
-    --jeng-user: #6f8a5f;
-    --jeng-user-tint: #e9f0e2;
-    --jeng-jeng: #b0716a;
-    --jeng-jeng-tint: #f9ece7;
-    --jeng-think-tint: #efebdf;
-    --jeng-danger: #c4736b;
-    --jeng-danger-tint: #f9e6e1;
+    /* Gold learns and blue works, the same two the terminal wears. The window sets both per
+     * mode, so a gadget's component is told the mode too. */
+    --jeng-accent: #d9a441;
+    --jeng-accent-tint: #f8ebd4;
+    /* The accent again, at ink strength rather than fill strength: a rule, a border, a dot or
+     * a hover that has to read as a line on the cream paper. A colour can only be dimmed
+     * against another ground, so the fill keeps its brightness and the line takes the same
+     * hue a long way down. */
+    --jeng-accent-ink: #8a6410;
 
-    /* What a slip is printed in, and the colour of its edge. Set per speaker below. */
+    --jeng-user: #b23a4a;
+    --jeng-user-tint: #f8cdc4;
+    --jeng-jeng: #7a4456;
+    --jeng-jeng-tint: #f8ebd4;
+    --jeng-think-tint: #e7dbd8;
+    --jeng-danger: #7a1230;
+    --jeng-danger-tint: #c02748;
+
+    /* What a slip is printed in. Set per speaker below. */
     --jeng-tint: var(--jeng-surface);
-    --jeng-edge: var(--jeng-border);
 }
 
 * {
@@ -48,7 +67,7 @@ body,
 
 body {
     background:
-        repeating-linear-gradient(90deg, rgb(120 96 60 / 2%) 0 1px, transparent 1px 3px),
+        repeating-linear-gradient(90deg, rgb(217 164 65 / 4%) 0 1px, transparent 1px 4px),
         var(--jeng-paper);
     color: var(--jeng-text);
     font: 16px / 1.6 var(--jeng-serif);
@@ -94,7 +113,7 @@ body {
 }
 
 .header button.where:hover {
-    color: var(--jeng-accent);
+    color: var(--jeng-accent-ink);
     text-decoration: underline;
 }
 
@@ -110,7 +129,7 @@ body {
     justify-content: center;
     align-items: flex-start;
     padding: 7vh 20px 20px;
-    background: rgb(59 52 43 / 28%);
+    background: rgb(20 6 12 / 45%);
 }
 
 .header .grow {
@@ -128,14 +147,22 @@ button {
 }
 
 button:hover {
-    border-color: var(--jeng-accent);
+    border-color: var(--jeng-accent-ink);
 }
 
+/* The mode is a solid block of its own colour rather than a wash of it: it is the one
+ * thing always on screen, and a wash at this size reads as nothing at all. Both of the
+ * palette's brights are light enough to take dark type, so the block carries its label. */
 .chip {
     padding: 3px 12px;
-    border-radius: 999px;
-    background: var(--jeng-accent-tint);
-    color: var(--jeng-accent);
+    border-color: transparent;
+    background: var(--jeng-accent);
+    color: var(--jeng-text);
+}
+
+.chip:hover {
+    background: var(--jeng-text);
+    color: var(--jeng-surface);
 }
 
 .scroll {
@@ -165,14 +192,14 @@ button:hover {
     display: flex;
     flex-direction: column;
     gap: 2px;
-    color: var(--jeng-muted);
+    color: var(--jeng-dim);
 }
 
 .working {
     display: flex;
     align-items: baseline;
     gap: 8px;
-    color: var(--jeng-muted);
+    color: var(--jeng-dim);
 }
 
 .working > span:first-child {
@@ -180,8 +207,8 @@ button:hover {
 }
 
 /*
- * A turn is a slip of paper. Each kind picks its own print and edge, so a turn is read
- * by its colour rather than by which side of the page it was pushed to.
+ * A turn is a slip of paper. Each kind picks its own print, so a turn is read by the
+ * colour it is printed in rather than by which side of the page it was pushed to.
  */
 .speech,
 .call,
@@ -190,22 +217,18 @@ button:hover {
 pre.card {
     padding: 10px 14px;
     border: 1px solid var(--jeng-border);
-    border-left: 3px solid var(--jeng-edge);
-    border-radius: var(--jeng-radius);
     background: var(--jeng-tint);
     box-shadow: var(--jeng-shadow);
 }
 
 .speech {
     --jeng-tint: var(--jeng-jeng-tint);
-    --jeng-edge: var(--jeng-jeng);
     white-space: pre-wrap;
     overflow-wrap: anywhere;
 }
 
 .speech.user {
     --jeng-tint: var(--jeng-user-tint);
-    --jeng-edge: var(--jeng-user);
     color: var(--jeng-text);
 }
 
@@ -215,9 +238,11 @@ pre.card {
     font-style: italic;
 }
 
+/* A tool call is printed on the desk itself rather than on a slip of its own, and says
+ * which mode called it by its edge. A wash would have put it alongside the user's. */
 .call {
-    --jeng-tint: var(--jeng-accent-tint);
-    --jeng-edge: var(--jeng-accent);
+    --jeng-tint: var(--jeng-surface);
+    border-color: var(--jeng-accent-ink);
     display: flex;
     gap: 10px;
     align-items: baseline;
@@ -225,15 +250,28 @@ pre.card {
     font-size: 13px;
 }
 
-.call.failed,
-.note.failed {
-    --jeng-tint: var(--jeng-danger-tint);
-    --jeng-edge: var(--jeng-danger);
+/* A note on its own is printed straight onto the desk, which is the one place a dim
+ * colour is right; inside a call it is on a slip and gets the muted one instead. */
+.note {
+    color: var(--jeng-dim);
+    overflow-wrap: anywhere;
 }
 
 .call .note {
     color: var(--jeng-muted);
-    overflow-wrap: anywhere;
+}
+
+/* Reversed, since the fill is the colour rather than a wash of it. The note is named
+ * because it matches the span directly, so the colour on .call would not reach it. */
+.call.failed,
+.note.failed {
+    --jeng-tint: var(--jeng-danger-tint);
+    border-color: var(--jeng-danger);
+    color: var(--jeng-surface);
+}
+
+.call.failed .note {
+    color: inherit;
 }
 
 .what {
@@ -253,7 +291,7 @@ pre.card {
 }
 
 .card.pending {
-    border-color: var(--jeng-accent);
+    border-color: var(--jeng-accent-ink);
 }
 
 .card .ask {
@@ -287,7 +325,7 @@ pre.card {
     display: flex;
     flex-direction: column;
     gap: 8px;
-    box-shadow: 0 8px 32px rgb(90 72 48 / 25%);
+    box-shadow: 10px 10px 0 var(--jeng-accent);
 }
 
 .picker h3 {
@@ -322,14 +360,14 @@ pre.card {
 }
 
 .picker .pick.picked {
-    border-color: var(--jeng-accent);
+    border-color: var(--jeng-accent-ink);
     background: var(--jeng-accent-tint);
 }
 
 /* The one in force is said by its edge rather than by a word next to it. */
 .picker .pick.picked::before {
     content: "● ";
-    color: var(--jeng-accent);
+    color: var(--jeng-accent-ink);
 }
 
 .picker .aside {
@@ -346,7 +384,7 @@ pre.card {
 }
 
 .approval {
-    border: 1px solid var(--jeng-accent);
+    border: 1px solid var(--jeng-accent-ink);
     border-radius: var(--jeng-radius);
     padding: 16px;
     background: var(--jeng-accent-tint);
@@ -369,7 +407,7 @@ pre.card {
 }
 
 .approval textarea:focus {
-    border-color: var(--jeng-accent);
+    border-color: var(--jeng-accent-ink);
 }
 
 .approval .why {
@@ -379,11 +417,13 @@ pre.card {
 /*
  * highlight.js marks up code and nothing else, so the colour is all there is to add. These
  * are picked against the paper rather than lifted from one of its themes, which are all
- * either dark or tuned for white and would leave a cream slip looking scuffed.
+ * either dark or tuned for white and would leave a cream slip looking scuffed. The palette
+ * gives a crimson for the keywords and a teal for the strings, which is the one hue it does
+ * not have; everything else is the taupe or a shade of it.
  */
 .hljs-comment,
 .hljs-quote {
-    color: #9a8f7d;
+    color: #8a6a74;
     font-style: italic;
 }
 
@@ -392,7 +432,7 @@ pre.card {
 .hljs-tag,
 .hljs-literal,
 .hljs-doctag {
-    color: #a03e52;
+    color: #a02c46;
 }
 
 .hljs-string,
@@ -400,20 +440,20 @@ pre.card {
 .hljs-symbol,
 .hljs-bullet,
 .hljs-addition {
-    color: #4c7a48;
+    color: #1f6f66;
 }
 
 .hljs-number,
 .hljs-meta,
 .hljs-link {
-    color: #8a6a3a;
+    color: #8a6a1f;
 }
 
 .hljs-title,
 .hljs-title.function_,
 .hljs-section,
 .hljs-name {
-    color: #3f6f9f;
+    color: #7a4456;
 }
 
 .hljs-type,
@@ -423,7 +463,7 @@ pre.card {
 .hljs-selector-class,
 .hljs-selector-id,
 .hljs-params {
-    color: #6a5a9e;
+    color: #6a3352;
 }
 
 .hljs-attr,
@@ -431,7 +471,7 @@ pre.card {
 .hljs-variable,
 .hljs-template-variable,
 .hljs-subst {
-    color: #a5643c;
+    color: #a8543a;
 }
 
 .hljs-emphasis {
@@ -444,12 +484,12 @@ pre.card {
 
 /* A patch is the one thing read for what changed, so those two lines carry a wash of ink. */
 .hljs-addition {
-    background: rgb(76 122 72 / 10%);
+    background: rgb(31 111 102 / 16%);
 }
 
 .hljs-deletion {
-    color: #a03e52;
-    background: rgb(160 62 82 / 10%);
+    color: #a02c46;
+    background: rgb(160 44 70 / 16%);
 }
 
 /* The button is as tall as the box beside it, so the two read as one control. */
@@ -460,9 +500,11 @@ pre.card {
     padding: 14px 20px;
     border-top: 1px solid var(--jeng-border);
     background: var(--jeng-surface);
-    box-shadow: 0 -4px 12px rgb(90 72 48 / 5%);
+    box-shadow: 0 -3px 0 var(--jeng-accent-ink);
 }
 
+/* The desk is dark, so the box is paper of its own rather than the desk showing through,
+ * and the mode's colour is what it turns when there is something to answer. */
 .composer textarea {
     flex: 1;
     resize: none;
@@ -471,16 +513,15 @@ pre.card {
     padding: 12px 14px;
     border: 1px solid var(--jeng-border);
     border-radius: var(--jeng-radius);
-    background: var(--jeng-paper);
+    background: var(--jeng-surface);
     color: var(--jeng-text);
     font: inherit;
     outline: none;
-    box-shadow: inset 0 1px 2px rgb(90 72 48 / 5%);
 }
 
 .composer textarea:focus {
-    border-color: var(--jeng-accent);
-    background: var(--jeng-surface);
+    border-color: var(--jeng-accent-ink);
+    background: var(--jeng-accent-tint);
 }
 
 .composer textarea::placeholder {
@@ -497,18 +538,21 @@ pre.card {
     margin-top: 10px;
 }
 
-/* Send is the one button that says the turn is about to start, so it wears the mode's
- * own colour, deepened just enough to keep its label readable. */
+/* Send is the one button that says the turn is about to start, so it wears the mode's own
+ * colour outright, and goes to ink on hover rather than to a paler version of itself. */
 .send {
-    background: color-mix(in oklab, var(--jeng-accent), var(--jeng-text) 25%);
+    background: var(--jeng-accent);
     border-color: transparent;
-    color: var(--jeng-surface);
+    color: var(--jeng-text);
 }
 
 .send:hover {
-    background: color-mix(in oklab, var(--jeng-accent), var(--jeng-text) 40%);
+    background: var(--jeng-text);
+    color: var(--jeng-surface);
 }
 
+/* Yes is the user letting the turn go on, so it wears the user's own colour; no is the
+ * turn stopping, which is the one thing on screen allowed to be crimson. */
 .yes {
     color: var(--jeng-user);
     border-color: var(--jeng-user);
@@ -538,14 +582,13 @@ pre.card {
 }
 
 .status button:hover {
-    color: var(--jeng-accent);
+    color: var(--jeng-accent-ink);
 }
 
 .dot {
     width: 7px;
     height: 7px;
-    border-radius: 999px;
-    background: var(--jeng-accent);
+    background: var(--jeng-accent-ink);
     animation: pulse 1.1s ease-in-out infinite;
 }
 

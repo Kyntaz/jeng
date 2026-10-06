@@ -9,9 +9,15 @@ import type { Bridge } from "./rpc";
 import { useSpinner } from "./spinner";
 import { Transcript } from "./transcript";
 
-// A mode is told apart by its colour. The window is cream paper rather than a terminal,
-// so it picks its own two: warm ochre and dusty blue, both light enough to read on paper.
-const MODE_COLOR = { learn: "#b5822f", work: "#6f93b8" };
+// A mode is told apart by its colour, and the window wears the same two the terminal
+// does, so the same sentence reads the same way in both. Each comes in two strengths,
+// because the bright one is a block that takes dark type and no other will do, and a
+// line drawn on the cream paper wants the same hue a long way down or it does not
+// read at all.
+const MODE_COLOR = {
+    learn: { accent: "#d9a441", tint: "#f8ebd4", ink: "#8a6410" },
+    work: { accent: "#5fb3d4", tint: "#d7e8f2", ink: "#435175" },
+};
 
 export function App({ bridge }: { bridge: Bridge }) {
     // The third argument is what a server renderer would ask for; the window is the only
@@ -71,8 +77,16 @@ export function App({ bridge }: { bridge: Bridge }) {
     return (
         <div
             className="app"
-            // The window's own accent, so a gadget's component inherits the mode too.
-            style={{ "--jeng-accent": MODE_COLOR[state.mode] } as CSSProperties}
+            // The window's own mode, so a gadget's component inherits it too. They are all
+            // set on the same element, since a wash written in :root could not read the
+            // accent this one puts back.
+            style={
+                {
+                    "--jeng-accent": MODE_COLOR[state.mode].accent,
+                    "--jeng-accent-tint": MODE_COLOR[state.mode].tint,
+                    "--jeng-accent-ink": MODE_COLOR[state.mode].ink,
+                } as CSSProperties
+            }
         >
             <header className="header">
                 {/* The two things the window can be pointed elsewhere are its first two

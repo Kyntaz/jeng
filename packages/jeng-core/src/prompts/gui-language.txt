@@ -51,9 +51,14 @@ and plain elements looks like part of the app:
 
   var(--jeng-paper)    var(--jeng-surface)  var(--jeng-text)    var(--jeng-muted)
   var(--jeng-border)   var(--jeng-shadow)  var(--jeng-radius)  var(--jeng-serif)
-  var(--jeng-mono)     var(--jeng-accent)  var(--jeng-accent-tint)
+  var(--jeng-mono)     var(--jeng-accent)  var(--jeng-accent-tint) var(--jeng-accent-ink)
   var(--jeng-user)     var(--jeng-user-tint)
   var(--jeng-jeng)     var(--jeng-jeng-tint) var(--jeng-danger) var(--jeng-danger-tint)
+
+`--jeng-accent` is the mode's colour, which changes under you; `--jeng-accent-tint` is a wash of
+it for anything a panel is printed on. `--jeng-accent-ink` is that same colour darkened for a rule,
+a border or a label on the paper: the bright accent is a block that takes dark type, and it cannot
+be read as a line on cream.
 
 A gadget that draws needs `* gui: true` in its header and is written to a `.tsx` file, because it is
 jsx. One without a window cannot run it at all, so it is not listed there either.

@@ -11,6 +11,7 @@
         "build": "bun build --compile --outfile dist/jeng packages/jeng-cli/src/index.ts",
         "setup": "bun run build && bun run scripts/setup.ts",
         "test": "bun test",
+        "pictures": "bun test packages/jeng-gui/test/e2e",
         "typecheck": "tsc --noEmit && tsc -p packages/jeng-cli && tsc -p packages/jeng-gui",
         "format": "biome format --write .",
         "lint": "biome lint .",

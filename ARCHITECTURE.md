@@ -39,7 +39,7 @@ The same agent is two things depending on what it is allowed to do to its home, 
 - **The actions are removed, not discouraged.** Work mode's tool does not list the actions that change the home and does not carry the arguments only they need, so a model cannot spend a turn talking itself into one and a small model never sees the words at all. `test_gadget` goes with them, because a throwaway gadget in a run that cannot keep anything is a turn wasted, and so does `load_ui`, which exists only to describe writing one. `load_gadget` goes too, because source it cannot rewrite is a gadget description with more words on it.
 - **A call that names one anyway is refused, and told which mode would have it.** A model asked to work will sometimes reach for what it was asked not to, and a refusal that only says no leaves it with nothing to do instead of something to try.
 - **A mode changes the prompt and the tool, never the conversation.** Switching mid-session rewrites neither the history nor what is on disk, and takes hold at the next model call rather than halfway through the current one, so a turn is never spent in two modes at once.
-- **The user is shown which mode is in force by color.** Learn is gold, work is blue, the user is green because they are neither, and the prompt box is bordered in the mode's color because that box is the one thing on screen that is always there to read it. It is washed in a fainter version of the same color, because the transcript scrolls under it and a border showing through reads as a broken one. What the user answered wears that green too, since an approval or a turn-down is the user talking rather than the model reporting on itself.
+- **The user is shown which mode is in force by color.** Learn is gold and work is blue, in the window as well as in the terminal, so the same sentence reads the same way in both. The prompt box is bordered in the mode's color because that box is the one thing on screen that is always there to read it. It is washed in a fainter version of the same color, because the transcript scrolls under it and a border showing through reads as a broken one. A line drawn on the cream paper takes the mode's color darkened rather than the bright one, since a bright gold fills a block but is not there at all as a rule on cream. The user wears a third color, because they are neither mode: green in the terminal, coral in the window. What the user answered wears it too, since an approval or a turn-down is the user talking rather than the model reporting on itself.
 
 ## Turns
 
@@ -385,6 +385,7 @@ The following structure includes only the most relevant files and paths of the p
             - `/package.json`
             - `/src` (`main` is the bun main process, `view` is the react-dom window, `picker.tsx` is what the window is pointed at, and `rpc.ts` is the contract between the two halves)
             - `/test/unit` (unit tests; structure mirrors `../src`)
+            - `/test/e2e` (the window photographed in a browser, one picture per scenario, compared against the picture kept last)
 
 ## Code organization
 
@@ -399,3 +400,11 @@ There are two types of tests:
 
 - Unit tests mirror the structure of the source code and validate the behaviors of each exported structure independently.
 - E2E tests describe the end to end utilization of the package they're part of.
+
+The window is also photographed. A styling change is one nobody can argue with once it can be looked at, so
+each scenario in `jeng-gui/test/e2e` is rendered against the real stylesheet, put in front of a real browser and
+compared pixel for pixel against the picture kept last. A name that has never been seen before is simply
+recorded; anything that moves fails and writes a diff beside the picture, saying where it moved. The pictures
+are kept in the repo so a change shows up as one, and the run's own render and diffs go to `artifacts/pictures`
+because that is where they are read. Browsers come from `playwright-core`, which installs none, so a machine
+that has not run it before needs `bunx playwright@1.58.2 install chromium`.

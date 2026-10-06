@@ -111,6 +111,12 @@ Jeng has two modes, and which one it is in decides whether it may change its hom
 | `learn` | the default; grows the home, writing gadgets and protocols as it goes              |
 | `work` | uses only what the home already holds and cannot write to it at all                 |
 
+The window tints its accent to the mode, and wears the terminal's two so the same sentence reads the
+same way in both: the badge in the header, the line of keys and the send button are gold under `learn`
+and blue under `work`:
+
+![a conversation in work mode: the header's badge, the line under the keys and the send button are all blue](packages/jeng-gui/test/e2e/__pictures__/work.png)
+
 ```sh
 jeng --mode work "summarize what changed in this repo"
 ```
@@ -169,6 +175,8 @@ Jeng also runs in a desktop window, with the same agent, the same homes and the 
 bun run gui
 ```
 
+![the window: a header saying where it works, the conversation as slips of paper, a line of keys and a box to type in](packages/jeng-gui/test/e2e/__pictures__/conversation.png)
+
 It is a separate frontend rather than a mode, because a gadget that draws a react component is written
 against it and cannot run in a terminal, so the two are listed separately rather than pretending to be
 one thing. What the window has that the TUI does not:
@@ -183,14 +191,22 @@ one thing. What the window has that the TUI does not:
 
 The conversation says the `AGENTS.md` files in force above the first message and spins under the last one
 while Jeng is working, both of which the TUI does too. The difference is that the window's turn is a
-slip of paper, so Jeng's own words are tinted, yours are green, and anything it did or decided is a card
-alongside them.
+slip of paper, so Jeng's own words are printed in a pale gold, yours in coral, and anything it did or
+decided is a card alongside them.
+
+![a turn in flight: a spinner under the last slip, a dot in the line of keys and send turned to stop](packages/jeng-gui/test/e2e/__pictures__/working.png)
 
 When Jeng asks to change something, one card comes up: what it wants to do, its own reasons for it, the
 source or patch it wants written, and the two ways out. It stays as the transcript's record once you have
-answered, but it is not on screen twice while it waits. Code in that card is coloured — by
+answered, but it is not on screen twice while it waits.
+
+![an approval waiting to be answered, in a card next to the source: what it wants, why, the source, a box to say why not and the two buttons](packages/jeng-gui/test/e2e/__pictures__/approval.png)
+
+Code in that card is coloured — by
 [highlight.js](https://highlightjs.org), holding only the languages Jeng actually proposes things in,
 rather than all of them — because a patch is read for what changed and a wall of identifiers is skimmed.
+
+![the same approval once it has been answered, holding a diff with only the two changed lines picked out](packages/jeng-gui/test/e2e/__pictures__/patch.png)
 
 A gadget's component is drawn the same way round: live while it is asking you something, and again as the
 record of what you said once it has. It is drawn twice and no more, so it stays where it is and holds what
@@ -202,6 +218,8 @@ Click the working directory or the config file at the left of the header to open
 either one starts a new conversation, since the homes, the model and the `AGENTS.md` files all come
 from them and cannot change under a run that is already going. The picker stays open while you do it,
 so a directory and a config can be picked together; `esc` or `close` puts it away.
+
+![the picker: the configs with the one in force marked, a forget button on each, the working directory to change and the sessions to go back to](packages/jeng-gui/test/e2e/__pictures__/picker.png)
 
 Paths are said relative to the working directory wherever they sit inside it, in the window as much as
 in the terminal, so a home two folders down reads `agents/.jeng` rather than a whole drive spelled out.
@@ -394,7 +412,10 @@ Three things are worth knowing before writing one:
 - **It needs no stylesheet of its own.** The window already defines `--jeng-paper`, `--jeng-surface`,
   `--jeng-text`, `--jeng-muted`, `--jeng-border`, `--jeng-shadow`, `--jeng-radius`, `--jeng-serif`,
   `--jeng-mono`, and an accent, user, jeng and danger colour with a pastel tint to pair with each,
-  and a component mounted into the window inherits them.
+  and a component mounted into the window inherits them. The accent is the mode's own colour, with
+  `--jeng-accent-tint` as a wash of it for anything a panel is printed on and `--jeng-accent-ink`
+  as the same colour darkened for a rule or a label, since the bright one only reads as a block it
+  can carry dark type on.
 
 A gadget that draws a component needs `* gui: true` in its header and is written to a `.tsx` file,
 because it is jsx. It cannot run without a window, so it is left out of the TUI and out of any piped
