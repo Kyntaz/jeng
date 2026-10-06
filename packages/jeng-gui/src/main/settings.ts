@@ -1,4 +1,4 @@
-import { mkdir } from "node:fs/promises";
+import { mkdir, stat } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { defaultHome } from "@jeng/core";
 
@@ -44,10 +44,21 @@ function write({ cwd, config, configs }: Settings): string {
     return `${lines.join("\n")}\n`;
 }
 
+async function isDirectory(dir: string): Promise<boolean> {
+    try {
+        return (await stat(dir)).isDirectory();
+    } catch {
+        return false;
+    }
+}
+
 /** A file that isn't there is an empty list rather than an error: there is nothing to forget yet. */
 export async function readSettings(cwd: string, file: string = FILE): Promise<Settings> {
     if (!(await Bun.file(file).exists())) return { cwd, configs: [] };
-    return parse(await Bun.file(file).text(), cwd);
+    const settings = parse(await Bun.file(file).text(), cwd);
+    // A directory that has been deleted since the window last ran is not worth refusing to
+    // start over: the folder jeng was launched from is the one thing certainly still there.
+    return { ...settings, cwd: (await isDirectory(settings.cwd)) ? settings.cwd : cwd };
 }
 
 export async function saveSettings(settings: Settings, file: string = FILE): Promise<void> {

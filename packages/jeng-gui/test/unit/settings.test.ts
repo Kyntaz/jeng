@@ -20,9 +20,18 @@ describe("the window's own settings", () => {
     });
 
     test("reads back the directory it was left working in", async () => {
-        const file = await scratch("cwd: /work/jeng\n");
+        const file = await scratch();
+        const work = join(file, "..");
+        await Bun.write(file, `cwd: ${work}\n`);
 
-        expect((await readSettings("/elsewhere", file)).cwd).toBe("/work/jeng");
+        expect((await readSettings("/elsewhere", file)).cwd).toBe(work);
+        await rm(work, { recursive: true, force: true });
+    });
+
+    test("starts where it was launched when the directory it was left in is gone", async () => {
+        const file = await scratch("cwd: /work/deleted\n");
+
+        expect((await readSettings("/elsewhere", file)).cwd).toBe("/elsewhere");
         await rm(join(file, ".."), { recursive: true, force: true });
     });
 
@@ -37,16 +46,18 @@ describe("the window's own settings", () => {
     });
 
     test("ignores the comments and blank lines of a file a person is meant to edit", async () => {
-        const file = await scratch("# jeng\n\ncwd: /work\n\n  * /a/jeng.json  \n");
+        const file = await scratch();
+        const work = join(file, "..");
+        await Bun.write(file, `# jeng\n\ncwd: ${work}\n\n  * /a/jeng.json  \n`);
 
         const settings = await readSettings("/elsewhere", file);
 
         expect(settings).toEqual({
-            cwd: "/work",
+            cwd: work,
             config: "/a/jeng.json",
             configs: ["/a/jeng.json"],
         });
-        await rm(join(file, ".."), { recursive: true, force: true });
+        await rm(work, { recursive: true, force: true });
     });
 
     test("says nothing is in force when no line is marked", async () => {
@@ -58,22 +69,20 @@ describe("the window's own settings", () => {
 
     test("round trips what it wrote", async () => {
         const file = await scratch();
+        const work = join(file, "..");
 
+        await saveSettings({ cwd: work, config: "/a/jeng.json", configs: ["/a/jeng.json"] }, file);
         await saveSettings(
-            { cwd: "/work", config: "/a/jeng.json", configs: ["/a/jeng.json"] },
-            file,
-        );
-        await saveSettings(
-            { cwd: "/work", config: "/b/jeng.json", configs: ["/a/jeng.json", "/b/jeng.json"] },
+            { cwd: work, config: "/b/jeng.json", configs: ["/a/jeng.json", "/b/jeng.json"] },
             file,
         );
 
         expect(await readSettings("/elsewhere", file)).toEqual({
-            cwd: "/work",
+            cwd: work,
             config: "/b/jeng.json",
             configs: ["/a/jeng.json", "/b/jeng.json"],
         });
-        await rm(join(file, ".."), { recursive: true, force: true });
+        await rm(work, { recursive: true, force: true });
     });
 
     test("marks the config in force in the file rather than in a second one", async () => {

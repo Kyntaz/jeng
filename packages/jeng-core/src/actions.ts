@@ -65,39 +65,39 @@ async function commit(
     await refresh(ctx, dir);
 }
 
-function coerceInput(input: unknown): { bad: string } | { bad: undefined; value: unknown } {
-    if (input === undefined || input === null) return { bad: undefined, value: {} };
-    if (typeof input !== "string") return { bad: undefined, value: input };
-
+/**
+ * A model that quotes its json tends to quote a list inside it too, so a string that
+ * parses as json is taken apart before a gadget is handed it. Nothing is lost by
+ * trying, because a string that does not parse is left exactly as it was.
+ */
+function unwrap(value: unknown): unknown {
+    if (Array.isArray(value)) return value.map(unwrap);
+    if (typeof value === "object" && value !== null)
+        return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, unwrap(item)]));
+    if (typeof value !== "string") return value;
     try {
-        return { bad: undefined, value: JSON.parse(input) };
+        return unwrap(JSON.parse(value));
     } catch {
-        return { bad: "input must be a json object, not a string" };
+        return value;
     }
 }
 
-const NAME_KEYS = ["name", "gadget", "gadget_name"];
+const kindOf = (value: unknown): string =>
+    Array.isArray(value) ? "a list" : value === null ? "null" : `a ${typeof value}`;
 
-// A model reading only a gadget's description tends to hand its name back as one
-// more input field, so the name is taken back out when the call left it empty.
-function liftName(
-    ctx: ActionContext,
-    name: string,
+/**
+ * What a gadget is handed is always an object, which is what the tool says `input` is.
+ * Absent input is the same as none at all, and anything else is refused rather than
+ * passed on, so a call that got its shape wrong is told so instead of tripping the
+ * gadget over its own arguments.
+ */
+function coerceInput(
     input: unknown,
-): { name: string; input: unknown } {
-    if (name || typeof input !== "object" || input === null || Array.isArray(input))
-        return { name, input };
-
-    const rest = { ...(input as Record<string, unknown>) };
-    const key = NAME_KEYS.find(
-        (candidate) =>
-            typeof rest[candidate] === "string" && findIn(ctx, "gadget", String(rest[candidate])),
-    );
-    if (key === undefined) return { name, input };
-
-    const lifted = String(rest[key]);
-    delete rest[key];
-    return { name: lifted, input: rest };
+): { bad: string } | { bad: undefined; value: Record<string, unknown> } {
+    const value = input === undefined || input === null ? {} : unwrap(input);
+    if (typeof value !== "object" || value === null || Array.isArray(value))
+        return { bad: `input must be a json object, not ${kindOf(value)}` };
+    return { bad: undefined, value: value as Record<string, unknown> };
 }
 
 // A gadget and a protocol are the same shape on disk, so they are found the same
@@ -127,7 +127,7 @@ async function runGadgetAction(
 ): Promise<ActionResult> {
     const coerced = coerceInput(args.input);
     if (coerced.bad !== undefined) return { ok: false, content: coerced.bad };
-    const { name, input } = liftName(ctx, String(args.name ?? ""), coerced.value);
+    const name = String(args.name ?? "");
 
     const found = findIn(ctx, "gadget", name);
     if (!found) return { ok: false, content: `no gadget named "${name}"` };
@@ -140,7 +140,7 @@ async function runGadgetAction(
 
     const result = await runGadget(
         found.ref.file,
-        input,
+        coerced.value,
         portsFor(ctx, found.ref.gui),
         stateFor(ctx, found.dir),
     );

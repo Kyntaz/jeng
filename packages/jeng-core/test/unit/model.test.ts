@@ -97,6 +97,7 @@ describe("model", () => {
         expect(turn.toolCall).toEqual({
             id: "call_1",
             name: "jeng",
+            raw: '{"action":"run_gadget","name":"greet"}',
             arguments: { action: "run_gadget", name: "greet" },
         });
         model.stop();

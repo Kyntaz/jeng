@@ -48,7 +48,7 @@ A turn is one message from the user to the moment Jeng hands control back, which
 - Every message Jeng sends is one call. Text on its own is progress, not an answer, and a model that narrates and then keeps working is doing the right thing rather than finishing.
 - An assistant message carrying a call is always followed by the message carrying that call's result, in the history as well as in the request. A history that keeps the request and forgets the result replays a call the model never saw answered, which is what sends it round again.
 - The same action with the same arguments twice in a row means nothing changed in between, so the call is refused and the model is told to say what it knows instead. The turn keeps going, because a repeat is a nudge and not a stop. The same action again *after* something else is legitimate, because the context moved.
-- Arguments that are not a JSON object come back as an error rather than being handed to a gadget.
+- **A quoted argument is unwrapped, then judged.** A model that quotes its json tends to quote a list inside it too, so a string that parses as json is taken apart before a gadget is handed it. What is left has to be a JSON object, and anything else — a list, a bare string, a number — comes back as an error rather than reaching a gadget that would trip over it. The reason a call was refused is what the model is told, including when its arguments were not json at all, because a model that cannot see why is a model that repeats itself.
 - A gadget is named after the header it was validated against, not after whatever the model called it, so the name the model reads back is the name on disk.
 - Creating a gadget or protocol that already exists rewrites it. The model cannot edit files, so refusing would leave it unable to fix memory it is unhappy with.
 - There is no turn limit, because a model that gets stuck should be interrupted rather than cut off at some number the user has to guess. `--max-turns` puts one back for whoever wants one, and stops a turn by returning `stopped after N turns without ending`, which is the only thing in Jeng that ends a turn besides `end` and an interrupt.
@@ -205,6 +205,7 @@ one works against the other.
 - A resolved config names the file it came from, so a host that was never given one can still say which config it is running.
 - A config file that cannot be read, parsed or understood is an error rather than a silent fallback, because an agent quietly running on the wrong model or the wrong memory is worse than one that refuses to start.
 - `createAgent` never reads config itself; it takes homes and a model as given. A library should not depend on the caller's working directory, and the CLI is the only place that knows about `-c`.
+- The working directory it is given is also the directory it runs in, because a gadget is a script and a script runs somewhere. A window launched from an app icon has a process directory nobody chose, so a gadget left in it would work in the wrong place while the header said otherwise. It is the process that moves rather than a path handed to a gadget, because a relative path only means anything where it is resolved.
 - The context window is configured rather than assumed, because a wrong guess is what makes an agent compact too late to be useful.
 
 ## Context

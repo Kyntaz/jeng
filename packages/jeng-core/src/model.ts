@@ -16,6 +16,8 @@ export interface ToolCall {
     id: string;
     name: string;
     arguments: Record<string, unknown>;
+    /** What the model actually wrote, which is what is replayed back to it. */
+    raw: string;
 }
 
 export interface Turn {
@@ -120,7 +122,7 @@ function wire(message: Message): Record<string, unknown> {
                     type: "function",
                     function: {
                         name: message.toolCall.name,
-                        arguments: JSON.stringify(message.toolCall.arguments),
+                        arguments: message.toolCall.raw,
                     },
                 },
             ],
@@ -212,7 +214,7 @@ export async function chat(messages: Message[], options: ChatOptions): Promise<T
         text,
         reasoning,
         toolCall: call
-            ? { id: call.id, name: call.name, arguments: parseArgs(call.args) }
+            ? { id: call.id, name: call.name, raw: call.args, arguments: parseArgs(call.args) }
             : undefined,
         promptTokens,
     };
@@ -242,7 +244,12 @@ export async function chatWithRetry(
     }
 }
 
-export function parseArgs(args: string): Record<string, unknown> {
+/**
+ * Whatever the model wrote, as far as it can be read: an object to act on, or the
+ * reason under `error`, which is what the model is told rather than an action name
+ * read out of arguments that were never there.
+ */
+function parseArgs(args: string): Record<string, unknown> {
     if (!args.trim()) return {};
     try {
         const parsed: unknown = JSON.parse(args);

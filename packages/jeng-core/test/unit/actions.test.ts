@@ -372,51 +372,81 @@ describe("actions", () => {
         await cleanup();
     });
 
-    test("run_gadget finds the gadget a model left inside input, and the gadget never sees the name", async () => {
+    test("run_gadget unwraps a quoted list inside input", async () => {
         const { ctx, dir, cleanup } = await context();
         await Bun.write(
             join(dir, "gadgets", "greet.ts"),
-            // biome-ignore lint/suspicious/noTemplateCurlyInString: gadget source, not a template
-            "/**\n * name: greet\n * description: says hi\n */\n\nexport default async (input: { who: string }) => `hi ${input.who} ${JSON.stringify(input)}`\n",
+            "/**\n * name: greet\n * description: says hi\n */\n\nexport default async (input: { who: string[] }) => JSON.stringify(input.who)\n",
         );
         ctx.homes = [await loadHome(dir)];
 
         const result = await runAction(
             "run_gadget",
-            { input: { name: "greet", who: "world" } },
+            { name: "greet", input: { who: '["ada","grace"]' } },
             ctx,
         );
 
-        expect(result).toEqual({ ok: true, content: 'hi world {"who":"world"}' });
+        expect(result).toEqual({ ok: true, content: '["ada","grace"]' });
         await cleanup();
     });
 
-    test("run_gadget keeps the name it was given over one left inside input", async () => {
+    test("run_gadget unwraps a quoted number inside input", async () => {
         const { ctx, dir, cleanup } = await context();
         await Bun.write(
-            join(dir, "gadgets", "greet.ts"),
-            "/**\n * name: greet\n * description: says hi\n */\n\nexport default async () => 'hi from greet'\n",
-        );
-        await Bun.write(
-            join(dir, "gadgets", "farewell.ts"),
-            "/**\n * name: farewell\n * description: says bye\n */\n\nexport default async () => 'bye from farewell'\n",
+            join(dir, "gadgets", "count.ts"),
+            "/**\n * name: count\n * description: counts\n */\n\nexport default async (input: { lines: number }) => String(input.lines * 2)\n",
         );
         ctx.homes = [await loadHome(dir)];
 
         const result = await runAction(
             "run_gadget",
-            { name: "greet", input: { name: "farewell" } },
+            { name: "count", input: { lines: '"3"' } },
             ctx,
         );
 
-        expect(result).toEqual({ ok: true, content: "hi from greet" });
+        expect(result).toEqual({ ok: true, content: "6" });
         await cleanup();
     });
 
-    test("run_gadget leaves an input name that is no gadget alone", async () => {
+    test("run_gadget refuses a list of its own", async () => {
         const { ctx, cleanup } = await context();
 
-        expect(await runAction("run_gadget", { input: { name: "nope" } }, ctx)).toEqual({
+        expect(await runAction("run_gadget", { name: "greet", input: ["ada"] }, ctx)).toEqual({
+            ok: false,
+            content: "input must be a json object, not a list",
+        });
+        await cleanup();
+    });
+
+    test("run_gadget refuses a quoted list of its own", async () => {
+        const { ctx, cleanup } = await context();
+
+        expect(await runAction("run_gadget", { name: "greet", input: '["ada"]' }, ctx)).toEqual({
+            ok: false,
+            content: "input must be a json object, not a list",
+        });
+        await cleanup();
+    });
+
+    test("run_gadget refuses a quoted null rather than reading it as no input", async () => {
+        const { ctx, cleanup } = await context();
+
+        expect(await runAction("run_gadget", { name: "greet", input: "null" }, ctx)).toEqual({
+            ok: false,
+            content: "input must be a json object, not null",
+        });
+        await cleanup();
+    });
+
+    test("run_gadget asks for the name rather than finding one inside input", async () => {
+        const { ctx, dir, cleanup } = await context();
+        await Bun.write(
+            join(dir, "gadgets", "greet.ts"),
+            "/**\n * name: greet\n * description: says hi\n */\n\nexport default async () => 'hi'\n",
+        );
+        ctx.homes = [await loadHome(dir)];
+
+        expect(await runAction("run_gadget", { input: { name: "greet" } }, ctx)).toEqual({
             ok: false,
             content: 'no gadget named ""',
         });
@@ -890,6 +920,21 @@ describe("actions", () => {
         );
 
         expect(result.content).toContain("hi world");
+        await cleanup();
+    });
+
+    test("test_gadget unwraps a quoted list in the input it is given", async () => {
+        const { ctx, cleanup } = await context();
+        const source =
+            '/**\n * name: greet\n * description: says hi\n */\n\nexport default async (input: { who: string[] }) => input.who.join(" and ")\n';
+
+        const result = await runAction(
+            "test_gadget",
+            { reason: WHY, source, input: { who: '["ada","grace"]' } },
+            ctx,
+        );
+
+        expect(result.content).toContain("ada and grace");
         await cleanup();
     });
 

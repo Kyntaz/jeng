@@ -98,6 +98,20 @@ const KEEP =
 const RECALL_NOTE =
     "/**\n * name: recall-note\n * description: recalls the kept note\n */\n\nexport default async (_input: unknown, _ui: unknown, state: State) => String((await state.persistent.get('note')) ?? 'nothing')\n";
 
+const HERE =
+    "/**\n * name: here\n * description: reads a file by a relative path\n */\n\nexport default async () => await Bun.file('marker.txt').text()\n";
+
+const START = process.cwd();
+
+/**
+ * An agent runs in the directory it was given, so a temp folder is left from outside it:
+ * windows will not delete one a process is standing in.
+ */
+async function leave(...dirs: string[]): Promise<void> {
+    process.chdir(START);
+    for (const dir of dirs) await rm(dir, { recursive: true, force: true });
+}
+
 describe("a jeng session", () => {
     test("grows a home folder: commits a protocol, learns from a rejected gadget, then answers", async () => {
         const home = await mkdtemp(join(tmpdir(), "jeng-e2e-"));
@@ -165,8 +179,30 @@ describe("a jeng session", () => {
         expect(requests[4]).toContain("hi world");
 
         model.stop();
-        await rm(home, { recursive: true, force: true });
-        await rm(cwd, { recursive: true, force: true });
+        await leave(home, cwd);
+    });
+
+    test("runs a gadget in the directory the agent works in", async () => {
+        const home = await mkdtemp(join(tmpdir(), "jeng-e2e-"));
+        const cwd = await mkdtemp(join(tmpdir(), "jeng-cwd-"));
+        await Bun.write(join(home, "gadgets", "here.ts"), HERE);
+        await Bun.write(join(cwd, "marker.txt"), "written where the header says\n");
+
+        const model = fakeModel([act({ action: "run_gadget", name: "here" }), end("read it")]);
+
+        const agent = await createAgent({
+            cwd,
+            homes: [home],
+            config: CONFIG(model.url),
+            approve: allow,
+        });
+        await agent.send("read the marker");
+
+        // The gadget reaches a file by its bare name, so it can only have read it from the
+        // directory the header is showing rather than from wherever jeng was launched.
+        expect(model.requests()[1]).toContain("written where the header says");
+        model.stop();
+        await leave(home, cwd);
     });
 
     test("hands the user's reason for a refusal back to the model so it can try again", async () => {
@@ -203,7 +239,7 @@ describe("a jeng session", () => {
         expect(await Bun.file(join(home, "gadgets", "wipe.ts")).text()).toBe(safe);
 
         model.stop();
-        await rm(home, { recursive: true, force: true });
+        await leave(home);
     });
 
     test("pulls a protocol into context only once the model asks for it", async () => {
@@ -232,7 +268,7 @@ describe("a jeng session", () => {
         expect(agent.memory.map((item) => item.name)).toEqual(["deploy"]);
 
         model.stop();
-        await rm(home, { recursive: true, force: true });
+        await leave(home);
     });
 
     test("nudges the model instead of repeating a call that just gave the same result", async () => {
@@ -251,7 +287,47 @@ describe("a jeng session", () => {
         expect(model.requests()).toHaveLength(3);
         expect(model.requests()[2]).toContain("was just called with the same arguments");
         model.stop();
-        await rm(home, { recursive: true, force: true });
+        await leave(home);
+    });
+
+    test("tells the model why its arguments were refused rather than naming an empty action", async () => {
+        const home = await mkdtemp(join(tmpdir(), "jeng-e2e-"));
+        const model = fakeModel([{ call: "[1,2]" }, end("my mistake")]);
+
+        const agent = await createAgent({
+            cwd: home,
+            homes: [home],
+            config: CONFIG(model.url),
+            approve: allow,
+        });
+
+        await agent.send("count something");
+
+        expect(model.requests()[1]).toContain("arguments must be a json object");
+        expect(model.requests()[1]).not.toContain("unknown action");
+        model.stop();
+        await leave(home);
+    });
+
+    test("replays a refused call with the arguments the model actually wrote", async () => {
+        const home = await mkdtemp(join(tmpdir(), "jeng-e2e-"));
+        const model = fakeModel([{ call: "oops" }, end("my mistake")]);
+
+        const agent = await createAgent({
+            cwd: home,
+            homes: [home],
+            config: CONFIG(model.url),
+            approve: allow,
+        });
+
+        await agent.send("count something");
+
+        const written = JSON.parse(model.requests()[1]).messages.find(
+            (message: { role: string }) => message.role === "assistant",
+        ) as { tool_calls: { function: { arguments: string } }[] };
+        expect(written.tool_calls[0].function.arguments).toBe("oops");
+        model.stop();
+        await leave(home);
     });
 
     test("lets the model retry a call after something else changed its context", async () => {
@@ -273,7 +349,7 @@ describe("a jeng session", () => {
 
         expect(await agent.send("count the lines")).toBe("done");
         model.stop();
-        await rm(home, { recursive: true, force: true });
+        await leave(home);
     });
 
     test("keeps every tool call paired with its result in the history it replays", async () => {
@@ -307,7 +383,7 @@ describe("a jeng session", () => {
         expect(second[orphan + 1].tool_call_id).toBe("call_1");
 
         model.stop();
-        await rm(home, { recursive: true, force: true });
+        await leave(home);
     });
 
     test("clear forgets the conversation and the loaded protocols", async () => {
@@ -336,7 +412,7 @@ describe("a jeng session", () => {
             memory: 0,
         });
         model.stop();
-        await rm(home, { recursive: true, force: true });
+        await leave(home);
     });
 
     test("carries a gadget's session state to the next one and forgets it on clear", async () => {
@@ -368,7 +444,7 @@ describe("a jeng session", () => {
         await agent.send("greet whoever");
         expect(answers()).toEqual(["nobody", "ended"]);
         model.stop();
-        await rm(home, { recursive: true, force: true });
+        await leave(home);
     });
 
     test("hands a commit to a session that comes later", async () => {
@@ -400,7 +476,7 @@ describe("a jeng session", () => {
 
         expect(await second.send("what was the note?")).toBe("ship on fridays");
         model.stop();
-        await rm(home, { recursive: true, force: true });
+        await leave(home);
     });
 
     test("does not hand control back when the model only talks", async () => {
@@ -421,7 +497,7 @@ describe("a jeng session", () => {
         expect(await agent.send("what is 2+2?")).toBe("4");
         expect(model.requests()).toHaveLength(3);
         model.stop();
-        await rm(home, { recursive: true, force: true });
+        await leave(home);
     });
 
     test("nudges the model back to work when it talks instead of calling end", async () => {
@@ -438,7 +514,7 @@ describe("a jeng session", () => {
 
         expect(model.requests()[1]).toContain("with that answer now");
         model.stop();
-        await rm(home, { recursive: true, force: true });
+        await leave(home);
     });
 
     test("waits a failing model out for as long as the gateway asks", async () => {
@@ -469,7 +545,7 @@ describe("a jeng session", () => {
         });
         expect(Date.now() - started).toBeLessThan(1000);
         model.stop();
-        await rm(home, { recursive: true, force: true });
+        await leave(home);
     });
 
     test("says a model that keeps failing once rather than once per attempt", async () => {
@@ -494,7 +570,7 @@ describe("a jeng session", () => {
             events.filter((event) => event.type === "result" && event.ok === false),
         ).toHaveLength(1);
         model.stop();
-        await rm(home, { recursive: true, force: true });
+        await leave(home);
     });
 
     test("compacts the transcript down to the model's own summary", async () => {
@@ -517,7 +593,7 @@ describe("a jeng session", () => {
             "[earlier conversation, compacted]\n\nwe were counting lines in src",
         );
         model.stop();
-        await rm(home, { recursive: true, force: true });
+        await leave(home);
     });
 
     test("keeps loaded protocols across a compact, since memory is not the transcript", async () => {
@@ -542,7 +618,7 @@ describe("a jeng session", () => {
 
         expect(agent.memory.map((item) => item.name)).toEqual(["deploy"]);
         model.stop();
-        await rm(home, { recursive: true, force: true });
+        await leave(home);
     });
 
     test("tells the model how full its context is", async () => {
@@ -562,7 +638,7 @@ describe("a jeng session", () => {
 
         expect(model.requests()[1]).toContain("Context: 1200/8192 tokens.");
         model.stop();
-        await rm(home, { recursive: true, force: true });
+        await leave(home);
     });
 
     test("delivers an injected message between two of the model's own calls", async () => {
@@ -585,7 +661,7 @@ describe("a jeng session", () => {
         expect(await sending).toBe("ship it");
         expect(model.requests()[1]).toContain("actually, check the logs too");
         model.stop();
-        await rm(home, { recursive: true, force: true });
+        await leave(home);
     });
 
     test("carries an injection the model never read into the next turn", async () => {
@@ -609,7 +685,7 @@ describe("a jeng session", () => {
                 .map((message: { content: string }) => message.content),
         ).toEqual(["deploy it", "one more thing", "never mind that"]);
         model.stop();
-        await rm(home, { recursive: true, force: true });
+        await leave(home);
     });
 
     test("leaves nothing half-finished when a turn is interrupted", async () => {
@@ -632,7 +708,7 @@ describe("a jeng session", () => {
         expect(sending).rejects.toThrow();
         expect(agent.history).toEqual([{ role: "user", content: "how do we deploy?" }]);
         model.stop();
-        await rm(home, { recursive: true, force: true });
+        await leave(home);
     });
 
     test("stops a model that never ends when a turn limit is set", async () => {
@@ -649,7 +725,7 @@ describe("a jeng session", () => {
 
         expect(await agent.send("what is 2+2?")).toBe("stopped after 2 turns without ending.");
         model.stop();
-        await rm(home, { recursive: true, force: true });
+        await leave(home);
     });
 
     test("draws a gadget's interface and hands it what the user answered", async () => {
@@ -675,7 +751,7 @@ describe("a jeng session", () => {
         expect(events.filter((event) => event.type === "view")).toHaveLength(1);
         expect(model.requests()[2]).toContain("on main");
         model.stop();
-        await rm(home, { recursive: true, force: true });
+        await leave(home);
     });
 
     test("a working session is never told how to grow", async () => {
@@ -693,7 +769,7 @@ describe("a jeng session", () => {
         expect(await agent.send("what is 2+2?")).toBe("4");
         expect(model.requests()[0]).not.toContain("How you grow:");
         model.stop();
-        await rm(home, { recursive: true, force: true });
+        await leave(home);
     });
 
     test("a working session is never shown the action that writes a gadget", async () => {
@@ -711,7 +787,7 @@ describe("a jeng session", () => {
         await agent.send("what is 2+2?");
         expect(model.requests()[0]).not.toContain("create_gadget");
         model.stop();
-        await rm(home, { recursive: true, force: true });
+        await leave(home);
     });
 
     test("a working session writes nothing even when the model asks it to", async () => {
@@ -733,7 +809,7 @@ describe("a jeng session", () => {
         expect(agent.homes[0].gadgets).toEqual([]);
         expect(await Bun.file(join(home, "gadgets", "greet.ts")).exists()).toBe(false);
         model.stop();
-        await rm(home, { recursive: true, force: true });
+        await leave(home);
     });
 
     test("a working session still runs the gadgets it was given", async () => {
@@ -755,7 +831,7 @@ describe("a jeng session", () => {
 
         expect(await agent.send("say hi to the world")).toBe("hi world");
         model.stop();
-        await rm(home, { recursive: true, force: true });
+        await leave(home);
     });
 
     test("switching to work changes the next turn and leaves the conversation alone", async () => {
@@ -779,7 +855,7 @@ describe("a jeng session", () => {
         // was already said.
         expect(agent.history.length).toBe(before + 3);
         model.stop();
-        await rm(home, { recursive: true, force: true });
+        await leave(home);
     });
 
     test("names every AGENTS.md the model is given, home first", async () => {
@@ -798,7 +874,6 @@ describe("a jeng session", () => {
         // The walk goes above the cwd, so whatever a parent folder happens to carry
         // is left out of what is being claimed here.
         expect(agent.agents.filter((dir) => dir === home || dir === cwd)).toEqual([home, cwd]);
-        await rm(home, { recursive: true, force: true });
-        await rm(cwd, { recursive: true, force: true });
+        await leave(home, cwd);
     });
 });

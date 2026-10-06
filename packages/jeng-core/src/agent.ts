@@ -58,6 +58,10 @@ export interface AgentOptions {
 
 export async function createAgent(options: AgentOptions): Promise<Agent> {
     const cwd = options.cwd ?? process.cwd();
+    // A gadget is a script and a script runs somewhere, so this is the directory one runs
+    // in: the process moves rather than being handed a path, because a gadget's relative
+    // paths have to mean the directory on screen rather than wherever jeng was launched.
+    process.chdir(cwd);
     const config = options.config ?? defaultModel();
     const homes = await loadHomes(options.homes ?? [defaultHome()]);
     const agentsFiles = await loadAgentsFiles(cwd);
@@ -187,6 +191,16 @@ export async function createAgent(options: AgentOptions): Promise<Agent> {
                     messages.push(paired);
                     history.push(paired);
                 };
+
+                // Arguments that were never json carry the reason under `error` instead
+                // of an action, so the reason is what comes back rather than an unknown
+                // action with an empty name.
+                const malformed = typeof args.error === "string" ? args.error : undefined;
+                if (malformed) {
+                    onEvent?.({ type: "result", content: malformed, ok: false });
+                    close(malformed);
+                    continue;
+                }
 
                 if (name === "end") {
                     const answer = String(args.content ?? "").trim();
