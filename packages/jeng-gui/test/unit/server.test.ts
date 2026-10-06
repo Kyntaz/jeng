@@ -3,7 +3,7 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { serve } from "../../src/main/server";
+import { forget, keep, serve } from "../../src/main/server";
 
 const GADGET = `/**
  * name: pick
@@ -61,6 +61,9 @@ async function withGadget(source: string, run: (url: string, file: string) => Pr
 
 const chunk = (url: string, file: string) =>
     fetch(`${url}gadget/${encodeURIComponent(file)}`).then((reply) => reply.text());
+
+const status = (url: string, file: string) =>
+    fetch(`${url}gadget/${encodeURIComponent(file)}`).then((reply) => reply.status);
 
 describe("the window's own files", () => {
     test("serves a shell that loads the view and the stylesheet", async () => {
@@ -209,6 +212,80 @@ describe("a gadget's component", () => {
             const reply = await fetch(`${site.url}gadget/${encodeURIComponent("/nope/gone.tsx")}`);
 
             expect(reply.status).toBe(500);
+        } finally {
+            site.stop();
+        }
+    });
+});
+
+describe("a gadget the window is holding", () => {
+    // A `test_gadget` is run out of a temp folder that is removed the moment the turn is
+    // over, and the record of it stays on screen. A path is the one thing in a record that
+    // can go missing, so the window holds what it was shown.
+    async function held(source: string, run: (url: string, file: string) => Promise<void>) {
+        const dir = await mkdtemp(join(tmpdir(), "jeng-gui-"));
+        const file = join(dir, "gadget.tsx");
+        await writeFile(file, source);
+        const site = serve();
+        try {
+            // What the window does the moment a gadget draws, and the moment after a draft:
+            // the source read while the file is there, and the file taken away.
+            await keep(file);
+            await chunk(site.url, file);
+            await rm(dir, { recursive: true, force: true });
+            await run(site.url, file);
+        } finally {
+            forget();
+            site.stop();
+        }
+    }
+
+    test("is still served once the file it was drawn from is gone", async () => {
+        await held(GADGET, async (url, file) => {
+            expect(await status(url, file)).toBe(200);
+            expect(await chunk(url, file)).toMatch(/mount/);
+        });
+    });
+
+    test("is let go when the conversation that drew it is put away", async () => {
+        await held(GADGET, async (url, file) => {
+            forget();
+
+            expect(await status(url, file)).toBe(500);
+        });
+    });
+
+    test("is built afresh when the file behind it is rewritten and drawn again", async () => {
+        // A committed gadget rewritten is a different file at the same path. Holding on to
+        // what it was must not pin it to the version it was the first time it drew.
+        const dir = await mkdtemp(join(tmpdir(), "jeng-gui-"));
+        const file = join(dir, "gadget.tsx");
+        await writeFile(file, GADGET);
+        const site = serve();
+        try {
+            await keep(file);
+            const before = await chunk(site.url, file);
+            await writeFile(file, GADGET.replace("pick one", "choose one"));
+            await keep(file);
+
+            expect(await chunk(site.url, file)).not.toBe(before);
+        } finally {
+            forget();
+            site.stop();
+            await rm(dir, { recursive: true, force: true });
+        }
+    });
+
+    test("would not be served at all if nothing had held it, which is the bug", async () => {
+        const dir = await mkdtemp(join(tmpdir(), "jeng-gui-"));
+        const file = join(dir, "gadget.tsx");
+        await writeFile(file, GADGET);
+        const site = serve();
+        try {
+            await chunk(site.url, file);
+            await rm(dir, { recursive: true, force: true });
+
+            expect(await status(site.url, file)).toBe(500);
         } finally {
             site.stop();
         }

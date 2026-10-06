@@ -8,16 +8,16 @@ describe("transcript", () => {
     test("gathers jeng's own words and thinking into one box", () => {
         expect(
             blocks([
-                { kind: "jeng", text: "a", mode: "learn" },
-                { kind: "think", text: "b", mode: "learn" },
+                { kind: "jeng", id: 1, text: "a", mode: "learn" },
+                { kind: "think", id: 2, text: "b", mode: "learn" },
             ]).length,
         ).toBe(1);
     });
 
     test("boxes an action apart even though it wears jeng's colour", () => {
         const groups = blocks([
-            { kind: "jeng", text: "a", mode: "learn" },
-            { kind: "tool", icon: "⚙", text: "read path=a.txt", mode: "learn" },
+            { kind: "jeng", id: 1, text: "a", mode: "learn" },
+            { kind: "tool", id: 2, icon: "⚙", text: "read path=a.txt", mode: "learn" },
         ]);
 
         expect(groups.map((group) => group.owner)).toEqual(["jeng", "tool"]);
@@ -25,9 +25,9 @@ describe("transcript", () => {
 
     test("keeps the output of an action inside the action's box", () => {
         const groups = blocks([
-            { kind: "tool", icon: "⚙", text: "read path=a.txt", mode: "learn" },
-            { kind: "output", icon: "↳", text: "a", mode: "learn" },
-            { kind: "failure", icon: "↳", text: "boom", mode: "learn" },
+            { kind: "tool", id: 1, icon: "⚙", text: "read path=a.txt", mode: "learn" },
+            { kind: "output", id: 2, icon: "↳", text: "a", mode: "learn" },
+            { kind: "failure", id: 3, icon: "↳", text: "boom", mode: "learn" },
         ]);
 
         expect(groups.length).toBe(1);
@@ -35,9 +35,9 @@ describe("transcript", () => {
 
     test("gives each action a box of its own, rather than one box for a run of them", () => {
         const groups = blocks([
-            { kind: "tool", icon: "⚙", text: "read path=a.txt", mode: "learn" },
-            { kind: "output", icon: "↳", text: "a", mode: "learn" },
-            { kind: "tool", icon: "⚙", text: "read path=b.txt", mode: "learn" },
+            { kind: "tool", id: 1, icon: "⚙", text: "read path=a.txt", mode: "learn" },
+            { kind: "output", id: 2, icon: "↳", text: "a", mode: "learn" },
+            { kind: "tool", id: 3, icon: "⚙", text: "read path=b.txt", mode: "learn" },
         ]);
 
         expect(groups.map((group) => group.entries.length)).toEqual([2, 1]);
@@ -47,7 +47,7 @@ describe("transcript", () => {
         const { renderer, captureSpans, flush } = await testRender(
             <BlockView
                 block={{
-                    entries: [{ kind: "output", icon: "↳", text: "a", mode: "learn" }],
+                    entries: [{ kind: "output", id: 1, icon: "↳", text: "a", mode: "learn" }],
                 }}
             />,
             { width: 20, height: 5 },
@@ -64,7 +64,9 @@ describe("transcript", () => {
     test("draws what an action could not return in the color of an error", async () => {
         const { renderer, captureSpans, flush } = await testRender(
             <BlockView
-                block={{ entries: [{ kind: "failure", icon: "↳", text: "boom", mode: "learn" }] }}
+                block={{
+                    entries: [{ kind: "failure", id: 1, icon: "↳", text: "boom", mode: "learn" }],
+                }}
             />,
             { width: 20, height: 5 },
         );
@@ -79,9 +81,9 @@ describe("transcript", () => {
 
     test("keeps the speaker's turn apart from the other one", () => {
         const groups = blocks([
-            { kind: "user", text: "hi" },
-            { kind: "jeng", text: "hello", mode: "learn" },
-            { kind: "user", text: "bye" },
+            { kind: "user", id: 1, text: "hi" },
+            { kind: "jeng", id: 2, text: "hello", mode: "learn" },
+            { kind: "user", id: 3, text: "bye" },
         ]);
 
         expect(groups.map((group) => group.owner)).toEqual(["user", "jeng", "user"]);
@@ -89,20 +91,32 @@ describe("transcript", () => {
 
     test("opens a new box where the mode changed, rather than repainting the last one", () => {
         const groups = blocks([
-            { kind: "jeng", text: "a", mode: "learn" },
-            { kind: "jeng", text: "b", mode: "work" },
+            { kind: "jeng", id: 1, text: "a", mode: "learn" },
+            { kind: "jeng", id: 2, text: "b", mode: "work" },
         ]);
 
         expect(groups.map((group) => group.mode)).toEqual(["learn", "work"]);
     });
 
     test("names a box after what is in it, so a box that moves is still the same box", () => {
-        const said = { kind: "tool" as const, icon: "⚙", text: "read a", mode: "learn" as const };
-        const later = { kind: "tool" as const, icon: "⚙", text: "read b", mode: "learn" as const };
+        const said = {
+            kind: "tool" as const,
+            id: 1,
+            icon: "⚙",
+            text: "read a",
+            mode: "learn" as const,
+        };
+        const later = {
+            kind: "tool" as const,
+            id: 2,
+            icon: "⚙",
+            text: "read b",
+            mode: "learn" as const,
+        };
         const [before, after] = blocks([said, later]);
         const [stillBefore, , stillAfter] = blocks([
             said,
-            { kind: "error", icon: "err", text: "boom" },
+            { kind: "error", id: 3, icon: "err", text: "boom" },
             later,
         ]);
 
@@ -114,13 +128,13 @@ describe("transcript", () => {
     });
 
     test("leaves an error outside every box", () => {
-        const groups = blocks([{ kind: "error", icon: "err", text: "boom" }]);
+        const groups = blocks([{ kind: "error", id: 1, icon: "err", text: "boom" }]);
 
         expect(groups).toEqual([
             {
                 owner: undefined,
                 mode: undefined,
-                entries: [{ kind: "error", icon: "err", text: "boom" }],
+                entries: [{ kind: "error", id: 1, icon: "err", text: "boom" }],
             },
         ]);
     });
@@ -131,7 +145,7 @@ describe("transcript", () => {
                 block={{
                     owner: "jeng",
                     mode: "learn",
-                    entries: [{ kind: "jeng", text: "hi", mode: "learn" }],
+                    entries: [{ kind: "jeng", id: 1, text: "hi", mode: "learn" }],
                 }}
             />,
             { width: 20, height: 5 },
@@ -152,7 +166,7 @@ describe("transcript", () => {
                 block={{
                     owner: "jeng",
                     mode: "work",
-                    entries: [{ kind: "jeng", text: "hi", mode: "work" }],
+                    entries: [{ kind: "jeng", id: 1, text: "hi", mode: "work" }],
                 }}
             />,
             { width: 20, height: 5 },
@@ -173,7 +187,7 @@ describe("transcript", () => {
                 block={{
                     owner: "tool",
                     mode: "work",
-                    entries: [{ kind: "tool", icon: "⚙", text: "read_file", mode: "work" }],
+                    entries: [{ kind: "tool", id: 1, icon: "⚙", text: "read_file", mode: "work" }],
                 }}
             />,
             { width: 20, height: 5 },
@@ -190,7 +204,7 @@ describe("transcript", () => {
 
     test("gives the user green, which is neither mode", async () => {
         const { renderer, captureSpans, flush } = await testRender(
-            <BlockView block={{ owner: "user", entries: [{ kind: "user", text: "hi" }] }} />,
+            <BlockView block={{ owner: "user", entries: [{ kind: "user", id: 1, text: "hi" }] }} />,
             { width: 20, height: 5 },
         );
         await flush();
@@ -206,7 +220,9 @@ describe("transcript", () => {
     test("holds the icon off the call it marks, in a column of its own", async () => {
         const { renderer, captureCharFrame, flush } = await testRender(
             <BlockView
-                block={{ entries: [{ kind: "tool", icon: "⚙", text: "run", mode: "learn" }] }}
+                block={{
+                    entries: [{ kind: "tool", id: 1, icon: "⚙", text: "run", mode: "learn" }],
+                }}
             />,
             { width: 20, height: 5 },
         );
@@ -220,7 +236,9 @@ describe("transcript", () => {
 
     test("marks an error with a gutter instead of a box", async () => {
         const { renderer, captureCharFrame, flush } = await testRender(
-            <BlockView block={{ entries: [{ kind: "error", icon: "err", text: "boom" }] }} />,
+            <BlockView
+                block={{ entries: [{ kind: "error", id: 1, icon: "err", text: "boom" }] }}
+            />,
             { width: 20, height: 5 },
         );
         await flush();
@@ -236,7 +254,7 @@ describe("transcript", () => {
                 block={{
                     owner: "jeng",
                     mode: "learn",
-                    entries: [{ kind: "jeng", text: "0123456789abcdefghij", mode: "learn" }],
+                    entries: [{ kind: "jeng", id: 1, text: "0123456789abcdefghij", mode: "learn" }],
                 }}
             />,
             { width: 20, height: 5 },
@@ -249,16 +267,16 @@ describe("transcript", () => {
     });
 
     test("stays taller than its text when the column around it is too short", async () => {
-        const jeng = (text: string) => ({
+        const jeng = (id: number, text: string) => ({
             owner: "jeng" as const,
             mode: "learn" as const,
-            entries: [{ kind: "jeng" as const, text, mode: "learn" as const }],
+            entries: [{ kind: "jeng" as const, id, text, mode: "learn" as const }],
         });
         const { renderer, captureCharFrame, flush } = await testRender(
             <box flexDirection="column" width={20} height={6}>
-                <BlockView block={jeng("a reply that wraps onto a second line")} />
-                <BlockView block={jeng("another reply that wraps as well")} />
-                <BlockView block={jeng("a third reply that wraps as well")} />
+                <BlockView block={jeng(1, "a reply that wraps onto a second line")} />
+                <BlockView block={jeng(2, "another reply that wraps as well")} />
+                <BlockView block={jeng(3, "a third reply that wraps as well")} />
             </box>,
             { width: 20, height: 8 },
         );

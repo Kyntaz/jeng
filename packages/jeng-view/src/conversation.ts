@@ -2,20 +2,29 @@ import type { Agent, Answers, Approval, ApprovalDecision, Draw, Mode, Widget } f
 import { fields } from "@jeng/core";
 import { append, type Entry, isAsk } from "./transcript";
 
-/** A gadget's interface, waiting on a user who has not answered it yet. */
-export interface Ask {
+/**
+ * A gadget's interface, waiting on a user who has not answered it yet. This is all a
+ * frontend is ever given: enough to draw the form and name it, and deliberately no way to
+ * answer it. A window reads this as JSON, where the callback that would answer it arrives
+ * as nothing at all, so it is held beside the state instead of inside it.
+ */
+export interface Pending {
     /** What tells two forms apart, since a gadget can leave more than one up. */
     id: number;
     draw: Draw;
-    resolve: (answers: Record<string, unknown>) => void;
 }
 
 type TuiDraw = { surface: "tui"; widget: Widget };
 
 export interface State {
     entries: Entry[];
-    asks: Ask[];
-    approval?: Approval;
+    asks: Pending[];
+    /**
+     * The one thing being waited on, numbered for the same reason a form is: a window is
+     * handed this as JSON, and it is the number alone that tells the live card and the
+     * transcript's record of it are the same approval rather than two that look alike.
+     */
+    approval?: { id: number; approval: Approval };
     busy: boolean;
     /** One request old, which is the size of the request the model is about to make. */
     tokens: number;
@@ -28,6 +37,8 @@ export interface State {
     cwd: string;
     /** The config file behind the homes and the model, or none when the environment is. */
     config?: string;
+    /** Where the AGENTS.md files in force sit, which is worth showing before a run shows it. */
+    agents: string[];
 }
 
 export const decided = (decision: ApprovalDecision): string =>
@@ -58,10 +69,14 @@ export function createConversation(agent: Agent, config?: string) {
         model: agent.model,
         cwd: agent.cwd,
         config,
+        agents: agent.agents,
     };
     let numbered = 0;
     let running: AbortController | undefined;
     let deciding: ((decision: ApprovalDecision) => void) | undefined;
+    // Kept beside the state rather than inside it, because a window is handed the state as
+    // JSON and a function would not survive the trip to arrive as something to call.
+    const waiting = new Map<number, (answers: Record<string, unknown>) => void>();
     const listeners = new Set<() => void>();
 
     function set(patch: Partial<State>): void {
@@ -69,17 +84,14 @@ export function createConversation(agent: Agent, config?: string) {
         for (const listener of listeners) listener();
     }
 
-    // An answer belongs to the draw it came from, which is the same widget or the same
-    // props the transcript entry was built from, so nothing has to be numbered to
-    // find it.
-    function settle(ask: Ask, answers: Record<string, unknown>): void {
+    function settle(ask: Pending, answers: Record<string, unknown>): void {
         set({
             asks: state.asks.filter((it) => it !== ask),
             entries: state.entries.map((entry) =>
                 isAsk(entry, ask) ? { ...entry, answers } : entry,
             ),
         });
-        ask.resolve(answers);
+        waiting.get(ask.id)?.(answers);
     }
 
     agent.setApprove(
@@ -87,10 +99,14 @@ export function createConversation(agent: Agent, config?: string) {
             new Promise<ApprovalDecision>((resolve) => {
                 deciding = resolve;
                 // What the user is being asked to allow goes in the transcript as well as
-                // wherever it is answered, so scrolling back shows the decision.
+                // wherever it is answered, so scrolling back shows the decision. The number
+                // is what tells a frontend that has both the one place that has yet to
+                // answer and the record of it that they are the same one thing, which a
+                // window could not work out from what they hold.
+                const id = ++numbered;
                 set({
-                    approval: request,
-                    entries: [...state.entries, { kind: "approval", approval: request }],
+                    approval: { id, approval: request },
+                    entries: [...state.entries, { kind: "approval", id, approval: request }],
                 });
             }),
     );
@@ -106,7 +122,9 @@ export function createConversation(agent: Agent, config?: string) {
     function ask(draw: Draw): Promise<Record<string, unknown>> {
         if (!asks(draw)) return Promise.resolve({});
         return new Promise((resolve) => {
-            set({ asks: [...state.asks, { id: ++numbered, draw, resolve }] });
+            const id = ++numbered;
+            waiting.set(id, resolve);
+            set({ asks: [...state.asks, { id, draw }] });
         });
     }
 
@@ -114,7 +132,7 @@ export function createConversation(agent: Agent, config?: string) {
         get: (): State => state,
 
         /** The one form that is up. A gadget that asks without waiting leaves more. */
-        get pending(): Ask | undefined {
+        get pending(): Pending | undefined {
             return state.asks[0];
         },
 
@@ -144,7 +162,10 @@ export function createConversation(agent: Agent, config?: string) {
             set({
                 approval: undefined,
                 // An answer is the user talking, so it is recorded as the user's line.
-                entries: [...state.entries, { kind: "user", text: decided(decision) }],
+                entries: [
+                    ...state.entries,
+                    { kind: "user", id: ++numbered, text: decided(decision) },
+                ],
             });
         },
 
@@ -170,14 +191,15 @@ export function createConversation(agent: Agent, config?: string) {
         clear(): void {
             // Anything still waiting on an answer would wait forever once the transcript
             // it was drawn in is gone.
-            for (const ask of state.asks) ask.resolve({});
+            for (const ask of state.asks) waiting.get(ask.id)?.({});
+            waiting.clear();
             agent.clear();
             set({ entries: [], asks: [], tokens: 0 });
         },
 
         async send(text: string): Promise<void> {
             if (!text.trim()) return;
-            set({ entries: [...state.entries, { kind: "user", text }] });
+            set({ entries: [...state.entries, { kind: "user", id: ++numbered, text }] });
 
             // The prompt keeps working while jeng does, so a message typed mid-turn
             // reaches the model between two of its calls rather than cutting one short.
@@ -200,7 +222,7 @@ export function createConversation(agent: Agent, config?: string) {
                         if (event.type === "usage") set({ tokens: event.promptTokens });
                         else {
                             if (event.type === "text") streamed += event.text;
-                            set({ entries: append(state.entries, event, speaking) });
+                            set({ entries: append(state.entries, event, speaking, ++numbered) });
                         }
                     },
                 });
@@ -208,11 +230,19 @@ export function createConversation(agent: Agent, config?: string) {
                 // turn that ended in words the user already watched stream stays one entry.
                 if (reply.trim() && reply.trim() !== streamed.trim())
                     set({
-                        entries: [...state.entries, { kind: "jeng", text: reply, mode: speaking }],
+                        entries: [
+                            ...state.entries,
+                            { kind: "jeng", id: ++numbered, text: reply, mode: speaking },
+                        ],
                     });
             } catch (error) {
                 const note = controller.signal.aborted ? "interrupted" : (error as Error).message;
-                set({ entries: [...state.entries, { kind: "error", icon: "err", text: note }] });
+                set({
+                    entries: [
+                        ...state.entries,
+                        { kind: "error", id: ++numbered, icon: "err", text: note },
+                    ],
+                });
             } finally {
                 running = undefined;
                 set({ busy: false });

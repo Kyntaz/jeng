@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
 import { mkdir, stat } from "node:fs/promises";
-import { dirname, join, relative } from "node:path";
+import { dirname, extname, join, relative } from "node:path";
 
 /**
  * The source tree, found by walking up to the folder the whole project hangs off.
@@ -113,15 +113,41 @@ async function bundle(entrypoint: string): Promise<string> {
 }
 
 const shells = new Map<string, string>();
-const gadgets = new Map<string, { at: number; code: string }>();
+// What a gadget was, held once the file it was in is gone. A `test_gadget` is run out of a
+// temp folder that is removed as soon as the turn is over, and the record of it outlives
+// that folder: a path is the one thing in a record that can stop existing while the
+// record is still on screen.
+const kept = new Map<string, string>();
+const gadgets = new Map<string, { at?: number; code: string }>();
 
 // Beside the source rather than in the system temp folder, because a wrapper reaches a
 // gadget by a relative path and two folders on different drives have no relative path
 // between them. A home on another drive is not unusual.
 const cache = join(ROOT, ".jeng-gadgets");
 
-const named = (file: string) =>
-    join(cache, `${createHash("sha256").update(file).digest("hex").slice(0, 16)}.js`);
+const digest = (file: string) => createHash("sha256").update(file).digest("hex").slice(0, 16);
+
+const named = (file: string) => join(cache, `${digest(file)}.js`);
+
+/** Where a kept gadget's source is written, since the wrapper reaches it by path too. */
+const pinned = (file: string) => join(cache, `${digest(file)}${extname(file)}`);
+
+/**
+ * Hold onto a gadget's source, because the window is going to be asked for it again by a
+ * record that outlives the file. Read now, while the file is there: a draft is gone by the
+ * time anything needs it a second time. What was built from an earlier reading is dropped,
+ * because a gadget rewritten and drawn again is a new file at the same path.
+ */
+export async function keep(file: string): Promise<void> {
+    kept.set(file, await Bun.file(file).text());
+    gadgets.delete(file);
+}
+
+/** What one conversation was holding, dropped when another takes its place. */
+export function forget(): void {
+    kept.clear();
+    gadgets.clear();
+}
 
 /** The window's own files, built once and kept: there are three of them and they never change. */
 async function shell(path: string): Promise<string> {
@@ -135,16 +161,20 @@ async function shell(path: string): Promise<string> {
 /**
  * A gadget's chunk, rebuilt only when the file it came from has changed. A rewritten
  * gadget is a different file at the same path, so the timestamp is what tells them
- * apart.
+ * apart — unless what is held is what it was when it was drawn, which has no later
+ * version to notice.
  */
 async function gadget(file: string): Promise<string> {
-    const at = (await stat(file)).mtimeMs;
+    const held = kept.get(file);
+    const at = held === undefined ? (await stat(file)).mtimeMs : undefined;
     const cached = gadgets.get(file);
     if (cached && cached.at === at) return cached.code;
 
     await mkdir(cache, { recursive: true });
     const entry = named(file);
-    await Bun.write(entry, wrapper(entry, file));
+    const from = held === undefined ? file : pinned(file);
+    if (held !== undefined) await Bun.write(from, held);
+    await Bun.write(entry, wrapper(entry, from));
 
     const code = await bundle(entry);
     gadgets.set(file, { at, code });

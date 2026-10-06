@@ -7,6 +7,7 @@ import { ApprovalCard } from "./approval";
 import { Composer } from "./composer";
 import { Picker } from "./picker";
 import type { Bridge } from "./rpc";
+import { useSpinner } from "./spinner";
 import { Transcript } from "./transcript";
 
 // A mode is told apart by its colour. The window is cream paper rather than a terminal,
@@ -20,6 +21,7 @@ export function App({ bridge }: { bridge: Bridge }) {
     const scroller = useRef<HTMLDivElement>(null);
     const [picking, setPicking] = useState(false);
     const [configs, setConfigs] = useState<string[]>([]);
+    const spinner = useSpinner(Boolean(state?.busy));
 
     // The window asks for the state once it is listening, because there is no telling
     // when a listener is attached. The configs it has been shown come back with it.
@@ -57,6 +59,7 @@ export function App({ bridge }: { bridge: Bridge }) {
     if (!state) return <div className="app" />;
 
     const holding = state.asks.length > 0 || Boolean(state.approval);
+    const waiting = holding ? "waiting for you" : "thinking";
 
     return (
         <div
@@ -89,17 +92,33 @@ export function App({ bridge }: { bridge: Bridge }) {
             </header>
 
             <div className="scroll" ref={scroller}>
+                {state.agents.length > 0 && (
+                    <div className="instructions">
+                        {state.agents.map((dir) => (
+                            <span key={dir}>{`▪ ${place(dir, state.cwd)}/AGENTS.md`}</span>
+                        ))}
+                    </div>
+                )}
                 <Transcript
                     entries={state.entries}
                     asks={state.asks}
                     thinking={state.thinking}
+                    approving={state.approval?.id}
                     onAnswer={(id, answers) => void bridge.answer(id, answers)}
                     onAbandon={(id) => void bridge.abandon(id)}
                 />
+                {/* Under the last thing said rather than in the bar, because the bar says
+                 * that Jeng is busy and this says it is still going. */}
+                {state.busy && (
+                    <div className="working">
+                        <span>{spinner}</span>
+                        <span>{waiting}</span>
+                    </div>
+                )}
                 {state.approval && (
                     <div className="turn">
                         <ApprovalCard
-                            approval={state.approval}
+                            approval={state.approval.approval}
                             onDecide={(decision) => void bridge.decide(decision)}
                         />
                     </div>
@@ -109,9 +128,7 @@ export function App({ bridge }: { bridge: Bridge }) {
             <div>
                 <div className="status">
                     {state.busy && <span className="dot" />}
-                    <span>
-                        {state.busy ? (holding ? "waiting for you" : "thinking") : "esc interrupt"}
-                    </span>
+                    <span>{state.busy ? waiting : "esc interrupt"}</span>
                     <span className="grow" />
                     <button type="button" onClick={() => void bridge.toggleThinking()}>
                         {state.thinking ? "hide detail" : "detail"}

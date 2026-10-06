@@ -12,7 +12,7 @@ export {
     isDelete,
 } from "./approve";
 export { type Config, configPaths, defaultHome, defaultModel, loadConfig } from "./config";
-export type { Gui, GuiAnswers, GuiProps } from "./gui";
+export type { Gui, GuiAnswers, GuiHost, GuiProps } from "./gui";
 export type { Home } from "./home";
 export { isMode, MODES, type Mode } from "./mode";
 export type { Message, ModelConfig } from "./model";

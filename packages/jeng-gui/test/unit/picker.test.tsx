@@ -16,6 +16,7 @@ const state: State = {
     model: "test-model",
     cwd: "/work/jeng",
     config: "/home/jeng/jeng.json",
+    agents: [],
 };
 
 /** A picker with no transport behind it, because nothing here asks anything of one. */

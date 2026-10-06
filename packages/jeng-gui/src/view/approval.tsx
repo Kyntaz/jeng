@@ -1,5 +1,6 @@
 import type { Approval } from "@jeng/core";
 import { useState } from "react";
+import { Code } from "./code";
 
 /**
  * An approval is answered where it is asked rather than in a bar that took the prompt's
@@ -22,7 +23,10 @@ export function ApprovalCard({
                     {approval.kind} <code>{approval.name}</code>
                 </span>
             </div>
-            <pre>{approval.source}</pre>
+            {/* Above the source rather than below it, because it is Jeng's case for the
+             * source and reads as one with it. */}
+            {approval.reason && <p className="why">{approval.reason}</p>}
+            <Code code={approval.source} />
             <textarea
                 value={reason}
                 placeholder="why not, if you are turning it down"

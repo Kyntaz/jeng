@@ -18,6 +18,7 @@ const quiet: State = {
     model: "test-model",
     cwd: "/work/jeng",
     config: "/home/jeng/jeng.json",
+    agents: [],
 };
 
 /** A window that is only ever looked at, because nothing here has a transport. */
@@ -41,6 +42,13 @@ const still = (state: State): Bridge =>
     }) as unknown as Bridge;
 
 const shown = (state: State) => renderToStaticMarkup(<App bridge={still(state)} />);
+
+const approval: Approval = {
+    kind: "create gadget",
+    name: "greet",
+    source: "export default async () => 1",
+    reason: "",
+};
 
 describe("the window", () => {
     test("says which homes and which model it is talking to", () => {
@@ -95,6 +103,7 @@ describe("the window", () => {
             id: 1,
             draw: {
                 surface: "gui" as const,
+                id: 1,
                 file: "/home/jeng/gadgets/review.tsx",
                 props: { diff: "a" },
             },
@@ -104,25 +113,70 @@ describe("the window", () => {
         expect(shown({ ...quiet, busy: true, asks: [ask] })).toContain("waiting for you");
     });
 
+    test("spins under the last thing said while it works, rather than only saying so in the bar", () => {
+        const markup = shown({
+            ...quiet,
+            busy: true,
+            entries: [{ kind: "user", id: 1, text: "hi" }],
+        });
+
+        expect(markup).toContain('<div class="working">');
+        expect(markup.indexOf('class="working"')).toBeGreaterThan(markup.indexOf("hi"));
+        // Braille, so what is drawn is the spinner and not some other glyph standing in
+        // for one.
+        expect(markup).toMatch(/<div class="working"><span>[\u2800-\u28ff]/);
+    });
+
+    test("shows no spinner when it is not working", () => {
+        expect(shown(quiet)).not.toContain("working");
+    });
+
+    test("lists the AGENTS.md files in force, because that is what makes two runs differ", () => {
+        const markup = shown({
+            ...quiet,
+            agents: ["/work/jeng", "/home/jeng/.jeng"],
+        });
+
+        expect(markup).toContain("AGENTS.md");
+        expect(markup).toContain(">▪ ./AGENTS.md</span>");
+        expect(markup).toContain(">▪ /home/jeng/.jeng/AGENTS.md</span>");
+    });
+
+    test("says nothing about AGENTS.md when there is none, rather than drawing an empty list", () => {
+        expect(shown(quiet)).not.toContain("AGENTS.md");
+    });
+
     test("offers a way to clear the conversation", () => {
         expect(shown(quiet)).toContain("clear");
     });
 
     test("asks for the state before it draws anything, because there is no telling when it is listening", () => {
-        expect(shown({ ...quiet, entries: [{ kind: "user", text: "hi" }] })).toContain("hi");
+        expect(shown({ ...quiet, entries: [{ kind: "user", id: 1, text: "hi" }] })).toContain("hi");
     });
 
     test("puts the approval where it is answered rather than in a bar of its own", () => {
-        const approval: Approval = {
-            kind: "create gadget",
-            name: "greet",
-            source: "export default async () => 1",
-            reason: "",
-        };
-
-        const markup = shown({ ...quiet, approval });
+        const markup = shown({ ...quiet, approval: { id: 1, approval } });
 
         expect(markup).toContain("create gadget");
         expect(markup).toContain("approve");
+    });
+
+    test("draws an approval once, since the card is already the answerable copy", () => {
+        const markup = shown({
+            ...quiet,
+            approval: { id: 1, approval },
+            entries: [{ kind: "approval", id: 1, approval }],
+        });
+
+        expect(markup.match(/create gadget/g)).toHaveLength(1);
+    });
+
+    test("keeps the why inside the card, because it is the case for the source", () => {
+        const markup = shown({
+            ...quiet,
+            approval: { id: 1, approval: { ...approval, reason: "it greets the repo" } },
+        });
+
+        expect(markup).toContain('<p class="why">it greets the repo</p>');
     });
 });

@@ -150,10 +150,33 @@ button:hover {
     display: flex;
     flex-direction: column;
     gap: 8px;
-    /* Hugged to what is written, so a short question is a short slip, but no wider than
-     * a comfortable line's worth of reading. */
+    /* Hugged to what is written, so a short question is a short slip. Nothing caps it,
+     * because the window is already only as wide as the reader made it and a diff wants
+     * every column it can get. */
     width: fit-content;
-    max-width: 70ch;
+    max-width: 100%;
+}
+
+/*
+ * What Jeng is reading, said before the conversation rather than inside it: the AGENTS.md
+ * files in force are the difference between two runs that look identical until they don't.
+ */
+.instructions {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    color: var(--jeng-muted);
+}
+
+.working {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    color: var(--jeng-muted);
+}
+
+.working > span:first-child {
+    color: var(--jeng-accent);
 }
 
 /*
@@ -239,13 +262,18 @@ pre.card {
     margin-bottom: 10px;
 }
 
-.card pre {
+/* The code being reviewed. One rule for it wherever it is put, so a snippet reads the same
+ * in the card being answered as in the transcript's record of it. */
+pre.card {
     margin: 0;
+    padding: 10px 12px;
     max-height: 320px;
     overflow: auto;
     font-family: var(--jeng-mono);
     font-size: 13px;
+    line-height: 1.5;
     white-space: pre;
+    tab-size: 4;
 }
 
 /*
@@ -328,17 +356,6 @@ pre.card {
     gap: 12px;
 }
 
-.approval pre {
-    margin: 0;
-    padding: 10px 12px;
-    border: 1px solid var(--jeng-border);
-    border-radius: var(--jeng-radius);
-    background: var(--jeng-surface);
-    font-family: var(--jeng-mono);
-    font-size: 13px;
-    overflow: auto;
-}
-
 .approval textarea {
     min-height: 60px;
     padding: 8px 10px;
@@ -357,6 +374,82 @@ pre.card {
 
 .approval .why {
     color: var(--jeng-muted);
+}
+
+/*
+ * highlight.js marks up code and nothing else, so the colour is all there is to add. These
+ * are picked against the paper rather than lifted from one of its themes, which are all
+ * either dark or tuned for white and would leave a cream slip looking scuffed.
+ */
+.hljs-comment,
+.hljs-quote {
+    color: #9a8f7d;
+    font-style: italic;
+}
+
+.hljs-keyword,
+.hljs-selector-tag,
+.hljs-tag,
+.hljs-literal,
+.hljs-doctag {
+    color: #a03e52;
+}
+
+.hljs-string,
+.hljs-regexp,
+.hljs-symbol,
+.hljs-bullet,
+.hljs-addition {
+    color: #4c7a48;
+}
+
+.hljs-number,
+.hljs-meta,
+.hljs-link {
+    color: #8a6a3a;
+}
+
+.hljs-title,
+.hljs-title.function_,
+.hljs-section,
+.hljs-name {
+    color: #3f6f9f;
+}
+
+.hljs-type,
+.hljs-title.class_,
+.hljs-class,
+.hljs-built_in,
+.hljs-selector-class,
+.hljs-selector-id,
+.hljs-params {
+    color: #6a5a9e;
+}
+
+.hljs-attr,
+.hljs-attribute,
+.hljs-variable,
+.hljs-template-variable,
+.hljs-subst {
+    color: #a5643c;
+}
+
+.hljs-emphasis {
+    font-style: italic;
+}
+
+.hljs-strong {
+    font-weight: 600;
+}
+
+/* A patch is the one thing read for what changed, so those two lines carry a wash of ink. */
+.hljs-addition {
+    background: rgb(76 122 72 / 10%);
+}
+
+.hljs-deletion {
+    color: #a03e52;
+    background: rgb(160 62 82 / 10%);
 }
 
 /* The button is as tall as the box beside it, so the two read as one control. */

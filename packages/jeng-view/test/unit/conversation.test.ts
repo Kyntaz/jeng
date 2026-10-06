@@ -85,8 +85,11 @@ const question = (name: string): Widget => ({ kind: "input", name, question: `${
 
 const drawn = (name: string): Draw => ({ surface: "tui", widget: question(name) });
 
+let numbered = 0;
+
 const component = (props: Record<string, unknown>): Draw => ({
     surface: "gui",
+    id: ++numbered,
     file: "/home/jeng/gadgets/review.tsx",
     props,
 });
@@ -256,8 +259,22 @@ describe("an approval", () => {
         const { talk, request } = harness();
         void request(asked);
 
-        expect(talk.get().entries).toContainEqual({ kind: "approval", approval: asked });
-        expect(talk.get().approval).toEqual(asked);
+        expect(talk.get().entries).toContainEqual({
+            kind: "approval",
+            id: 1,
+            approval: asked,
+        });
+        expect(talk.get().approval).toEqual({ id: 1, approval: asked });
+    });
+
+    test("numbers the two the same, so a frontend can tell one approval from two alike ones", () => {
+        const { talk, request } = harness();
+        void request(asked);
+        const entry = talk.get().entries.at(-1);
+        const live = talk.get().approval;
+        if (entry?.kind !== "approval" || !live) throw new Error("no approval was raised");
+
+        expect(entry.id).toBe(live.id);
     });
 
     test("records what the user said as the user's own line", async () => {
@@ -269,6 +286,7 @@ describe("an approval", () => {
         expect(await decision).toEqual({ approved: false, reason: "not that one" });
         expect(talk.get().entries.at(-1)).toEqual({
             kind: "user",
+            id: 2,
             text: "rejected: not that one",
         });
     });
@@ -342,6 +360,7 @@ describe("a turn", () => {
 
         expect(talk.get().entries.at(-1)).toEqual({
             kind: "jeng",
+            id: 3,
             text: "another",
             mode: "learn",
         });
@@ -377,6 +396,13 @@ describe("which agent this is", () => {
         const { talk } = harness();
 
         expect(talk.get().config).toBeUndefined();
+    });
+
+    test("names where the AGENTS.md files in force sit, which is the difference between two runs", () => {
+        const { agent } = stubAgent();
+        const talk = createConversation({ ...agent, agents: ["/work/jeng", "/home/jeng/.jeng"] });
+
+        expect(talk.get().agents).toEqual(["/work/jeng", "/home/jeng/.jeng"]);
     });
 });
 

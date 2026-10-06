@@ -37,6 +37,13 @@ export function Gadget({
     // down and put it back up again under the user.
     const answer = useRef(onAnswer);
     answer.current = onAnswer;
+    // What the gadget was handed, and what it was given, are both handed over afresh every
+    // time the window is told anything at all, and neither time are they different: the
+    // draw they belong to has not changed. Held the same way, so the window saying
+    // something else does not take a half-typed form apart.
+    const given = useRef({ props, answers });
+    given.current = { props, answers };
+    const settled = answers !== undefined;
 
     useEffect(() => {
         let unmount: (() => void) | undefined;
@@ -47,10 +54,9 @@ export function Gadget({
             .then((module: { mount?: Mount }) => {
                 if (gone || !host.current) return;
                 if (!module.mount) throw new Error("this gadget exported no component to draw");
-                const settled = answers !== undefined;
                 unmount = module.mount(host.current, {
-                    ...props,
-                    ...(settled ? { answers: answers } : { answer: answer.current }),
+                    ...given.current.props,
+                    ...(settled ? { answers: given.current.answers } : { answer: answer.current }),
                 });
             })
             .catch((error: Error) => {
@@ -63,14 +69,14 @@ export function Gadget({
             gone = true;
             unmount?.();
         };
-    }, [file, revision, props, answers]);
+    }, [file, revision, settled]);
 
     return (
         <div className="card">
-            <div className="ask">{answers === undefined ? "waiting for you" : "answered"}</div>
+            <div className="ask">{settled ? "answered" : "waiting for you"}</div>
             <div ref={host} />
             {failure && <div className="note failed">{failure}</div>}
-            {answers === undefined && onAbandon && (
+            {!settled && onAbandon && (
                 <div className="actions abandon">
                     <button type="button" className="no" onClick={onAbandon}>
                         skip

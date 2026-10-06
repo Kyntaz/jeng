@@ -1,12 +1,22 @@
 import type { AgentEvent, Approval, Draw, Mode, Widget } from "@jeng/core";
 
+/**
+ * One line of the conversation, named by a number.
+ *
+ * The number is what a row is called by, and it is what it is called by in a window
+ * rather than in the terminal, because a window reads its state as JSON: there, being
+ * the same object stops meaning anything, and a row named by what it holds would be a
+ * new row every time anything else on screen changed. An approval's number is the one
+ * the conversation is asked about, so the same number says which record is the one
+ * still waiting.
+ */
 export type Entry =
-    | { kind: "user"; text: string }
-    | { kind: "jeng" | "think"; text: string; mode: Mode }
-    | { kind: "tool" | "output" | "failure"; icon: string; text: string; mode: Mode }
-    | { kind: "view"; draw: Draw; mode: Mode; answers?: Record<string, unknown> }
-    | { kind: "approval"; approval: Approval }
-    | { kind: "error"; icon: string; text: string };
+    | { kind: "user"; id: number; text: string }
+    | { kind: "jeng" | "think"; id: number; text: string; mode: Mode }
+    | { kind: "tool" | "output" | "failure"; id: number; icon: string; text: string; mode: Mode }
+    | { kind: "view"; id: number; draw: Draw; mode: Mode; answers?: Record<string, unknown> }
+    | { kind: "approval"; id: number; approval: Approval }
+    | { kind: "error"; id: number; icon: string; text: string };
 
 // What the toggle holds back: the thinking behind a reply, the output behind an
 // action, and a turn that went wrong. A failure is none of those -- it is the answer
@@ -21,13 +31,19 @@ export const blank = (entry: Entry): boolean => {
 };
 
 /**
- * Whether two draws are the same form. The wrapper is built twice — once by the agent
- * for the transcript and once by the host that took the port over — so what identifies
- * a form is the thing the gadget handed it, which is the same object in both.
+ * Whether two draws are the same form. The wrapper is built twice — once by the agent for
+ * the transcript and once for the host that took the port over — so what identifies a form
+ * is the number the agent gave it, which both copies carry and neither can lose.
+ *
+ * A component is numbered because a window reads its state as JSON, where being the same
+ * object stops meaning anything: without the number the window cannot tell the transcript's
+ * copy of a form from the ask it belongs to, and hands the gadget no way to answer. A widget
+ * tree still goes by identity, because the terminal holds the same objects throughout and
+ * has no reason to number anything.
  */
 export const sameDraw = (one: Draw, other: Draw): boolean => {
     if (one.surface !== other.surface) return false;
-    if (one.surface === "gui" && other.surface === "gui") return one.props === other.props;
+    if (one.surface === "gui" && other.surface === "gui") return one.id === other.id;
     return one.surface === "tui" && other.surface === "tui" && one.widget === other.widget;
 };
 
@@ -58,15 +74,18 @@ const blankWidget = (widget: Widget): boolean => {
     }
 };
 
-// A turn is written in more than one piece, so text and thinking both join the
-// entry they are already part of.
-export function append(entries: Entry[], event: AgentEvent, mode: Mode): Entry[] {
+/**
+ * A turn is written in more than one piece, so text and thinking both join the entry they
+ * are already part of — keeping the number they were given, because a reply arriving a
+ * word at a time is one row the whole way through rather than one row per word.
+ */
+export function append(entries: Entry[], event: AgentEvent, mode: Mode, id: number): Entry[] {
     if (event.type === "text" || event.type === "reasoning") {
         const kind = event.type === "text" ? "jeng" : "think";
         const last = entries.at(-1);
         if (last?.kind === kind)
             return [...entries.slice(0, -1), { ...last, text: last.text + event.text }];
-        return [...entries, { kind, text: event.text, mode }];
+        return [...entries, { kind, id, text: event.text, mode }];
     }
 
     switch (event.type) {
@@ -79,6 +98,7 @@ export function append(entries: Entry[], event: AgentEvent, mode: Mode): Entry[]
                 ...entries,
                 {
                     kind: "tool",
+                    id,
                     icon: "⚙",
                     text: args ? `${event.action} ${args}` : event.action,
                     mode,
@@ -86,7 +106,7 @@ export function append(entries: Entry[], event: AgentEvent, mode: Mode): Entry[]
             ];
         }
         case "view":
-            return [...entries, { kind: "view", draw: event.draw, mode }];
+            return [...entries, { kind: "view", id, draw: event.draw, mode }];
         case "result":
             // What an action returned is detail, but what it could not return is the
             // answer to whether it worked, so only the two are told apart here.
@@ -94,6 +114,7 @@ export function append(entries: Entry[], event: AgentEvent, mode: Mode): Entry[]
                 ...entries,
                 {
                     kind: event.ok ? "output" : "failure",
+                    id,
                     icon: "↳",
                     text: event.content,
                     mode,

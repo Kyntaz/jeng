@@ -6,10 +6,19 @@ import { prompt } from "./prompts";
  */
 export type Surface = "tui" | "gui";
 
-/** One thing a gadget asked to be shown, in the vocabulary of the surface that will show it. */
+/**
+ * One thing a gadget asked to be shown, in the vocabulary of the surface that will show it.
+ *
+ * A `gui` draw is numbered rather than being recognised by what it holds, because a window
+ * is handed its state as JSON: two draws that were the same object on this side arrive as
+ * two equal ones over there, and the id is the only thing that survives to say they are one
+ * form rather than two copies of a coincidence.
+ */
 export type Draw =
     | { surface: "tui"; widget: Widget }
-    | { surface: "gui"; file: string; props: Record<string, unknown> };
+    | { surface: "gui"; id: number; file: string; props: Record<string, unknown> };
+
+export type GuiDraw = Extract<Draw, { surface: "gui" }>;
 
 export type Choice = { name: string; description?: string };
 

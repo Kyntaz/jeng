@@ -9,7 +9,7 @@ import {
 import { type Conversation, createConversation } from "@jeng/view";
 import { app, Utils } from "electrobun/main";
 import type { Applied } from "../rpc";
-import { serve } from "./server";
+import { forget, keep, serve } from "./server";
 import { readSettings, type Settings, saveSettings } from "./settings";
 import { openWindow } from "./window";
 
@@ -62,8 +62,13 @@ async function open(from: Settings, mode?: Mode): Promise<Conversation> {
     });
     const conversation = createConversation(agent, config.path);
     // A gadget that draws a react component is compiled and mounted in the window, so this
-    // is the port that makes a run anything but headless.
-    agent.setGui((file, props) => conversation.ask({ surface: "gui", file, props }));
+    // is the port that makes a run anything but headless. What it drew is kept on the way
+    // past, because a gadget run as a draft is deleted the moment the turn is over and the
+    // record of it has to outlive that.
+    agent.setGui(async (draw) => {
+        await keep(draw.file).catch(() => {});
+        return await conversation.ask(draw);
+    });
     return conversation;
 }
 
@@ -98,6 +103,8 @@ async function set(next: Settings): Promise<Applied> {
     talk.escape();
     settings = wanted;
     talk = opened;
+    // The old conversation's gadgets go with it: nothing left on screen is drawing them.
+    forget();
     watch();
     // Nobody has said anything since the swap, so the new state has to be handed over
     // rather than waited for: the window is holding the old one until it is told.

@@ -1,8 +1,8 @@
 export {
-    type Ask,
     type Conversation,
     createConversation,
     decided,
+    type Pending,
     type State,
 } from "./conversation";
 export { place } from "./place";

@@ -96,16 +96,32 @@ how Jeng puts an interaction in front of someone that it could not have written 
   come up, promise `enter answer`, and swallow every keystroke. What is reported as a field and what is
   drawn as one form are the same `fields()`, so they cannot drift.
 - **A form is one at a time, and it keeps its own answers.** A gadget that asks without waiting can
-  leave more than one up; the rest wait rather than reaching for the keys. Each form is keyed by what
-  the gadget handed the port, not by the wrapper around it, because the wrapper is built twice — once
-  for the transcript and once by the host — and only what the gadget passed is the same object in both.
+  leave more than one up; the rest wait rather than reaching for the keys. Each form is keyed by a
+  number the agent gave it, because the wrapper around a draw is built twice — once for the transcript
+  and once by the host — and only the number survives to say they were one form. It cannot be the object
+  the gadget passed: a window is handed its state as JSON, where being the same object stops meaning
+  anything, and a form the window cannot recognise is one whose gadget has been left no way to answer.
+- **An approval is drawn once too, but as the card rather than as the record.** The transcript keeps it
+  either way, so scrolling back shows what was allowed; while it is still being answered the window shows
+  only the card, since the record has no buttons and is the same form a second time. The number says which
+  one is which, for the same reason a form's does.
 - **An interface is drawn once, in the transcript.** A form being filled in is part of the scroll
   region rather than a panel below it, so a tall one scrolls with everything else instead of taking
   rows the prompt needs and being the one thing on screen that cannot be scrolled through. Drawn
   twice, once live and once in the transcript, it is only reachable in the copy nobody can move. The
   live tree is left out of the transcript and put back carrying its answers, so what was asked
   and what was answered stays in place and scrolling back shows the decision the gadget went on to
-  make.
+  make. Exactly twice, no more: a window rebuilds its rows from a number and a component holds
+  whatever it is holding, so a state push that changes nothing changes nothing on screen. Naming
+  rows by the object holding them would tear the whole scroll down and put it back on every word
+  the model says, which is what took a gadget apart while the user was in the middle of one.
+- **The window holds what it was shown, because a path is the only thing in a record that can go
+  missing.** A widget tree is recorded as the tree, and an approval as its source, but a component
+  is recorded as the file it was loaded from — and a gadget run as a draft lives in a temp folder
+  that is removed the moment the turn is over. So the source is read at the moment of the draw, while
+  the file is still there, and kept for as long as the conversation that drew it. What is kept is
+  what was drawn rather than what is on disk now, so a gadget rewritten later leaves the record of
+  it as it was actually shown.
 - **A gadget that draws is declared in its header**, with `ui: true` for a widget tree or `gui: true`
   for a react component, because whether it has an interface has to be known before it runs rather
   than discovered while it runs. The header also decides the extension, because a gadget that writes
@@ -307,6 +323,12 @@ run in a terminal and pretending otherwise would mean offering it somewhere it c
   anything is called off it. `place` is the rule about how a path is said, and it is written without
   `node:path` so both frontends can hold to the same one; `server.test.ts` runs what comes out of that
   build, because nothing about the build itself would say so.
+- **What crosses into the window is data, and only data.** The state is serialised as JSON, so anything
+  in it that is not data is either dropped without a word or, worse, mistaken for something it is not:
+  an object identity that no longer means identity once it has been written down and read back. So the
+  resolve that answers a form is held beside the state instead of inside it, and everything a window has
+  to recognise is numbered rather than recognised by what it holds — a draw, an approval, and every row
+  of the transcript.
 - **A gadget's component is compiled when the window asks for it**, because which gadgets exist is
   decided by a model writing them and not by anything that ships with the app. This is also why the
   app runs from source: compiling needs react on disk to compile against.

@@ -145,6 +145,25 @@ one thing. What the window has that the TUI does not:
 - An approval is answered in a card next to the source, with room to say why not.
 - The config file and the working directory are a click rather than a flag, because a window started
   from an app launcher was never handed either.
+- The conversation runs the full width of the window, since the window is only as wide as the reader made
+  it and a diff wants every column it can get.
+
+The conversation says the `AGENTS.md` files in force above the first message and spins under the last one
+while Jeng is working, both of which the TUI does too. The difference is that the window's turn is a
+slip of paper, so Jeng's own words are tinted, yours are green, and anything it did or decided is a card
+alongside them.
+
+When Jeng asks to change something, one card comes up: what it wants to do, its own reasons for it, the
+source or patch it wants written, and the two ways out. It stays as the transcript's record once you have
+answered, but it is not on screen twice while it waits. Code in that card is coloured — by
+[highlight.js](https://highlightjs.org), holding only the languages Jeng actually proposes things in,
+rather than all of them — because a patch is read for what changed and a wall of identifiers is skimmed.
+
+A gadget's component is drawn the same way round: live while it is asking you something, and again as the
+record of what you said once it has. It is drawn twice and no more, so it stays where it is and holds what
+you had typed into it while Jeng carries on talking. Jeng can run a throwaway gadget to try an idea out
+and delete it afterwards; the window keeps what that one looked like, so scrolling back still shows it
+rather than an empty card.
 
 Click the working directory or the config file at the left of the header to open the picker. Choosing
 either one starts a new conversation, since the homes, the model and the `AGENTS.md` files all come

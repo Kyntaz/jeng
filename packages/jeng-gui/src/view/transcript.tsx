@@ -1,26 +1,16 @@
-import type { Ask } from "@jeng/view";
+import type { Pending } from "@jeng/view";
 // Reached past the barrel, because the window has no business loading the agent that
 // the conversation is a view of: `@jeng/view` is where the node half of jeng starts.
 import { blank, type Entry, isAsk, QUIET } from "@jeng/view/transcript";
-import { Fragment } from "react";
+import { Code } from "./code";
 import { Gadget } from "./gadget";
-
-// Named by identity rather than by position, because anything that opens or closes a
-// card moves everything below it.
-const revisions = new WeakMap<Entry, number>();
-let named = 0;
-
-const revisionOf = (entry: Entry): number => {
-    const known = revisions.get(entry);
-    if (known !== undefined) return known;
-    revisions.set(entry, ++named);
-    return named;
-};
 
 export interface TranscriptProps {
     entries: Entry[];
-    asks: Ask[];
+    asks: Pending[];
     thinking: boolean;
+    /** The approval being answered right now, which the card below already draws. */
+    approving?: number;
     onAnswer: (id: number, answers: Record<string, unknown>) => void;
     onAbandon: (id: number) => void;
 }
@@ -29,16 +19,32 @@ export interface TranscriptProps {
  * The record of the conversation. A form is drawn here rather than in a panel of its
  * own, because a window has room for it: live while it is open, and again carrying what
  * it was given once it has been, which is what a widget tree does with a widget.
+ *
+ * Every row is named by the number it was given, because this is a window reading its
+ * state as JSON, where being the same object stops meaning anything. Naming rows by the
+ * object holding them would rebuild the whole scroll on every word the model says, which
+ * is not only slow: it is what takes a gadget down and puts it back up while the user is
+ * in the middle of filling one in.
  */
-export function Transcript({ entries, asks, thinking, onAnswer, onAbandon }: TranscriptProps) {
+export function Transcript({
+    entries,
+    asks,
+    thinking,
+    approving,
+    onAnswer,
+    onAbandon,
+}: TranscriptProps) {
     const visible = entries.filter(
-        (entry) => thinking || (!QUIET.includes(entry.kind) && !blank(entry)),
+        (entry) =>
+            // The live card already shows the approval being answered, and it shows it
+            // better: the transcript's copy has no way to answer it. It stays here the
+            // moment it is decided, which is when it becomes the record it was left to be.
+            !(approving !== undefined && entry.kind === "approval" && entry.id === approving) &&
+            (thinking || (!QUIET.includes(entry.kind) && !blank(entry))),
     );
 
     return visible.map((entry) => (
-        <Fragment key={revisionOf(entry)}>
-            <Turn entry={entry} asks={asks} onAnswer={onAnswer} onAbandon={onAbandon} />
-        </Fragment>
+        <Turn key={entry.id} entry={entry} asks={asks} onAnswer={onAnswer} onAbandon={onAbandon} />
     ));
 }
 
@@ -97,7 +103,7 @@ function Turn({ entry, asks, onAnswer, onAbandon }: TurnProps) {
                     {entry.approval.reason && (
                         <div className="note">why: {entry.approval.reason}</div>
                     )}
-                    <pre className="card">{entry.approval.source}</pre>
+                    <Code code={entry.approval.source} />
                 </div>
             );
         case "view": {
@@ -116,7 +122,7 @@ function Turn({ entry, asks, onAnswer, onAbandon }: TurnProps) {
                         file={entry.draw.file}
                         props={entry.draw.props}
                         answers={entry.answers}
-                        revision={revisionOf(entry)}
+                        revision={entry.draw.id}
                         onAnswer={open ? (answers) => onAnswer(open.id, answers) : undefined}
                         onAbandon={open ? () => onAbandon(open.id) : undefined}
                     />

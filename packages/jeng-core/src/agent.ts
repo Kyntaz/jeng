@@ -3,14 +3,14 @@ import { loadAgentsFiles } from "./agents";
 import type { Approve } from "./approve";
 import { defaultHome, defaultModel } from "./config";
 import { buildContext, loadedAgents, type Memory } from "./context";
-import type { Gui } from "./gui";
+import type { GuiHost } from "./gui";
 import { type Home, loadHomes } from "./home";
 import { DEFAULT_MODE, type Mode } from "./mode";
 import { chatWithRetry, type Message, type ModelConfig } from "./model";
 import { prompt } from "./prompts";
 import { sessionState } from "./state";
 import { jengTool } from "./tool";
-import type { Draw, Ui } from "./ui";
+import type { Draw, GuiDraw, Ui } from "./ui";
 
 const NUDGE = prompt("nudge");
 
@@ -38,7 +38,7 @@ export interface Agent {
     // Handing over an interface is what makes a run anything but headless. Which of
     // the two is taken is what the run draws in.
     setUi: (ui: Ui) => void;
-    setGui: (gui: Gui) => void;
+    setGui: (gui: GuiHost) => void;
     setMode: (mode: Mode) => void;
     send(
         text: string,
@@ -64,7 +64,7 @@ export async function createAgent(options: AgentOptions): Promise<Agent> {
     const agents = loadedAgents(homes, agentsFiles).map((file) => file.dir);
     let approve = options.approve;
     let hostUi: Ui | undefined;
-    let hostGui: Gui | undefined;
+    let hostGui: GuiHost | undefined;
     let mode = options.mode ?? DEFAULT_MODE;
     const ctx: ActionContext = {
         homes,
@@ -82,6 +82,7 @@ export async function createAgent(options: AgentOptions): Promise<Agent> {
     const maxTurns = options.maxTurns ?? Infinity;
     const pending: string[] = [];
     let promptTokens = 0;
+    let drawn = 0;
 
     async function send(
         text: string,
@@ -101,8 +102,12 @@ export async function createAgent(options: AgentOptions): Promise<Agent> {
             : undefined;
         ctx.gui = ownedGui
             ? async (file, props) => {
-                  onEvent?.({ type: "view", draw: { surface: "gui", file, props } });
-                  return await ownedGui(file, props);
+                  // One draw, numbered here and handed to both halves: the transcript and
+                  // the host each get their own copy of the request, and the number is
+                  // what says later that they were one form.
+                  const draw: GuiDraw = { surface: "gui", id: ++drawn, file, props };
+                  onEvent?.({ type: "view", draw });
+                  return await ownedGui(draw);
               }
             : undefined;
         for (const injected of pending.splice(0)) history.push({ role: "user", content: injected });
