@@ -45,7 +45,7 @@ export function defaultModel(): ModelConfig {
     return { ...MODEL_DEFAULTS };
 }
 
-export function resolveHomes(
+function resolveHomes(
     homeArgs: string[] = [],
     env: Record<string, string | undefined> = process.env,
 ): string[] {
@@ -54,7 +54,7 @@ export function resolveHomes(
     return [defaultHome()];
 }
 
-export function resolveConfig(env: Record<string, string | undefined> = process.env): ModelConfig {
+function resolveConfig(env: Record<string, string | undefined> = process.env): ModelConfig {
     const window = Number(env.JENG_CONTEXT);
     return withDefaults({
         baseUrl: env.JENG_BASE_URL,
@@ -66,6 +66,23 @@ export function resolveConfig(env: Record<string, string | undefined> = process.
 
 function fail(path: string, reason: string): never {
     throw new Error(`invalid config at ${path}: ${reason}`);
+}
+
+/** The one shape check three keys share, so "a list, not an object" is said once. */
+function objectAt(path: string, value: unknown, key: string): Record<string, unknown> {
+    if (typeof value !== "object" || value === null || Array.isArray(value))
+        return fail(path, `${key} must be an object`);
+    return value as Record<string, unknown>;
+}
+
+function homeAt(path: string, home: string): string {
+    if (home === "~")
+        return fail(
+            path,
+            'home "~" is your entire home folder. Use "~/.jeng" or a folder inside it.',
+        );
+    if (home.startsWith("~/")) return join(homedir(), home.slice(1));
+    return isAbsolute(home) ? home : resolve(dirname(path), home);
 }
 
 async function loadConfigFile(path: string): Promise<FileConfig> {
@@ -95,14 +112,7 @@ async function loadConfigFile(path: string): Promise<FileConfig> {
     }
 
     const model = raw.model;
-    if (
-        model !== undefined &&
-        (typeof model !== "object" || model === null || Array.isArray(model))
-    ) {
-        return fail(path, "model must be an object");
-    }
-
-    const fields = (model ?? {}) as Record<string, unknown>;
+    const fields = model === undefined ? {} : objectAt(path, model, "model");
     for (const [key, value] of Object.entries(fields)) {
         const kind = MODEL_FIELDS[key as keyof typeof MODEL_FIELDS];
         if (!kind) fail(path, `unknown model key ${key}`);
@@ -111,18 +121,7 @@ async function loadConfigFile(path: string): Promise<FileConfig> {
     }
 
     return {
-        homes: (homes as string[] | undefined)?.map((home) =>
-            home === "~"
-                ? fail(
-                      path,
-                      'home "~" is your entire home folder. Use "~/.jeng" or a folder inside it.',
-                  )
-                : home.startsWith("~/")
-                  ? join(homedir(), home.slice(1))
-                  : isAbsolute(home)
-                    ? home
-                    : resolve(dirname(path), home),
-        ),
+        homes: (homes as string[] | undefined)?.map((home) => homeAt(path, home)),
         model: fields as Partial<ModelConfig>,
     };
 }

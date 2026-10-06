@@ -1,6 +1,6 @@
 import { dirname, join } from "node:path";
 import { type ApprovalKind, type Approve, review } from "./approve";
-import { prepareGadget } from "./draft";
+import { type Draft, prepareGadget } from "./draft";
 import { type Ports, runGadget } from "./gadget";
 import { GUI_LANGUAGE, type Gui } from "./gui";
 import { writeProtocol } from "./header";
@@ -12,7 +12,13 @@ import { actionsFor } from "./tool";
 import { type Surface, UI_LANGUAGE, type Ui } from "./ui";
 import { validateProtocol } from "./validate";
 
-export type ActionResult = { ok: boolean; content: string };
+type Args = Record<string, unknown>;
+type ActionResult = { ok: boolean; content: string };
+
+type Noun = "gadget" | "protocol";
+
+/** The home a thing came from travels with it, because that is the one to reload afterwards. */
+type Found = { dir: string; ref: GadgetRef };
 
 export interface ActionContext {
     homes: Home[];
@@ -52,6 +58,10 @@ const stateFor = (ctx: ActionContext, dir: string): State => ({
     session: ctx.session,
     persistent: persistentState(dir),
 });
+
+// The model cannot edit files, so a name that is taken is rewritten rather than refused.
+const memory = (noun: Noun, existing: boolean): ApprovalKind =>
+    existing ? `rewrite ${noun}` : `create ${noun}`;
 
 // The home is only ever written to once the user has agreed.
 async function commit(
@@ -93,26 +103,29 @@ const kindOf = (value: unknown): string =>
  */
 function coerceInput(
     input: unknown,
-): { bad: string } | { bad: undefined; value: Record<string, unknown> } {
+): { bad: string } | { bad: undefined; input: Record<string, unknown> } {
     const value = input === undefined || input === null ? {} : unwrap(input);
     if (typeof value !== "object" || value === null || Array.isArray(value))
         return { bad: `input must be a json object, not ${kindOf(value)}` };
-    return { bad: undefined, value: value as Record<string, unknown> };
+    return { bad: undefined, input: value as Record<string, unknown> };
 }
 
-// A gadget and a protocol are the same shape on disk, so they are found the same
-// way. The home comes back with it, because that is the one that has to be
-// reloaded afterwards when something under it goes away.
-function findIn(
-    ctx: ActionContext,
-    noun: "gadget" | "protocol",
-    name: string,
-): { dir: string; ref: GadgetRef } | undefined {
+function findIn(ctx: ActionContext, noun: Noun, name: string): Found | undefined {
     for (const home of ctx.homes)
         for (const ref of noun === "gadget" ? home.gadgets : home.protocols)
             if (ref.name === name) return { dir: home.dir, ref };
     return undefined;
 }
+
+const named = (
+    ctx: ActionContext,
+    noun: Noun,
+    args: Args,
+): { bad: string } | { bad: undefined; found: Found } => {
+    const name = String(args.name ?? "");
+    const found = findIn(ctx, noun, name);
+    return found ? { bad: undefined, found } : { bad: `no ${noun} named "${name}"` };
+};
 
 async function refresh(ctx: ActionContext, dir: string): Promise<void> {
     const refreshed = await Promise.all(
@@ -121,48 +134,56 @@ async function refresh(ctx: ActionContext, dir: string): Promise<void> {
     ctx.homes.splice(0, ctx.homes.length, ...refreshed);
 }
 
-async function runGadgetAction(
-    ctx: ActionContext,
-    args: Record<string, unknown>,
-): Promise<ActionResult> {
-    const coerced = coerceInput(args.input);
-    if (coerced.bad !== undefined) return { ok: false, content: coerced.bad };
-    const name = String(args.name ?? "");
+async function runGadgetAction(ctx: ActionContext, args: Args): Promise<ActionResult> {
+    const given = coerceInput(args.input);
+    if (given.bad !== undefined) return { ok: false, content: given.bad };
 
-    const found = findIn(ctx, "gadget", name);
-    if (!found) return { ok: false, content: `no gadget named "${name}"` };
+    const hit = named(ctx, "gadget", args);
+    if (hit.bad !== undefined) return { ok: false, content: hit.bad };
+    const { dir, ref } = hit.found;
 
-    if (drawsElsewhere(found.ref, surfaceOf(ctx)))
-        return {
-            ok: false,
-            content: prompt("gadget-draws", { name }),
-        };
+    if (drawsElsewhere(ref, surfaceOf(ctx)))
+        return { ok: false, content: prompt("gadget-draws", { name: ref.name }) };
 
     const result = await runGadget(
-        found.ref.file,
-        coerced.value,
-        portsFor(ctx, found.ref.gui),
-        stateFor(ctx, found.dir),
+        ref.file,
+        given.input,
+        portsFor(ctx, ref.gui),
+        stateFor(ctx, dir),
     );
     return { ok: result.ok, content: result.ok ? result.output : result.error };
 }
 
-async function loadAction(
-    ctx: ActionContext,
-    args: Record<string, unknown>,
-    noun: "gadget" | "protocol",
-): Promise<ActionResult> {
-    const name = String(args.name ?? "");
-    const found = findIn(ctx, noun, name);
-    if (!found) return { ok: false, content: `no ${noun} named "${name}"` };
-
-    return { ok: true, content: await Bun.file(found.ref.file).text() };
+async function loadAction(ctx: ActionContext, args: Args, noun: Noun): Promise<ActionResult> {
+    const hit = named(ctx, noun, args);
+    if (hit.bad !== undefined) return { ok: false, content: hit.bad };
+    return { ok: true, content: await Bun.file(hit.found.ref.file).text() };
 }
 
-async function createProtocolAction(
-    ctx: ActionContext,
-    args: Record<string, unknown>,
-): Promise<ActionResult> {
+async function deleteAction(ctx: ActionContext, args: Args, noun: Noun): Promise<ActionResult> {
+    const name = String(args.name ?? "");
+    const hit = named(ctx, noun, args);
+    if (hit.bad !== undefined) return { ok: false, content: hit.bad };
+    const { dir, ref } = hit.found;
+
+    const reason = String(args.reason ?? "").trim();
+    if (!reason)
+        return {
+            ok: false,
+            content: `delete_${noun} needs a \`reason\`: the user reads it to decide whether to let this go`,
+        };
+
+    const source = await Bun.file(ref.file).text();
+    const approved = await review(ctx.approve, { kind: `delete ${noun}`, name, source, reason });
+    if (!approved.ok) return approved;
+
+    await Bun.file(ref.file).delete();
+    await refresh(ctx, dir);
+
+    return { ok: true, content: `${noun} "${name}" deleted from ${dir}` };
+}
+
+async function createProtocolAction(ctx: ActionContext, args: Args): Promise<ActionResult> {
     const name = String(args.name ?? "");
     const source = writeProtocol(
         { name, description: String(args.description ?? ""), when: String(args.when ?? "") },
@@ -171,13 +192,16 @@ async function createProtocolAction(
     const valid = validateProtocol(source);
     if (!valid.ok) return { ok: false, content: valid.error };
 
-    const home = primaryHome(ctx);
     const existing = findIn(ctx, "protocol", name);
-    const kind: ApprovalKind = existing ? "rewrite protocol" : "create protocol";
+    const approved = await review(ctx.approve, {
+        kind: memory("protocol", existing !== undefined),
+        name,
+        source,
+        reason: "",
+    });
+    if (!approved.ok) return approved;
 
-    const approved = await review(ctx.approve, { kind, name, source, reason: "" });
-    if (!approved.ok) return { ok: false, content: approved.error };
-
+    const home = primaryHome(ctx);
     await commit(ctx, home, join(home, "protocols", `${name}.md`), source);
 
     return {
@@ -186,22 +210,37 @@ async function createProtocolAction(
     };
 }
 
-async function createGadgetAction(
+/**
+ * A draft is prepared, handed over and thrown away in one place, so that no action can
+ * leave the folder a `test_gadget` was run out of behind it.
+ */
+async function withDraft(
     ctx: ActionContext,
-    args: Record<string, unknown>,
+    args: Args,
+    action: string,
+    body: (draft: Draft, source: string, reason: string) => Promise<ActionResult>,
 ): Promise<ActionResult> {
     const source = String(args.source ?? "");
     const reason = String(args.reason ?? "");
-    const prepared = await prepareGadget(source, reason, "create_gadget", surfaceOf(ctx));
+    const prepared = await prepareGadget(source, reason, action, surfaceOf(ctx));
     if (!prepared.ok) return prepared;
-    const { draft } = prepared;
-
     try {
-        const existing = findIn(ctx, "gadget", draft.name);
-        const kind: ApprovalKind = existing ? "rewrite gadget" : "create gadget";
+        return await body(prepared.draft, source, reason);
+    } finally {
+        await prepared.draft.dispose();
+    }
+}
 
-        const approved = await review(ctx.approve, { kind, name: draft.name, source, reason });
-        if (!approved.ok) return { ok: false, content: approved.error };
+async function createGadgetAction(ctx: ActionContext, args: Args): Promise<ActionResult> {
+    return await withDraft(ctx, args, "create_gadget", async (draft, source, reason) => {
+        const existing = findIn(ctx, "gadget", draft.name);
+        const approved = await review(ctx.approve, {
+            kind: memory("gadget", existing !== undefined),
+            name: draft.name,
+            source,
+            reason,
+        });
+        if (!approved.ok) return approved;
 
         const home = primaryHome(ctx);
         const file = gadgetFile(home, draft.name, draft.header);
@@ -211,36 +250,25 @@ async function createGadgetAction(
             ok: true,
             content: `gadget "${draft.name}" ${existing ? "rewritten" : "created"} at ${file}`,
         };
-    } finally {
-        await draft.dispose();
-    }
+    });
 }
 
-async function testGadgetAction(
-    ctx: ActionContext,
-    args: Record<string, unknown>,
-): Promise<ActionResult> {
-    const input = coerceInput(args.input);
-    if (input.bad !== undefined) return { ok: false, content: input.bad };
+async function testGadgetAction(ctx: ActionContext, args: Args): Promise<ActionResult> {
+    const given = coerceInput(args.input);
+    if (given.bad !== undefined) return { ok: false, content: given.bad };
 
-    const source = String(args.source ?? "");
-    const reason = String(args.reason ?? "");
-    const prepared = await prepareGadget(source, reason, "test_gadget", surfaceOf(ctx));
-    if (!prepared.ok) return prepared;
-    const { draft } = prepared;
-
-    try {
+    return await withDraft(ctx, args, "test_gadget", async (draft, source, reason) => {
         const approved = await review(ctx.approve, {
             kind: "test gadget",
             name: draft.name,
             source,
             reason,
         });
-        if (!approved.ok) return { ok: false, content: approved.error };
+        if (!approved.ok) return approved;
 
         const result = await runGadget(
             draft.file,
-            input.value,
+            given.input,
             portsFor(ctx, draft.header.gui === "true"),
             stateFor(ctx, primaryHome(ctx)),
         );
@@ -250,74 +278,37 @@ async function testGadgetAction(
             ok: true,
             content: prompt("untested-gadget", { output: result.output, name: draft.name }),
         };
-    } finally {
-        await draft.dispose();
-    }
+    });
 }
 
-async function deleteAction(
-    ctx: ActionContext,
-    args: Record<string, unknown>,
-    noun: "gadget" | "protocol",
-): Promise<ActionResult> {
-    const name = String(args.name ?? "");
-    const found = findIn(ctx, noun, name);
-    if (!found) return { ok: false, content: `no ${noun} named "${name}"` };
-
-    const reason = String(args.reason ?? "").trim();
-    if (!reason)
-        return {
-            ok: false,
-            content: `delete_${noun} needs a \`reason\`: the user reads it to decide whether to let this go`,
-        };
-
-    const source = await Bun.file(found.ref.file).text();
-    const approved = await review(ctx.approve, { kind: `delete ${noun}`, name, source, reason });
-    if (!approved.ok) return { ok: false, content: approved.error };
-
-    await Bun.file(found.ref.file).delete();
-    await refresh(ctx, found.dir);
-
-    return { ok: true, content: `${noun} "${name}" deleted from ${found.dir}` };
-}
+const HANDLERS: Record<string, (ctx: ActionContext, args: Args) => Promise<ActionResult>> = {
+    run_gadget: runGadgetAction,
+    test_gadget: testGadgetAction,
+    load_gadget: (ctx, args) => loadAction(ctx, args, "gadget"),
+    load_protocol: (ctx, args) => loadAction(ctx, args, "protocol"),
+    load_ui: async (ctx) => ({
+        ok: true,
+        content: surfaceOf(ctx) === "gui" ? GUI_LANGUAGE : UI_LANGUAGE,
+    }),
+    create_protocol: createProtocolAction,
+    create_gadget: createGadgetAction,
+    delete_gadget: (ctx, args) => deleteAction(ctx, args, "gadget"),
+    delete_protocol: (ctx, args) => deleteAction(ctx, args, "protocol"),
+};
 
 export async function runAction(
     action: string,
-    args: Record<string, unknown>,
+    args: Args,
     ctx: ActionContext,
 ): Promise<ActionResult> {
     if (ctx.mode === "work" && GROWS.includes(action))
+        return { ok: false, content: prompt("learn-only-action", { action }) };
+
+    const handler = HANDLERS[action];
+    if (!handler)
         return {
             ok: false,
-            content: prompt("learn-only-action", { action }),
+            content: `unknown action "${action}". Available: ${actionsFor(ctx.mode ?? DEFAULT_MODE).join(", ")}`,
         };
-
-    switch (action) {
-        case "run_gadget":
-            return await runGadgetAction(ctx, args);
-        case "test_gadget":
-            return await testGadgetAction(ctx, args);
-        case "load_gadget":
-            return await loadAction(ctx, args, "gadget");
-        case "load_protocol":
-            return await loadAction(ctx, args, "protocol");
-        case "load_ui":
-            return {
-                ok: true,
-                content: surfaceOf(ctx) === "gui" ? GUI_LANGUAGE : UI_LANGUAGE,
-            };
-        case "create_protocol":
-            return await createProtocolAction(ctx, args);
-        case "create_gadget":
-            return await createGadgetAction(ctx, args);
-        case "delete_gadget":
-            return await deleteAction(ctx, args, "gadget");
-        case "delete_protocol":
-            return await deleteAction(ctx, args, "protocol");
-        default:
-            return {
-                ok: false,
-                content: `unknown action "${action}". Available: ${actionsFor(ctx.mode ?? DEFAULT_MODE).join(", ")}`,
-            };
-    }
+    return await handler(ctx, args);
 }

@@ -7,7 +7,7 @@ type Drawn = Extract<Widget, { kind: "text" | "markdown" | "code" | "diff" }>;
 type Choice = Extract<Widget, { kind: "select" }>;
 type Typed = Extract<Widget, { kind: "input" | "textarea" }>;
 
-export interface ViewProps {
+interface ViewProps {
     widget: Widget;
     /** Given, the tree is a record of what was answered rather than something live. */
     answers?: Record<string, unknown>;

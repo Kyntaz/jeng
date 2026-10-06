@@ -319,11 +319,15 @@ run in a terminal and pretending otherwise would mean offering it somewhere it c
 - **The window is served over a loopback socket rather than bundled into the app.** One `bun build`
   path then covers a dev run and a packaged app, and the view can be rebuilt without relaunching the
   native side.
-- **Anything the view shares with the terminal has to be importable by a browser.** `node:` is swapped
-  for an empty module on the way into the window, which builds cleanly and throws the first time
-  anything is called off it. `place` is the rule about how a path is said, and it is written without
-  `node:path` so both frontends can hold to the same one; `server.test.ts` runs what comes out of that
-  build, because nothing about the build itself would say so.
+- **Anything the view shares with the terminal has to be importable by a browser.** `@jeng/view` takes
+  `@jeng/core` for types only, which is what lets the window load the barrel instead of a path around
+  it: the agent, the tool schema and the gadget compiler stay out of a bundle with no use for them.
+  `place` is the rule about how a path is said, and it is worded rather than computed so both frontends
+  can hold to the same one without either of them reaching for `node:path`.
+- **`node:` is dropped for a gadget and refused for the window.** A gadget has a bun half that needs it
+  and a component half that does not, so swapping it for an empty module builds cleanly and throws the
+  first time anything is called off it. The window has no bun half at all, so `window.test.ts` builds
+  it with `node:` refused, which fails the moment anything the window can reach asks for one.
 - **What crosses into the window is data, and only data.** The state is serialised as JSON, so anything
   in it that is not data is either dropped without a word or, worse, mistaken for something it is not:
   an object identity that no longer means identity once it has been written down and read back. So the

@@ -13,7 +13,7 @@ export interface GadgetRef {
     gui: boolean;
 }
 
-export type ProtocolRef = GadgetRef;
+type ProtocolRef = GadgetRef;
 
 export interface Home {
     dir: string;

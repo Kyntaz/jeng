@@ -1,9 +1,4 @@
-export {
-    type Conversation,
-    createConversation,
-    decided,
-    type Pending,
-    type State,
-} from "./conversation";
+export { type Conversation, createConversation, type Pending, type State } from "./conversation";
 export { place } from "./place";
-export { append, blank, type Entry, isAsk, QUIET, sameDraw } from "./transcript";
+export { blank, type Entry, isAsk, QUIET } from "./transcript";
+export { fields } from "./widget";

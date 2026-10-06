@@ -1,2 +1,2 @@
-export { App, renderTui } from "./app";
+export { renderTui } from "./app";
 export { approvalText } from "./entries";

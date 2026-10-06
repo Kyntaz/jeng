@@ -1,7 +1,8 @@
 import type { Agent } from "@jeng/core";
-import { blank, createConversation, isAsk, QUIET } from "@jeng/view";
+import { blank, type Conversation, createConversation, isAsk, QUIET } from "@jeng/view";
 import {
     createCliRenderer,
+    type KeyEvent,
     type ScrollBoxRenderable,
     type TextareaRenderable,
 } from "@opentui/core";
@@ -36,6 +37,32 @@ export async function renderTui(agent: Agent): Promise<void> {
     }
 }
 
+/**
+ * The prompt holds the focus, so the keys that scroll the transcript are taken here rather
+ * than left to the scroll region, which never sees one.
+ */
+function onKeys(
+    talk: Conversation,
+    scrollTo: (screens: number) => void,
+    holding: boolean,
+    onExit: () => void,
+) {
+    return (key: KeyEvent): void => {
+        const plain = !key.ctrl && !key.shift;
+
+        if (key.name === "pageup") scrollTo(-1);
+        else if (key.name === "pagedown") scrollTo(1);
+        else if (key.ctrl && key.name === "end") scrollTo(END);
+        // Escape means nothing when idle, which keeps it from eating a keystroke, and
+        // it reaches for whatever is holding the turn up rather than cutting it short.
+        else if (key.ctrl && key.name === "escape") onExit();
+        else if (plain && key.name === "escape") talk.escape();
+        else if (key.ctrl && key.name === "l") talk.clear();
+        else if (key.ctrl && key.name === "r") talk.toggleThinking();
+        else if (plain && key.name === "tab" && !holding) talk.toggleMode();
+    };
+}
+
 export function App({ agent, onExit }: { agent: Agent; onExit: () => void }) {
     const talk = useMemo(() => createConversation(agent), [agent]);
     const state = useSyncExternalStore(talk.subscribe, talk.get);
@@ -51,23 +78,11 @@ export function App({ agent, onExit }: { agent: Agent; onExit: () => void }) {
         agent.setUi((widget) => talk.ask({ surface: "tui", widget }));
     }, [agent, talk]);
 
-    useKeyboard((key) => {
-        // The prompt holds the focus, so the keys that scroll the transcript are
-        // taken here rather than left to the scroll region, which never sees one.
-        if (key.ctrl && key.name === "end") scroll(scroller.current, END);
-        else if (key.name === "pageup") scroll(scroller.current, -1);
-        else if (key.name === "pagedown") scroll(scroller.current, 1);
-        if (key.ctrl && key.name === "escape") onExit();
-        // Escape means nothing when idle, which keeps it from eating a keystroke, and
-        // it reaches for whatever is holding the turn up rather than cutting it short.
-        else if (!key.ctrl && key.name === "escape") talk.escape();
-        if (key.ctrl && key.name === "l") talk.clear();
-        if (key.ctrl && key.name === "r") talk.toggleThinking();
-        // Tab walks the answers of an interface or an approval, so it only changes the
-        // mode when the prompt holds the keys.
-        if (!key.shift && !key.ctrl && key.name === "tab" && !state.asks.length && !state.approval)
-            talk.toggleMode();
-    });
+    // An approval and a gadget's interface are the same thing to the user: Jeng has
+    // stopped to be answered, which is what decides whether tab walks the answers.
+    const holding = state.asks.length > 0 || state.approval !== undefined;
+
+    useKeyboard(onKeys(talk, (screens) => scroll(scroller.current, screens), holding, onExit));
 
     // The transcript is the record, so an interface is only drawn here once answered.
     const visible = useMemo(
@@ -85,8 +100,6 @@ export function App({ agent, onExit }: { agent: Agent; onExit: () => void }) {
     // a tall interface scrolls with everything else.
     const pending = talk.pending;
 
-    // An approval and a gadget's interface are the same thing to the user: Jeng has
-    // stopped to be answered.
     const waiting = useMemo(
         () =>
             state.asks.length

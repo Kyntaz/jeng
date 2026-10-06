@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 
-export const FRAMES = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏";
+const FRAMES = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏";
 
 export function useSpinner(active: boolean): string {
     const [frame, setFrame] = useState(0);

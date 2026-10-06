@@ -1,7 +1,7 @@
 import type { ApprovalDecision, Mode } from "@jeng/core";
 import type { State } from "@jeng/view";
 import { Electroview } from "electrobun/view";
-import type { JengRPC } from "../rpc";
+import type { JengRPC } from "..";
 
 /**
  * The window's half of the bridge. It asks for the state once and is handed every

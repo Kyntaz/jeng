@@ -1,7 +1,7 @@
 import type { ApprovalDecision, Mode } from "@jeng/core";
 import type { State } from "@jeng/view";
 import { BrowserView, BrowserWindow } from "electrobun/main";
-import type { Applied, JengRPC } from "../rpc";
+import type { Applied, JengRPC } from "..";
 
 /** Everything the window is allowed to do to the conversation. */
 export interface Handle {

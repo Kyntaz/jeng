@@ -3,7 +3,7 @@ import type { Gui, GuiAnswers } from "./gui";
 import { type State, sessionState } from "./state";
 import type { Ui } from "./ui";
 
-export type GadgetResult = { ok: true; output: string } | { ok: false; error: string };
+type GadgetResult = { ok: true; output: string } | { ok: false; error: string };
 
 /** The second argument a gadget is handed: whichever one surface its header declared. */
 type Port = Ui | ((props: Record<string, unknown>) => Promise<GuiAnswers>);

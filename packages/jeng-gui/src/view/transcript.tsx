@@ -1,11 +1,8 @@
-import type { Pending } from "@jeng/view";
-// Reached past the barrel, because the window has no business loading the agent that
-// the conversation is a view of: `@jeng/view` is where the node half of jeng starts.
-import { blank, type Entry, isAsk, QUIET } from "@jeng/view/transcript";
+import { blank, type Entry, isAsk, Pending, QUIET } from "@jeng/view";
 import { Code } from "./code";
 import { Gadget } from "./gadget";
 
-export interface TranscriptProps {
+interface TranscriptProps {
     entries: Entry[];
     asks: Pending[];
     thinking: boolean;
@@ -52,48 +49,37 @@ interface TurnProps extends Omit<TranscriptProps, "entries" | "thinking"> {
     entry: Entry;
 }
 
-function Turn({ entry, asks, onAnswer, onAbandon }: TurnProps) {
+function Turn(props: TurnProps) {
+    return <div className="turn">{body(props)}</div>;
+}
+
+/** What one line says. Every kind is a turn, so the wrapper belongs to one place. */
+function body({ entry, asks, onAnswer, onAbandon }: TurnProps) {
     switch (entry.kind) {
         case "user":
-            return (
-                <div className="turn">
-                    <div className="speech user">{entry.text}</div>
-                </div>
-            );
+            return <div className="speech user">{entry.text}</div>;
         case "jeng":
-            return (
-                <div className="turn">
-                    <div className="speech">{entry.text}</div>
-                </div>
-            );
+            return <div className="speech">{entry.text}</div>;
         case "think":
-            return (
-                <div className="turn">
-                    <div className="speech think">{entry.text}</div>
-                </div>
-            );
+            return <div className="speech think">{entry.text}</div>;
         case "tool":
         case "output":
         case "failure":
             return (
-                <div className="turn">
-                    <div className={entry.kind === "failure" ? "call failed" : "call"}>
-                        <span>{entry.icon}</span>
-                        <span className="note">{entry.text}</span>
-                    </div>
+                <div className={entry.kind === "failure" ? "call failed" : "call"}>
+                    <span>{entry.icon}</span>
+                    <span className="note">{entry.text}</span>
                 </div>
             );
         case "error":
             return (
-                <div className="turn">
-                    <div className="note failed">
-                        {entry.icon} {entry.text}
-                    </div>
+                <div className="note failed">
+                    {entry.icon} {entry.text}
                 </div>
             );
         case "approval":
             return (
-                <div className="turn">
+                <>
                     <div className="what">
                         <span>⚑</span>
                         <span>
@@ -104,29 +90,23 @@ function Turn({ entry, asks, onAnswer, onAbandon }: TurnProps) {
                         <div className="note">why: {entry.approval.reason}</div>
                     )}
                     <Code code={entry.approval.source} />
-                </div>
+                </>
             );
         case "view": {
             // A widget tree belongs to the terminal, and a run here would never have
             // been offered one, so anything else says so rather than nothing.
             if (entry.draw.surface !== "gui")
-                return (
-                    <div className="turn">
-                        <div className="note">an interface for the terminal</div>
-                    </div>
-                );
+                return <div className="note">an interface for the terminal</div>;
             const open = asks.find((ask) => isAsk(entry, ask));
             return (
-                <div className="turn">
-                    <Gadget
-                        file={entry.draw.file}
-                        props={entry.draw.props}
-                        answers={entry.answers}
-                        revision={entry.draw.id}
-                        onAnswer={open ? (answers) => onAnswer(open.id, answers) : undefined}
-                        onAbandon={open ? () => onAbandon(open.id) : undefined}
-                    />
-                </div>
+                <Gadget
+                    file={entry.draw.file}
+                    props={entry.draw.props}
+                    answers={entry.answers}
+                    revision={entry.draw.id}
+                    onAnswer={open ? (answers) => onAnswer(open.id, answers) : undefined}
+                    onAbandon={open ? () => onAbandon(open.id) : undefined}
+                />
             );
         }
     }

@@ -4,9 +4,7 @@
     "type": "module",
     "main": "./src/index.ts",
     "exports": {
-        ".": "./src/index.ts",
-        "./place": "./src/place.ts",
-        "./transcript": "./src/transcript.ts"
+        ".": "./src/index.ts"
     },
     "dependencies": {
         "@jeng/core": "workspace:*"

@@ -1,9 +1,9 @@
 import { type Header, parseGadget, parseProtocol } from "./header";
 
-export type Validation = { ok: true } | { ok: false; error: string };
+type Validation = { ok: true } | { ok: false; error: string };
 
 /** The header comes back with it, because the caller needs the name and the extension too. */
-export type GadgetValidation = { ok: true; header: Header } | { ok: false; error: string };
+type GadgetValidation = { ok: true; header: Header } | { ok: false; error: string };
 
 const NAME = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 

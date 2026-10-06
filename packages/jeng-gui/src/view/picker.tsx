@@ -1,7 +1,6 @@
-import type { State } from "@jeng/view";
-import { place } from "@jeng/view/place";
+import { place, type State } from "@jeng/view";
 import { useState } from "react";
-import type { Applied } from "../rpc";
+import type { Applied } from "..";
 import type { Bridge } from "./rpc";
 
 /**

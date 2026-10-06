@@ -1,6 +1,6 @@
 import type { Agent, Answers, Approval, ApprovalDecision, Draw, Mode, Widget } from "@jeng/core";
-import { fields } from "@jeng/core";
 import { append, type Entry, isAsk } from "./transcript";
+import { fields } from "./widget";
 
 /**
  * A gadget's interface, waiting on a user who has not answered it yet. This is all a
@@ -41,7 +41,7 @@ export interface State {
     agents: string[];
 }
 
-export const decided = (decision: ApprovalDecision): string =>
+const decided = (decision: ApprovalDecision): string =>
     decision.approved ? "approved" : decision.reason ? `rejected: ${decision.reason}` : "rejected";
 
 // A widget that asks nothing is nothing to wait for. A component always is: what it
@@ -128,6 +128,26 @@ export function createConversation(agent: Agent, config?: string) {
         });
     }
 
+    function answer(id: number, answers: Record<string, unknown>): void {
+        const ask = state.asks.find((it) => it.id === id);
+        if (ask) settle(ask, answers);
+    }
+
+    /** Walking away from a form is an answer with nothing in it, as it is for a widget. */
+    function abandon(id: number): void {
+        answer(id, {});
+    }
+
+    function decide(decision: ApprovalDecision): void {
+        deciding?.(decision);
+        deciding = undefined;
+        set({
+            approval: undefined,
+            // An answer is the user talking, so it is recorded as the user's line.
+            entries: [...state.entries, { kind: "user", id: ++numbered, text: decided(decision) }],
+        });
+    }
+
     const conversation = {
         get: (): State => state,
 
@@ -144,30 +164,9 @@ export function createConversation(agent: Agent, config?: string) {
         },
 
         ask,
-
-        answer(id: number, answers: Record<string, unknown>): void {
-            const ask = state.asks.find((it) => it.id === id);
-            if (ask) settle(ask, answers);
-        },
-
-        /** Walking away from a form is an answer with nothing in it, as it is for a widget. */
-        abandon(id: number): void {
-            const ask = state.asks.find((it) => it.id === id);
-            if (ask) settle(ask, {});
-        },
-
-        decide(decision: ApprovalDecision): void {
-            deciding?.(decision);
-            deciding = undefined;
-            set({
-                approval: undefined,
-                // An answer is the user talking, so it is recorded as the user's line.
-                entries: [
-                    ...state.entries,
-                    { kind: "user", id: ++numbered, text: decided(decision) },
-                ],
-            });
-        },
+        answer,
+        abandon,
+        decide,
 
         toggleThinking(): void {
             set({ thinking: !state.thinking });
@@ -182,9 +181,8 @@ export function createConversation(agent: Agent, config?: string) {
         /** Escape reaches for whatever is holding the turn up, the user first. */
         escape(): void {
             const ask = state.asks[0];
-            if (ask) conversation.abandon(ask.id);
-            else if (state.approval)
-                conversation.decide({ approved: false, reason: "interrupted" });
+            if (ask) abandon(ask.id);
+            else if (state.approval) decide({ approved: false, reason: "interrupted" });
             else if (state.busy) running?.abort();
         },
 
@@ -219,11 +217,9 @@ export function createConversation(agent: Agent, config?: string) {
                 const reply = await agent.send(text, {
                     signal: controller.signal,
                     onEvent: (event) => {
-                        if (event.type === "usage") set({ tokens: event.promptTokens });
-                        else {
-                            if (event.type === "text") streamed += event.text;
-                            set({ entries: append(state.entries, event, speaking, ++numbered) });
-                        }
+                        if (event.type === "usage") return set({ tokens: event.promptTokens });
+                        if (event.type === "text") streamed += event.text;
+                        set({ entries: append(state.entries, event, speaking, ++numbered) });
                     },
                 });
                 // The answer is said out loud rather than only in the transcript, so a

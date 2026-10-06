@@ -25,6 +25,15 @@
 - Keep modules under 300 lines, and make sure everything a module exports is related.
 - Formatting is Biome's job: run `bun run format` instead of hand-aligning whitespace. `bun run check` runs the formatter and the linter together, and must pass.
 
+### Barrels
+
+- Every folder inside `src` has an `index.ts` re-exporting what that folder holds; `src/index.ts` re-exports what the package holds. It is the one file to edit when a module's shape moves.
+- A barrel re-exports and does nothing else. Logic belonging to a folder is a sibling of its `index.ts`, never inside it.
+- A module imports its siblings by path, and a child folder through its `index.ts`. Importing a file inside a child folder is reaching behind the barrel that declares it.
+- Across packages, go through the `exports` map. A declared subpath is a front door; an undeclared deep path is not.
+- A module the window can reach takes its values from `@jeng/view` and only types from `@jeng/core`, so no barrel drags `node:` into a browser. `window.test.ts` builds the window refusing `node:` and fails the moment one gets in.
+- The `index.ts` an application is launched through is the exception: it holds the code that runs, so it should be little more than a call.
+
 ### Tests
 
 - General coding guidelines apply.

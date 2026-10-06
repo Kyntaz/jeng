@@ -22,16 +22,18 @@ export type ApprovalDecision = { approved: true } | { approved: false; reason: s
 
 export type Approve = (request: Approval) => Promise<ApprovalDecision>;
 
-type Review = { ok: true } | { ok: false; error: string };
-
 export const isDelete = (kind: ApprovalKind) => kind.startsWith("delete");
 
-export async function review(approve: Approve, request: Approval): Promise<Review> {
+/** Answers in the shape an action answers in, so a refusal needs no translating on the way back. */
+export async function review(
+    approve: Approve,
+    request: Approval,
+): Promise<{ ok: boolean; content: string }> {
     const decision = await approve(request);
-    if (decision.approved) return { ok: true };
+    if (decision.approved) return { ok: true, content: "" };
     return {
         ok: false,
-        error: prompt(isDelete(request.kind) ? "rejected-delete" : "rejected-change", {
+        content: prompt(isDelete(request.kind) ? "rejected-delete" : "rejected-change", {
             kind: request.kind,
             name: request.name,
             reason: decision.reason.trim() || "no reason was given",

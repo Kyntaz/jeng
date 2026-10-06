@@ -7,7 +7,7 @@ import { MODE_COLOR, MODE_TINT, SELECTION } from "./theme";
 // Sending a prompt stays a single key, so Enter submits and Shift+Enter is what
 // breaks a line. Bindings merge over the defaults, so only the differences need
 // naming.
-export const PROMPT_KEYS: KeyBinding[] = [
+const PROMPT_KEYS: KeyBinding[] = [
     { name: "return", action: "submit" },
     { name: "kpenter", action: "submit" },
     { name: "linefeed", action: "submit" },

@@ -1,18 +1,16 @@
 import type { Mode } from "@jeng/core";
-import { blank, type Entry, QUIET } from "@jeng/view";
+import type { Entry } from "@jeng/view";
 import { memo } from "react";
 import { approvalText } from "./entries";
 import { COLORS, color, MODE_COLOR, type Owner, owner, SELECTION } from "./theme";
 import { GadgetView } from "./view";
 
-export interface Block {
+interface Block {
     owner?: Owner;
     /** The mode the entries in here were produced in, which decides the colour. */
     mode?: Mode;
     entries: Entry[];
 }
-
-export { blank, QUIET };
 
 const modeOf = (entry: Entry) => ("mode" in entry ? entry.mode : undefined);
 

@@ -1,6 +1,4 @@
-// The deep import is deliberate: the barrel drags in the conversation and with it
-// `@jeng/core`, whose `node:` imports this view's build drops on the floor.
-import { place } from "@jeng/view/place";
+import { place } from "@jeng/view";
 import type { CSSProperties } from "react";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { ApprovalCard } from "./approval";

@@ -1,6 +1,6 @@
 import { mkdir, stat } from "node:fs/promises";
 import { dirname, join } from "node:path";
-import { defaultHome } from "@jeng/core";
+import { configPaths, defaultHome } from "@jeng/core";
 
 /**
  * The configs the window knows about and the two things it picked, kept in a plain text
@@ -64,4 +64,28 @@ export async function readSettings(cwd: string, file: string = FILE): Promise<Se
 export async function saveSettings(settings: Settings, file: string = FILE): Promise<void> {
     await mkdir(dirname(file), { recursive: true });
     await Bun.write(file, write(settings));
+}
+
+/**
+ * Nothing has been picked yet, so the list is whatever jeng can already find. A window
+ * started from a launcher has no `./jeng.json` of its own to fall back on.
+ */
+export async function discoverConfigs(
+    settings: Settings,
+    found: { cwd: string; homes: string[]; config?: string },
+): Promise<Settings> {
+    if (settings.config !== undefined || settings.configs.length > 0) return settings;
+
+    const next = {
+        ...settings,
+        config: found.config,
+        configs: [
+            ...new Set([
+                ...(await configPaths(found.cwd, found.homes[0] ?? defaultHome())),
+                ...(found.config ? [found.config] : []),
+            ]),
+        ],
+    };
+    await saveSettings(next);
+    return next;
 }

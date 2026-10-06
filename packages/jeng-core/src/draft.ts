@@ -25,7 +25,7 @@ export interface Draft {
     dispose: () => Promise<void>;
 }
 
-export type Prepared = { ok: false; content: string } | { ok: true; draft: Draft };
+type Prepared = { ok: false; content: string } | { ok: true; draft: Draft };
 
 export async function prepareGadget(
     source: string,

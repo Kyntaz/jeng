@@ -1,76 +1,19 @@
-import {
-    type Approve,
-    configPaths,
-    createAgent,
-    defaultHome,
-    loadConfig,
-    type Mode,
-} from "@jeng/core";
-import { type Conversation, createConversation } from "@jeng/view";
+import type { Conversation } from "@jeng/view";
 import { app, Utils } from "electrobun/main";
-import type { Applied } from "../rpc";
-import { forget, keep, serve } from "./server";
-import { readSettings, type Settings, saveSettings } from "./settings";
+import type { Applied } from "..";
+import { open } from "./open";
+import { forget, serve } from "./server";
+import { discoverConfigs, readSettings, type Settings, saveSettings } from "./settings";
 import { openWindow } from "./window";
-
-// Nothing is approved before the window exists to ask, which is the same reason a piped
-// terminal run will not write to a home without being told to.
-const noone: Approve = async () => ({
-    approved: false,
-    reason: "there is no window to approve on",
-});
 
 /**
  * The window is launched from an app launcher, so nothing about it is a flag: the config
  * and the directory it works in are the ones it remembered, and it starts in whatever
  * folder it was launched from.
  */
-let settings = await readSettings(process.cwd());
-let talk = await open(settings);
-
-// Nothing has been picked yet, so the list is whatever jeng can already find. A window
-// started from a launcher has no `./jeng.json` of its own to fall back on.
-if (settings.config === undefined && !settings.configs.length) {
-    const state = talk.get();
-    settings = {
-        ...settings,
-        config: state.config,
-        configs: [
-            ...new Set([
-                ...(await configPaths(state.cwd, state.homes[0] ?? defaultHome())),
-                ...(state.config ? [state.config] : []),
-            ]),
-        ],
-    };
-    await saveSettings(settings);
-}
-
-/**
- * Homes, model and the AGENTS.md chain are all settled when an agent is built, so applying
- * a config or a directory means building another one rather than editing the one in hand.
- * The mode carries over, because dropping from work to learn would hand back the ability
- * to write to a home.
- */
-async function open(from: Settings, mode?: Mode): Promise<Conversation> {
-    const config = await loadConfig({ path: from.config, cwd: from.cwd });
-    const agent = await createAgent({
-        cwd: from.cwd,
-        homes: config.homes,
-        config: config.model,
-        mode,
-        approve: noone,
-    });
-    const conversation = createConversation(agent, config.path);
-    // A gadget that draws a react component is compiled and mounted in the window, so this
-    // is the port that makes a run anything but headless. What it drew is kept on the way
-    // past, because a gadget run as a draft is deleted the moment the turn is over and the
-    // record of it has to outlive that.
-    agent.setGui(async (draw) => {
-        await keep(draw.file).catch(() => {});
-        return await conversation.ask(draw);
-    });
-    return conversation;
-}
+const remembered = await readSettings(process.cwd());
+let talk = await open(remembered);
+let settings = await discoverConfigs(remembered, talk.get());
 
 // The window asks for the state once it is listening, because nothing before that would
 // have anywhere to go, and is handed every change after it.
@@ -113,6 +56,30 @@ async function set(next: Settings): Promise<Applied> {
     return { ok: true, configs: settings.configs };
 }
 
+/**
+ * The system's own dialog. No file type filter, because a config is not obliged to be
+ * called `.json` — the one this window keeps its list in has no extension at all — and a
+ * picker that hides the file you wanted is worse than one showing a few extra. Electrobun
+ * wants a comma separated list of extensions without dots here, so a filter is also the
+ * wrong shape to reach for in a hurry.
+ */
+async function pick(directory: boolean): Promise<string | undefined> {
+    const [path] = await Utils.openFileDialog({
+        startingFolder: settings.cwd,
+        canChooseFiles: !directory,
+        canChooseDirectory: directory,
+        allowsMultipleSelection: false,
+    });
+    return path;
+}
+
+/** Picking nothing is not a change, so the picker asks for a file and then applies it. */
+async function browse(key: "config" | "cwd"): Promise<Applied> {
+    const picked = await pick(key === "cwd");
+    if (!picked) return { ok: true, configs: settings.configs };
+    return await set({ ...settings, [key]: picked });
+}
+
 const site = serve();
 const window = openWindow(site.url, {
     ready: () => {
@@ -125,16 +92,8 @@ const window = openWindow(site.url, {
         void saveSettings(settings);
         return { ok: true, configs: settings.configs };
     },
-    browseConfig: async () => {
-        const config = await pick(false);
-        return config
-            ? await set({ ...settings, config })
-            : { ok: true, configs: settings.configs };
-    },
-    browseCwd: async () => {
-        const cwd = await pick(true);
-        return cwd ? await set({ ...settings, cwd }) : { ok: true, configs: settings.configs };
-    },
+    browseConfig: async () => await browse("config"),
+    browseCwd: async () => await browse("cwd"),
     send: (text) => {
         void talk.send(text);
         return { sent: Boolean(text.trim()) };
@@ -155,23 +114,6 @@ function watch(): void {
     unwatch = talk.subscribe(() => {
         if (listening) window.state(talk.get());
     });
-}
-
-/**
- * The system's own dialog. No file type filter, because a config is not obliged to be
- * called `.json` — the one this window keeps its list in has no extension at all — and a
- * picker that hides the file you wanted is worse than one showing a few extra. Electrobun
- * wants a comma separated list of extensions without dots here, so a filter is also the
- * wrong shape to reach for in a hurry.
- */
-async function pick(directory: boolean): Promise<string | undefined> {
-    const [path] = await Utils.openFileDialog({
-        startingFolder: settings.cwd,
-        canChooseFiles: !directory,
-        canChooseDirectory: directory,
-        allowsMultipleSelection: false,
-    });
-    return path;
 }
 
 watch();

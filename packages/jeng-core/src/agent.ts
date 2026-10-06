@@ -1,6 +1,7 @@
 import { type ActionContext, runAction, surfaceOf } from "./actions";
 import { loadAgentsFiles } from "./agents";
 import type { Approve } from "./approve";
+import { readCall } from "./call";
 import { defaultHome, defaultModel } from "./config";
 import { buildContext, loadedAgents, type Memory } from "./context";
 import type { GuiHost } from "./gui";
@@ -88,32 +89,38 @@ export async function createAgent(options: AgentOptions): Promise<Agent> {
     let promptTokens = 0;
     let drawn = 0;
 
-    async function send(
-        text: string,
-        sendOptions: { signal?: AbortSignal; onEvent?: (event: AgentEvent) => void } = {},
-    ): Promise<string> {
-        const { signal, onEvent } = sendOptions;
-        const ownedUi = hostUi;
-        const ownedGui = hostGui;
-        // The interface belongs to the host and outlives the turn, while what it draws
-        // belongs to this turn's stream, so the two are joined here. Which one it is
-        // was decided when the host took it, not here.
-        ctx.ui = ownedUi
+    /**
+     * The interface belongs to the host and outlives the turn, while what it draws belongs
+     * to this turn's stream, so the two are joined here. Which one it is was decided when
+     * the host took it, not here.
+     */
+    function openPorts(onEvent?: (event: AgentEvent) => void): void {
+        const ui = hostUi;
+        const gui = hostGui;
+        ctx.ui = ui
             ? async (widget) => {
                   onEvent?.({ type: "view", draw: { surface: "tui", widget } });
-                  return await ownedUi(widget);
+                  return await ui(widget);
               }
             : undefined;
-        ctx.gui = ownedGui
+        ctx.gui = gui
             ? async (file, props) => {
                   // One draw, numbered here and handed to both halves: the transcript and
                   // the host each get their own copy of the request, and the number is
                   // what says later that they were one form.
                   const draw: GuiDraw = { surface: "gui", id: ++drawn, file, props };
                   onEvent?.({ type: "view", draw });
-                  return await ownedGui(draw);
+                  return await gui(draw);
               }
             : undefined;
+    }
+
+    async function send(
+        text: string,
+        sendOptions: { signal?: AbortSignal; onEvent?: (event: AgentEvent) => void } = {},
+    ): Promise<string> {
+        const { signal, onEvent } = sendOptions;
+        openPorts(onEvent);
         for (const injected of pending.splice(0)) history.push({ role: "user", content: injected });
         // The system slot is refilled at the top of every turn, so it starts empty.
         const messages: Message[] = [
@@ -124,7 +131,18 @@ export async function createAgent(options: AgentOptions): Promise<Agent> {
         history.push({ role: "user", content: text });
         let previous = "";
         let nudged = false;
-        let reported = false;
+
+        // history is the Agent's own array, so a compact empties it rather than replacing
+        // it; memory and homes are not the transcript.
+        const compact = (summary: string) => {
+            history.length = 0;
+            history.push({
+                role: "user",
+                content: `[earlier conversation, compacted]\n\n${summary}`,
+            });
+            messages.length = 0;
+            messages.push({ role: "system", content: "" }, ...history);
+        };
 
         for (let turn = 0; turn < maxTurns; turn++) {
             const speaking = mode;
@@ -140,13 +158,15 @@ export async function createAgent(options: AgentOptions): Promise<Agent> {
             // not break a tool call from its result.
             const incoming = pending.splice(0);
             if (incoming.length === 0 && nudged) incoming.push(NUDGE);
+            nudged = false;
             for (const text of incoming) {
                 const message: Message = { role: "user", content: text };
                 messages.push(message);
                 history.push(message);
             }
-            nudged = false;
 
+            // An hour-long outage is one thing to read about, so the reason is said once.
+            let reported = false;
             const reply = await chatWithRetry(messages, {
                 config,
                 tools: [jengTool(speaking)],
@@ -160,8 +180,11 @@ export async function createAgent(options: AgentOptions): Promise<Agent> {
                 onRetry: (reason, delay) => {
                     if (reported) return;
                     reported = true;
-                    const content = `${reason}. Retrying in ${Math.max(1, Math.round(delay / 1000))}s and backing off from there; esc stops the turn.`;
-                    onEvent?.({ type: "result", content, ok: false });
+                    onEvent?.({
+                        type: "result",
+                        ok: false,
+                        content: `${reason}. Retrying in ${Math.max(1, Math.round(delay / 1000))}s and backing off from there; esc stops the turn.`,
+                    });
                 },
             });
 
@@ -173,92 +196,47 @@ export async function createAgent(options: AgentOptions): Promise<Agent> {
             history.push(message);
             messages.push(message);
 
-            const { action, ...args } = (reply.toolCall?.arguments ?? {}) as {
-                action?: string;
-            } & Record<string, unknown>;
-            const name = String(action ?? "");
-
-            if (reply.toolCall) {
-                onEvent?.({ type: "tool", action: name, args });
-
-                const paired: Message = {
-                    role: "tool",
-                    toolCallId: reply.toolCall.id,
-                    content: "",
-                };
-                const close = (content: string) => {
-                    paired.content = content;
-                    messages.push(paired);
-                    history.push(paired);
-                };
-
-                // Arguments that were never json carry the reason under `error` instead
-                // of an action, so the reason is what comes back rather than an unknown
-                // action with an empty name.
-                const malformed = typeof args.error === "string" ? args.error : undefined;
-                if (malformed) {
-                    onEvent?.({ type: "result", content: malformed, ok: false });
-                    close(malformed);
-                    continue;
-                }
-
-                if (name === "end") {
-                    const answer = String(args.content ?? "").trim();
-                    if (!answer) {
-                        const complaint = prompt("end-no-content");
-                        onEvent?.({ type: "result", content: complaint, ok: false });
-                        close(complaint);
-                        continue;
-                    }
-                    close("ended");
-                    return answer;
-                }
-
-                if (name === "compact") {
-                    const summary = String(args.summary ?? "").trim();
-                    if (!summary) {
-                        const complaint = prompt("compact-no-summary");
-                        onEvent?.({ type: "result", content: complaint, ok: false });
-                        close(complaint);
-                        continue;
-                    }
-                    close("compacted");
-
-                    // history is the Agent's own array, so it is emptied rather
-                    // than replaced; memory and homes are not the transcript.
-                    history.length = 0;
-                    history.push({
-                        role: "user",
-                        content: `[earlier conversation, compacted]\n\n${summary}`,
-                    });
-                    messages.length = 0;
-                    messages.push({ role: "system", content: "" }, ...history);
-                    continue;
-                }
-
-                // A model that reissues the call it just made, having learned
-                // nothing in between, will never make progress.
-                const signature = `${name}:${JSON.stringify(args)}`;
-                if (signature === previous) {
-                    const refusal = prompt("repeat-call", { name });
-                    onEvent?.({ type: "result", content: refusal, ok: false });
-                    close(refusal);
-                    continue;
-                }
-                previous = signature;
-
-                const result = await runAction(name, args, ctx);
-                onEvent?.({ type: "result", content: result.content, ok: result.ok });
-                close(result.content);
-
-                if (action === "load_protocol" && result.ok)
-                    memory.push({ name: String(args.name ?? ""), body: result.content });
+            // Text on its own is progress towards an answer that has not been
+            // handed over yet, so the next iteration nudges.
+            if (!reply.toolCall) {
+                nudged = true;
                 continue;
             }
 
-            // Text on its own is progress towards an answer that has not been
-            // handed over yet, so the next iteration nudges.
-            nudged = true;
+            const { action, ...args } = reply.toolCall.arguments;
+            onEvent?.({ type: "tool", action: String(action ?? ""), args });
+
+            // A call is answered immediately, so its result goes in beside it.
+            const paired: Message = { role: "tool", toolCallId: reply.toolCall.id, content: "" };
+            const close = (content: string) => {
+                paired.content = content;
+                messages.push(paired);
+                history.push(paired);
+            };
+
+            const call = readCall(reply.toolCall.arguments, previous);
+            if (call.kind === "refused") {
+                onEvent?.({ type: "result", content: call.content, ok: false });
+                close(call.content);
+                continue;
+            }
+            if (call.kind === "answer") {
+                close("ended");
+                return call.answer;
+            }
+            if (call.kind === "compact") {
+                close("compacted");
+                compact(call.summary);
+                continue;
+            }
+
+            previous = call.signature;
+            const result = await runAction(call.name, call.args, ctx);
+            onEvent?.({ type: "result", content: result.content, ok: result.ok });
+            close(result.content);
+
+            if (call.name === "load_protocol" && result.ok)
+                memory.push({ name: String(call.args.name ?? ""), body: result.content });
         }
         return `stopped after ${maxTurns} turns without ending.`;
     }

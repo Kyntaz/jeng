@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { fields, type Widget } from "../../src/ui";
+import type { Widget } from "@jeng/core";
+import { fields } from "../../src/widget";
 
 const FORM: Widget = {
     kind: "box",
@@ -23,7 +24,7 @@ const FORM: Widget = {
     ],
 };
 
-describe("ui", () => {
+describe("widget", () => {
     test("finds the fields of a tree in the order it lays them out", () => {
         expect(fields(FORM)).toEqual([
             { name: "action", kind: "select" },

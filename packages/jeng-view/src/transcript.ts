@@ -41,7 +41,7 @@ export const blank = (entry: Entry): boolean => {
  * tree still goes by identity, because the terminal holds the same objects throughout and
  * has no reason to number anything.
  */
-export const sameDraw = (one: Draw, other: Draw): boolean => {
+const sameDraw = (one: Draw, other: Draw): boolean => {
     if (one.surface !== other.surface) return false;
     if (one.surface === "gui" && other.surface === "gui") return one.id === other.id;
     return one.surface === "tui" && other.surface === "tui" && one.widget === other.widget;

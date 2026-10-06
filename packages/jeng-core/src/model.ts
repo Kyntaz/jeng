@@ -20,14 +20,14 @@ export interface ToolCall {
     raw: string;
 }
 
-export interface Turn {
+interface Turn {
     text: string;
     reasoning: string;
     toolCall: ToolCall | undefined;
     promptTokens: number;
 }
 
-export interface ToolSpec {
+interface ToolSpec {
     name: string;
     description: string;
     parameters: Record<string, unknown>;
@@ -36,7 +36,7 @@ export interface ToolSpec {
 const BACKOFF_BASE = 1000;
 const BACKOFF_CAP = 30000;
 
-export class RequestError extends Error {
+class RequestError extends Error {
     constructor(
         message: string,
         readonly status: number,
@@ -107,6 +107,18 @@ async function* lines(body: ReadableStream<Uint8Array>): AsyncGenerator<string> 
             if (line.startsWith("data:")) yield line.slice(5).trim();
         }
     }
+}
+
+/** A call arrives in pieces, and a later piece never repeats what an earlier one carried. */
+function mergeCall(
+    call: { id: string; name: string; args: string } | undefined,
+    next: { id: string | undefined; name: string; args: string },
+): { id: string; name: string; args: string } {
+    return {
+        id: next.id ?? call?.id ?? "call_0",
+        name: next.name || call?.name || "",
+        args: (call?.args ?? "") + next.args,
+    };
 }
 
 function wire(message: Message): Record<string, unknown> {
@@ -201,13 +213,7 @@ export async function chat(messages: Message[], options: ChatOptions): Promise<T
         }
 
         const next = firstToolCall(delta);
-        if (next) {
-            call = {
-                id: next.id ?? call?.id ?? "call_0",
-                name: next.name || call?.name || "",
-                args: (call?.args ?? "") + next.args,
-            };
-        }
+        if (next) call = mergeCall(call, next);
     }
 
     return {
