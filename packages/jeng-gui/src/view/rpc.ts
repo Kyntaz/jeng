@@ -51,6 +51,10 @@ export function connect() {
         forget: (path: string) => rpc.request.forget({ path }),
         browseConfig: () => rpc.request.browseConfig(),
         browseCwd: () => rpc.request.browseCwd(),
+        // Asked for when the picker opens rather than with the first state, because which
+        // sessions there are follows the homes the window is pointed at.
+        sessions: async () => (await rpc.request.sessions()).sessions,
+        resume: (id: string) => rpc.request.resume({ id }),
         send: (text: string) => rpc.request.send({ text }),
         interrupt: () => rpc.request.interrupt(),
         clear: () => rpc.request.clear(),

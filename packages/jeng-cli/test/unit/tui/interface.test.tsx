@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { Agent, Answers, Ui, Widget } from "@jeng/core";
+import { createConversation } from "@jeng/view";
 import { testRender } from "@opentui/react/test-utils";
 import { act } from "react";
 import { App } from "../../../src/tui/app";
@@ -73,8 +74,23 @@ function stubTurn(turn: (ask: (widget: Widget) => Promise<Answers>) => Promise<v
     return { agent, answered };
 }
 
+/** A run with nothing written down to it, so the picker has nothing to offer. */
+function run(agent: Agent) {
+    return {
+        run: {
+            agent,
+            talk: createConversation(agent),
+            home: "/home/jeng",
+            sessions: () => [],
+        },
+        resume: async () => {
+            throw new Error("there is no session to load in this test");
+        },
+    };
+}
+
 async function render(agent: Agent) {
-    return testRender(<App agent={agent} onExit={() => {}} />, {
+    return testRender(<App {...run(agent)} onExit={() => {}} />, {
         width: 80,
         height: 24,
         kittyKeyboard: true,

@@ -76,6 +76,32 @@ run is yours and you trust it to write to the home folder.
 Jeng keeps going until it ends its turn with an answer or you interrupt it with `esc`. Pass
 `--max-turns <n>` if you would rather it gave up after that many calls.
 
+## Sessions
+
+A conversation is written down in the first `--home` folder, so you can pick it back up
+later. Each one is a file in `<home>/sessions`, named after when it happened.
+
+```sh
+jeng --sessions
+jeng --session 2026-10-06T14-02-11.204
+```
+
+`--sessions` lists them newest first and exits. `--session <id>` starts on one, and takes a
+prompt like anything else: `jeng --session <id> "what was left to do?"`. A session carries
+the directory, homes, config and mode it was working under, so `--session` refuses to be
+combined with `--config`, `--home` or `--mode` rather than quietly ignoring one of them.
+
+In the TUI, `ctrl+p` lists them without leaving it: `up` and `down` to choose, `enter` to
+load, `esc` to put the list away. Loading one is the same as starting on it: the working
+directory moves to where that conversation was.
+
+A conversation is written down every five exchanges, before it is cleared, and on the way
+out — so a run killed with `ctrl+c` loses at most a few exchanges. `ctrl+l` writes the
+conversation down before clearing it, and what comes after is a session of its own.
+
+A piped or one-shot run keeps what the model was told rather than a transcript, because it
+printed that to stdout instead of showing one.
+
 ## Modes
 
 Jeng has two modes, and which one it is in decides whether it may change its home.
@@ -106,11 +132,18 @@ homes it can reach and the context size the model is actually working with. Its 
 | `tab`         | change mode, or move between the answers    |
 | `ctrl+esc`    | quit                                        |
 | `ctrl+l`      | clear the conversation and loaded protocols |
+| `ctrl+p`      | list the sessions kept in the home, and load one |
 | `esc`         | interrupt what Jeng is doing right now      |
 | `ctrl+r`      | show or hide the detail behind a turn: what the model is thinking, what each action returned and what went wrong |
 | `pageup`      | scroll the transcript back a screen           |
 | `pagedown`    | scroll the transcript on a screen             |
 | `ctrl+end`    | scroll the transcript to the newest thing    |
+| `ctrl+g`      | turn to the next page of keys in the footer   |
+
+The footer is one line, so its keys are in three pages: `ctrl+g` turns to the next one and the
+counter says which page you are on, while the spinner and the counter stay where they are. While
+Jeng is waiting for an answer the footer says those keys instead, because they are the only ones
+worth pressing.
 
 Drag with the mouse to select any of it and let go, and the selection goes to your
 clipboard. The mouse wheel scrolls the transcript too. The prompt box grows to hold
@@ -178,8 +211,9 @@ The picker lists the configs it knows about, marks the one in force, and will ad
 system's own file dialog: `add a config file…` asks for a file and `change…` asks for a directory.
 Neither filters by extension, because a config is not obliged to be called `.json` and a picker that hides
 the file you wanted is worse than one showing a few extra. Anything that is not a config says so rather
-than running on it. Everything the window remembers is kept in `~/.jeng/knownconfigs`, as plain text so
-you can edit it yourself:
+than running on it. It also lists the sessions the home has kept, and picking one loads that conversation,
+the directory it was working in and the config it was on. Everything the window remembers is kept in
+`~/.jeng/knownconfigs`, as plain text so you can edit it yourself:
 
 ```
 cwd: C:/work/jeng
@@ -219,6 +253,8 @@ Jeng loads up and edits context on the following locations:
         - `/*.ts` (tools that Jeng can use to interact with the system; these run on the bun runtime)
     - `/AGENTS.md` (global agents file; always loaded into Jeng's context)
     - `/.state` (json a gadget has committed, kept between sessions)
+    - `/sessions`
+        - `/*.json` (conversations you have had with this agent, kept in the first home and named after when they happened)
 
 Additionally, Jeng loads up `AGENTS.md` files for the current working directory or any directory above it, following the expected protocol.
 You can have multiple `--home` folders to have multiple agents with different capabilities.

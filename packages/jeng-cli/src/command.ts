@@ -1,7 +1,6 @@
 #!/usr/bin/env bun
 import { createInterface, type Interface } from "node:readline";
 import {
-    type Agent,
     type Approval,
     type ApprovalDecision,
     type Approve,
@@ -9,11 +8,26 @@ import {
     createAgent,
     isDelete,
     isMode,
+    listSessions,
     loadConfig,
     type Mode,
+    readSession,
+    sessionId,
+    writeSession,
 } from "@jeng/core";
+import { createConversation, type Session, type Sessioning } from "@jeng/view";
 import { Command } from "commander";
-import { approvalText, renderTui } from "./tui";
+import { approvalText, type Run, renderTui } from "./tui";
+
+interface Options {
+    home: string[];
+    config: string | undefined;
+    yes: boolean;
+    mode?: Mode;
+    maxTurns?: number;
+    session?: string;
+    sessions?: boolean;
+}
 
 const collect = (value: string, previous: string[]) => [...previous, value];
 
@@ -64,8 +78,115 @@ async function askOnStdin(request: Approval): Promise<ApprovalDecision> {
 const yes: Approve = async (request) =>
     isDelete(request.kind) ? await askOnStdin(request) : { approved: true };
 
-async function once(agent: Agent, prompt: string): Promise<void> {
+const approve = (options: Options): Approve => (options.yes ? yes : askOnStdin);
+
+/**
+ * A session carries the run it was: the directory, the homes, the config file and the mode
+ * it was working under. So a session is read out of the first home a run would use, which
+ * is where it is kept, and the flags that would name a different run are refused rather
+ * than quietly dropped.
+ */
+async function restored(options: Options): Promise<Session> {
+    if (options.config || options.home.length > 0 || options.mode !== undefined)
+        die(
+            "a session carries its own config, homes and mode: leave --config, --home and --mode off, or start without --session",
+        );
+
     try {
+        return readSession<Session>((await configFor(options)).homes[0], options.session ?? "");
+    } catch (error) {
+        die(error instanceof Error ? error.message : String(error));
+    }
+}
+
+async function configFor(options: Options, resume?: Session): Promise<Config> {
+    try {
+        return await loadConfig({
+            // A resumed run brought its own config, so it is the one read rather than found.
+            path: resume?.config ?? options.config,
+            cwd: resume?.cwd,
+            // Which is the same precedence a flag has over the homes a config file lists.
+            homeArgs: resume ? resume.homes : options.home,
+        });
+    } catch (error) {
+        die(error instanceof Error ? error.message : String(error));
+    }
+}
+
+/**
+ * A list of sessions is read rather than searched, so it is one line each and newest
+ * first: this is what is read before `--session <id>`.
+ */
+function listed(home: string): void {
+    const sessions = listSessions(home);
+    if (sessions.length === 0) {
+        process.stdout.write("no sessions yet\n");
+        return;
+    }
+
+    for (const session of sessions) {
+        const when = new Date(session.updated).toLocaleString(undefined, {
+            dateStyle: "short",
+            timeStyle: "short",
+        });
+        process.stdout.write(`${when}  ${session.id}  ${session.title || "nothing said yet"}\n`);
+    }
+}
+
+async function open(options: Options, resume?: Session): Promise<Run> {
+    // A mode that is not one is a typo rather than a mode, and quietly
+    // falling back to learn would hand the user an agent that writes.
+    if (options.mode !== undefined && !isMode(options.mode))
+        die(`mode must be learn or work, not ${options.mode}`);
+
+    // A limit is the user taking the ability to interrupt back, so a
+    // nonsense one has to be said rather than clamped.
+    if (
+        options.maxTurns !== undefined &&
+        (!Number.isInteger(options.maxTurns) || options.maxTurns < 1)
+    )
+        die(`max-turns must be a whole number above zero, not ${options.maxTurns}`);
+
+    const config = await configFor(options, resume);
+    const agent = await createAgent({
+        cwd: resume?.cwd,
+        homes: config.homes,
+        config: config.model,
+        history: resume?.history,
+        memory: resume?.memory,
+        tokens: resume?.tokens,
+        mode: resume?.mode ?? options.mode,
+        maxTurns: options.maxTurns,
+        // --yes never installs the reader on its own, so a scripted run
+        // touches no stdin unless it has something to delete.
+        approve: approve(options),
+    });
+
+    // Sessions belong to the home a run was given first, which is the one whose agent this
+    // is: a second home is another agent's memory rather than somewhere this one's
+    // conversations go.
+    const home = config.homes[0];
+    const sessioning: Sessioning = {
+        ...(resume ? { resume } : {}),
+        name: () => sessionId(),
+        save: (session) => {
+            writeSession(home, session);
+        },
+    };
+
+    return {
+        agent,
+        talk: createConversation(agent, config.path, sessioning),
+        home,
+        sessions: () => listSessions(home),
+    };
+}
+
+async function once({ agent, talk }: Run, prompt: string, options: Options): Promise<void> {
+    try {
+        // Nobody is here to answer an approval the conversation put up for a frontend that
+        // does not exist, so the terminal's own reader goes back in.
+        agent.setApprove(approve(options));
         let streamed = "";
         const reply = await agent.send(prompt, {
             onEvent: (event) => {
@@ -85,45 +206,8 @@ async function once(agent: Agent, prompt: string): Promise<void> {
         // never opened one in the first place.
         ask?.close();
         ask = undefined;
+        talk.save();
     }
-}
-
-async function agentFor(options: {
-    home: string[];
-    config: string | undefined;
-    yes: boolean;
-    mode?: Mode;
-    maxTurns?: number;
-}): Promise<Agent> {
-    // A mode that is not one is a typo rather than a mode, and quietly
-    // falling back to learn would hand the user an agent that writes.
-    if (options.mode !== undefined && !isMode(options.mode))
-        die(`mode must be learn or work, not ${options.mode}`);
-
-    // A limit is the user taking the ability to interrupt back, so a
-    // nonsense one has to be said rather than clamped.
-    if (
-        options.maxTurns !== undefined &&
-        (!Number.isInteger(options.maxTurns) || options.maxTurns < 1)
-    )
-        die(`max-turns must be a whole number above zero, not ${options.maxTurns}`);
-
-    let config: Config;
-    try {
-        config = await loadConfig({ path: options.config, homeArgs: options.home });
-    } catch (error) {
-        die(error instanceof Error ? error.message : String(error));
-    }
-
-    return await createAgent({
-        homes: config.homes,
-        config: config.model,
-        mode: options.mode as Mode | undefined,
-        maxTurns: options.maxTurns,
-        // --yes never installs the reader on its own, so a scripted run
-        // touches no stdin unless it has something to delete.
-        approve: options.yes ? yes : askOnStdin,
-    });
 }
 
 export async function jeng(): Promise<void> {
@@ -152,12 +236,27 @@ export async function jeng(): Promise<void> {
             "-y, --yes",
             "approve every gadget and protocol without asking; a deletion is always asked for",
         )
+        .option("--session <id>", "start on a session that was saved before; see --sessions")
+        .option("--sessions", "list the sessions kept in the first home, newest first")
         .showHelpAfterError()
-        .action(async (prompt: string[], options: Parameters<typeof agentFor>[0]) => {
-            const agent = await agentFor(options);
+        .action(async (prompt: string[], options: Options) => {
+            if (options.sessions) {
+                if (options.session) die("--sessions lists them and --session opens one: pick one");
+                listed((await configFor(options)).homes[0]);
+                return;
+            }
+
+            const run = await open(options, options.session ? await restored(options) : undefined);
             const text = prompt.length ? prompt.join(" ") : await piped();
-            if (text.trim()) await once(agent, text);
-            else if (process.stdin.isTTY) await renderTui(agent);
+            if (text.trim()) await once(run, text, options);
+            else if (process.stdin.isTTY)
+                await renderTui(run, async (id, from) => {
+                    // The conversation being left is one somebody may want back, so it is
+                    // written down before the one being opened rather than after. Which home
+                    // the session is read out of is the one the run being left was writing to.
+                    from.talk.save();
+                    return await open(options, readSession<Session>(from.home, id));
+                });
             else die("no prompt given, on the argument or on stdin");
         })
         .parseAsync();

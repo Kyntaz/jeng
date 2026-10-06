@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import type { SessionRef } from "@jeng/core";
 import type { State } from "@jeng/view";
 import { renderToStaticMarkup } from "react-dom/server";
 import { Picker } from "../../src/view/picker";
@@ -19,12 +20,21 @@ const state: State = {
     agents: [],
 };
 
+const session = (id: string, title: string): SessionRef => ({
+    id,
+    title,
+    started: "2026-10-06T14:02:11.204Z",
+    updated: "2026-10-06T14:19:02.881Z",
+    file: `/home/jeng/sessions/${id}.json`,
+});
+
 /** A picker with no transport behind it, because nothing here asks anything of one. */
-const shown = (configs: string[], over: Partial<State> = {}) =>
+const shown = (configs: string[], over: Partial<State> = {}, sessions: SessionRef[] = []) =>
     renderToStaticMarkup(
         <Picker
             bridge={{} as Bridge}
             configs={configs}
+            sessions={sessions}
             state={{ ...state, ...over }}
             onConfigs={() => {}}
             onClose={() => {}}
@@ -74,5 +84,19 @@ describe("the picker", () => {
         const markup = shown(["/work/jeng/jeng.json"]);
 
         expect(markup).toContain(">jeng.json</button>");
+    });
+
+    test("lists the conversations this home has already had", () => {
+        const markup = shown([], {}, [session("2026-10-06T14-02-11", "what files are in src?")]);
+
+        expect(markup).toContain("what files are in src?");
+    });
+
+    test("says a session nothing was asked in rather than leaving its name empty", () => {
+        expect(shown([], {}, [session("2026-10-06T14-02-11", "")])).toContain("nothing said yet");
+    });
+
+    test("says so when there is nothing to load yet", () => {
+        expect(shown([])).toContain("no sessions yet");
     });
 });

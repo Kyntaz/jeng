@@ -52,6 +52,10 @@ export interface AgentOptions {
     homes?: string[];
     config?: ModelConfig;
     history?: Message[];
+    /** A protocol loaded before this run began is still memory, so it survives a restore. */
+    memory?: Memory[];
+    /** The last request's size, so a restored run does not claim an empty context for a turn. */
+    tokens?: number;
     maxTurns?: number;
     mode?: Mode;
     approve: Approve;
@@ -83,10 +87,10 @@ export async function createAgent(options: AgentOptions): Promise<Agent> {
         },
     };
     const history = options.history ?? [];
-    const memory: Memory[] = [];
+    const memory: Memory[] = options.memory ?? [];
     const maxTurns = options.maxTurns ?? Infinity;
     const pending: string[] = [];
-    let promptTokens = 0;
+    let promptTokens = options.tokens ?? 0;
     let drawn = 0;
 
     /**

@@ -876,4 +876,44 @@ describe("a jeng session", () => {
         expect(agent.agents.filter((dir) => dir === home || dir === cwd)).toEqual([home, cwd]);
         await leave(home, cwd);
     });
+
+    test("carries the protocols a run had committed into the one that picks it up", async () => {
+        const home = await mkdtemp(join(tmpdir(), "jeng-e2e-"));
+        const model = fakeModel([end("ship it")]);
+
+        const agent = await createAgent({
+            cwd: home,
+            homes: [home],
+            config: CONFIG(model.url),
+            // A protocol loaded before this run began is still memory rather than
+            // transcript, so a run that starts from a session still knows it.
+            memory: [{ name: "deploy", body: "run make, then push" }],
+            approve: allow,
+        });
+
+        await agent.send("deploy it");
+
+        expect(model.requests()[0]).toContain("run make, then push");
+        model.stop();
+        await leave(home);
+    });
+
+    test("tells the model how full the context already was, rather than claiming an empty one", async () => {
+        const home = await mkdtemp(join(tmpdir(), "jeng-e2e-"));
+        const model = fakeModel([end("done")]);
+
+        const agent = await createAgent({
+            cwd: home,
+            homes: [home],
+            config: CONFIG(model.url),
+            tokens: 1200,
+            approve: allow,
+        });
+
+        await agent.send("keep going");
+
+        expect(model.requests()[0]).toContain("Context: 1200/8192 tokens.");
+        model.stop();
+        await leave(home);
+    });
 });

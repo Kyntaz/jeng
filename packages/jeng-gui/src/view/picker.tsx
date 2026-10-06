@@ -1,39 +1,44 @@
+import type { SessionRef } from "@jeng/core";
 import { place, type State } from "@jeng/view";
 import { useState } from "react";
 import type { Applied } from "..";
 import type { Bridge } from "./rpc";
 
 /**
- * Where the window points: which config file it reads and which directory it works in.
- * Both are a click rather than a launch flag, because a window started from an app
- * launcher was never handed either.
+ * What the window looks at while it is open: which config file it reads, which directory it
+ * works in, and which conversations it has already had. The first two are a click rather than
+ * a launch flag, because a window started from an app launcher was never handed either.
  *
- * Applying either one rebuilds the agent, so the conversation behind this is gone by the
- * time it closes. A config that cannot be read leaves the window where it was, which is
- * why the reason is said here rather than swallowed.
+ * Applying any of them rebuilds the agent, so the conversation behind this is gone by the
+ * time it closes. A config or a session that cannot be opened leaves the window where it
+ * was, which is why the reason is said here rather than swallowed.
  */
 export function Picker({
     bridge,
     configs,
+    sessions,
     state,
     onConfigs,
     onClose,
 }: {
     bridge: Bridge;
     configs: string[];
+    /** What the home in force has written down, read by the window when this was opened. */
+    sessions: SessionRef[];
     state: State;
     onConfigs: (configs: string[]) => void;
     onClose: () => void;
 }) {
     const [error, setError] = useState<string>();
 
-    // Applying something leaves the picker up, because the working directory and the config
-    // are two halves of the same decision and closing on the first one would make picking
-    // both a fight. Only `close` and `esc` put it away. What a change brings back is the
-    // list and, when something was refused, why.
+    // Applying something leaves the picker up, because the working directory, the config
+    // and the session are all one decision and closing on the first of them would make
+    // picking the rest of it a fight. Only `close` and `esc` put it away. What a change
+    // brings back is the list and, when something was refused, why.
     const report = (result: Applied) => {
         onConfigs(result.configs);
-        if (!result.ok) setError(result.error);
+        if (result.ok) setError(undefined);
+        else setError(result.error);
     };
 
     // A dialog that fails outright rejects rather than answering, and a rejected promise
@@ -106,6 +111,32 @@ export function Picker({
                     >
                         change…
                     </button>
+                </div>
+
+                <h3>sessions</h3>
+                <p className="ask">conversations this home has already had, newest first</p>
+                <div className="rows">
+                    {sessions.length === 0 && <span className="pick">no sessions yet</span>}
+                    {sessions.map((session) => (
+                        <div className="row" key={session.id}>
+                            <button
+                                type="button"
+                                className="pick"
+                                onClick={() =>
+                                    void bridge.resume(session.id).then((result) => {
+                                        report(result);
+                                        // A conversation that could not be opened is left
+                                        // in front of the user rather than thrown away.
+                                        if (result.ok) onClose();
+                                    }, failed)
+                                }
+                            >
+                                {/* A session is named by when it happened, which is what a
+                                 * list of them is read by, and by what it was about. */}
+                                {`${new Date(session.updated).toLocaleString(undefined, { dateStyle: "short", timeStyle: "short" })}  ${session.title || "nothing said yet"}`}
+                            </button>
+                        </div>
+                    ))}
                 </div>
 
                 {error && <p className="failed">{error}</p>}

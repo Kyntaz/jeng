@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { Agent, Approval, ApprovalDecision, Approve, Mode } from "@jeng/core";
+import { createConversation } from "@jeng/view";
 import type { CapturedLine } from "@opentui/core";
 import { RGBA } from "@opentui/core";
 import { testRender } from "@opentui/react/test-utils";
@@ -45,10 +46,25 @@ function stubAgent(decided: ApprovalDecision[]): Agent {
     };
 }
 
+/** A run with nothing written down to it, so the picker has nothing to offer. */
+function run(agent: Agent) {
+    return {
+        run: {
+            agent,
+            talk: createConversation(agent),
+            home: "/home/jeng",
+            sessions: () => [],
+        },
+        resume: async () => {
+            throw new Error("there is no session to load in this test");
+        },
+    };
+}
+
 async function render(agent: Agent, height = 24) {
     // Shift+Enter only arrives as its own key when the terminal reports
     // modifiers, which is what the kitty keyboard protocol buys.
-    return testRender(<App agent={agent} onExit={() => {}} />, {
+    return testRender(<App {...run(agent)} onExit={() => {}} />, {
         width: 80,
         height,
         kittyKeyboard: true,
@@ -315,7 +331,7 @@ describe("approving a gadget", () => {
             },
         };
         const { renderer, mockInput, flush } = await testRender(
-            <App agent={agent} onExit={() => {}} />,
+            <App {...run(agent)} onExit={() => {}} />,
             { width: 80, height: 24, kittyKeyboard: true },
         );
 
@@ -371,5 +387,22 @@ describe("approving a gadget", () => {
             switched: [],
             stillLearning: true,
         });
+    });
+
+    test("has no page to turn while the footer is answering something", async () => {
+        const { renderer, mockInput, flush, captureCharFrame, waitFor } = await render(
+            stubAgent([]),
+        );
+
+        await mockInput.typeText("say hi");
+        act(() => mockInput.pressEnter());
+        await act(async () => await flush());
+        await waitFor(() => captureCharFrame().includes("approve"));
+        act(() => mockInput.pressKey("g", { ctrl: true }));
+        await act(async () => await flush());
+        const frame = captureCharFrame();
+        act(() => renderer.destroy());
+
+        expect(frame).not.toContain("ctrl+g");
     });
 });

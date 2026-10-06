@@ -1,4 +1,6 @@
 import type { Agent, Answers, Approval, ApprovalDecision, Draw, Mode, Widget } from "@jeng/core";
+import type { Session, Sessioning } from "./session";
+import { titled } from "./session";
 import { append, type Entry, isAsk } from "./transcript";
 import { fields } from "./widget";
 
@@ -48,30 +50,43 @@ const decided = (decision: ApprovalDecision): string =>
 // draws and whether it asks is the gadget's own business, and asking costs one entry.
 const asks = (draw: Draw): boolean => draw.surface === "gui" || fields(draw.widget).length > 0;
 
+// How many exchanges are worth keeping in memory before a conversation is written down. A
+// session file is small enough to write on every turn, so five is about not paying for a
+// file write nobody notices rather than about not losing anything.
+const EVERY = 5;
+
 /**
  * The conversation as state, with nothing in it about how any of it is drawn. A terminal
  * and a window have very little in common past this, which is the point: the rules below
  * are the ones that were hardest to get right, so they are written down once.
  *
  * `config` is only ever said out loud, so a terminal that was pointed at a file with
- * `-c` leaves it out.
+ * `-c` leaves it out. `sessioning` is a host's way of saying where this conversation is
+ * written down: given one, it is named, saved every few exchanges, saved before it is
+ * cleared, and able to pick one up again through `sessioning.resume`.
  */
-export function createConversation(agent: Agent, config?: string) {
+export function createConversation(agent: Agent, config?: string, sessioning?: Sessioning) {
+    const resumed = sessioning?.resume;
     let state: State = {
-        entries: [],
+        entries: resumed?.entries ?? [],
         asks: [],
         approval: undefined,
         busy: false,
-        tokens: 0,
+        tokens: resumed?.tokens ?? 0,
         mode: agent.mode,
-        thinking: false,
+        thinking: resumed?.thinking ?? false,
         homes: agent.homes.map((home) => home.dir),
         model: agent.model,
         cwd: agent.cwd,
         config,
         agents: agent.agents,
     };
-    let numbered = 0;
+    // A row is named by a number rather than by what it holds, so a resumed transcript has
+    // to carry on counting past what it holds rather than over it.
+    let numbered = Math.max(0, ...(resumed?.entries.map((entry) => entry.id) ?? []));
+    let id = sessioning ? (resumed?.id ?? sessioning.name()) : "";
+    let began = resumed?.started ?? new Date().toISOString();
+    let exchanges = 0;
     let running: AbortController | undefined;
     let deciding: ((decision: ApprovalDecision) => void) | undefined;
     // Kept beside the state rather than inside it, because a window is handed the state as
@@ -79,13 +94,60 @@ export function createConversation(agent: Agent, config?: string) {
     const waiting = new Map<number, (answers: Record<string, unknown>) => void>();
     const listeners = new Set<() => void>();
 
-    function set(patch: Partial<State>): void {
+    function update(patch: Partial<State>): void {
         state = { ...state, ...patch };
         for (const listener of listeners) listener();
     }
 
+    function snapshot(): Session {
+        const history = [...agent.history];
+        return {
+            id,
+            title: titled(state.entries, history),
+            started: began,
+            updated: new Date().toISOString(),
+            cwd: state.cwd,
+            homes: state.homes,
+            config: state.config,
+            mode: state.mode,
+            thinking: state.thinking,
+            tokens: state.tokens,
+            // The agent's own arrays, which are added to in place and emptied on a clear, so
+            // a record is taken of them rather than of the arrays themselves.
+            history,
+            memory: [...agent.memory],
+            entries: state.entries,
+        };
+    }
+
+    /**
+     * Written down whenever it is worth it. The record is taken here rather than when the
+     * write lands, so a save asked for before a clear still holds what the clear is about to
+     * throw away. Nothing that cannot be written is worth losing the screen over: it says so
+     * in the transcript, which is where the user is already looking.
+     */
+    function save(): void {
+        if (!sessioning) return;
+        const record = snapshot();
+        try {
+            sessioning.save(record);
+        } catch (error) {
+            update({
+                entries: [
+                    ...state.entries,
+                    {
+                        kind: "error",
+                        id: ++numbered,
+                        icon: "err",
+                        text: `session not saved: ${(error as Error).message}`,
+                    },
+                ],
+            });
+        }
+    }
+
     function settle(ask: Pending, answers: Record<string, unknown>): void {
-        set({
+        update({
             asks: state.asks.filter((it) => it !== ask),
             entries: state.entries.map((entry) =>
                 isAsk(entry, ask) ? { ...entry, answers } : entry,
@@ -104,7 +166,7 @@ export function createConversation(agent: Agent, config?: string) {
                 // answer and the record of it that they are the same one thing, which a
                 // window could not work out from what they hold.
                 const id = ++numbered;
-                set({
+                update({
                     approval: { id, approval: request },
                     entries: [...state.entries, { kind: "approval", id, approval: request }],
                 });
@@ -124,7 +186,7 @@ export function createConversation(agent: Agent, config?: string) {
         return new Promise((resolve) => {
             const id = ++numbered;
             waiting.set(id, resolve);
-            set({ asks: [...state.asks, { id, draw }] });
+            update({ asks: [...state.asks, { id, draw }] });
         });
     }
 
@@ -141,7 +203,7 @@ export function createConversation(agent: Agent, config?: string) {
     function decide(decision: ApprovalDecision): void {
         deciding?.(decision);
         deciding = undefined;
-        set({
+        update({
             approval: undefined,
             // An answer is the user talking, so it is recorded as the user's line.
             entries: [...state.entries, { kind: "user", id: ++numbered, text: decided(decision) }],
@@ -150,6 +212,11 @@ export function createConversation(agent: Agent, config?: string) {
 
     const conversation = {
         get: (): State => state,
+
+        /** What this conversation is right now, whether or not anyone has written it down. */
+        get session(): Session {
+            return snapshot();
+        },
 
         /** The one form that is up. A gadget that asks without waiting leaves more. */
         get pending(): Pending | undefined {
@@ -167,15 +234,16 @@ export function createConversation(agent: Agent, config?: string) {
         answer,
         abandon,
         decide,
+        save,
 
         toggleThinking(): void {
-            set({ thinking: !state.thinking });
+            update({ thinking: !state.thinking });
         },
 
         toggleMode(): void {
             const next: Mode = state.mode === "learn" ? "work" : "learn";
             agent.setMode(next);
-            set({ mode: next });
+            update({ mode: next });
         },
 
         /** Escape reaches for whatever is holding the turn up, the user first. */
@@ -191,13 +259,19 @@ export function createConversation(agent: Agent, config?: string) {
             // it was drawn in is gone.
             for (const ask of state.asks) waiting.get(ask.id)?.({});
             waiting.clear();
+            save();
+            // What came before is a session of its own now, so what comes after is another.
+            if (sessioning) {
+                id = sessioning.name();
+                began = new Date().toISOString();
+            }
             agent.clear();
-            set({ entries: [], asks: [], tokens: 0 });
+            update({ entries: [], asks: [], tokens: 0 });
         },
 
         async send(text: string): Promise<void> {
             if (!text.trim()) return;
-            set({ entries: [...state.entries, { kind: "user", id: ++numbered, text }] });
+            update({ entries: [...state.entries, { kind: "user", id: ++numbered, text }] });
 
             // The prompt keeps working while jeng does, so a message typed mid-turn
             // reaches the model between two of its calls rather than cutting one short.
@@ -208,7 +282,7 @@ export function createConversation(agent: Agent, config?: string) {
 
             const controller = new AbortController();
             running = controller;
-            set({ busy: true });
+            update({ busy: true });
             // Read once per turn rather than per event, so a mode switched mid-turn
             // stamps the whole turn rather than splitting it in two.
             const speaking = state.mode;
@@ -217,15 +291,15 @@ export function createConversation(agent: Agent, config?: string) {
                 const reply = await agent.send(text, {
                     signal: controller.signal,
                     onEvent: (event) => {
-                        if (event.type === "usage") return set({ tokens: event.promptTokens });
+                        if (event.type === "usage") return update({ tokens: event.promptTokens });
                         if (event.type === "text") streamed += event.text;
-                        set({ entries: append(state.entries, event, speaking, ++numbered) });
+                        update({ entries: append(state.entries, event, speaking, ++numbered) });
                     },
                 });
                 // The answer is said out loud rather than only in the transcript, so a
                 // turn that ended in words the user already watched stream stays one entry.
                 if (reply.trim() && reply.trim() !== streamed.trim())
-                    set({
+                    update({
                         entries: [
                             ...state.entries,
                             { kind: "jeng", id: ++numbered, text: reply, mode: speaking },
@@ -233,7 +307,7 @@ export function createConversation(agent: Agent, config?: string) {
                     });
             } catch (error) {
                 const note = controller.signal.aborted ? "interrupted" : (error as Error).message;
-                set({
+                update({
                     entries: [
                         ...state.entries,
                         { kind: "error", id: ++numbered, icon: "err", text: note },
@@ -241,7 +315,11 @@ export function createConversation(agent: Agent, config?: string) {
                 });
             } finally {
                 running = undefined;
-                set({ busy: false });
+                update({ busy: false });
+                // A run killed outright costs whatever it said since the last write, which
+                // is what the count is for. A message injected into a turn already in flight
+                // is not a turn of its own and does not count towards one.
+                if (++exchanges % EVERY === 0) save();
             }
         },
     };

@@ -197,6 +197,21 @@ one works against the other.
 - `test_gadget` gets the real thing, so a gadget that commits during a test really has committed it. The
   alternative would be a test that behaves differently from the run it is standing in for.
 
+## Sessions
+
+A conversation is written down so a later run can be the same conversation, which is one file per run in `<first home>/sessions`, named after when it started.
+
+- **A session is named by its own beginning.** The file name is that timestamp with the colons swapped out, which is legal on every platform and sorts the way it happened, so a list of them needs no ordering of its own. The milliseconds are in there so two runs started in the same second do not write over each other.
+- **It is kept in the first home, not in all of them.** A second home is another agent's memory rather than a filing cabinet for this one's conversations, and one home per session is one place to look for it.
+- **Two halves travel together.** The model gets its history and the protocols it had committed; the user gets the transcript, so a session picked back up can be read as well as continued. A one-shot run has no transcript to keep — it printed one to stdout — so what it records is the model's side, which is what picking it back up is for.
+- **What is not kept is as deliberate as what is.** The system prompt is rebuilt every turn out of the homes, the `AGENTS.md` chain and the memory, which is why the memory is kept and a prompt is not. A gadget's scratch does not travel either: it holds live handles that mean nothing in another process. Persistent state in `<home>/.state` already outlives the session on its own.
+- **A record of a component whose file is gone is dropped rather than kept.** A `test_gadget` lives in a temp folder that is removed the moment the turn is over, and what it drew was only ever held in memory, so there is nothing left to draw. The window drops those rows on the way in; a widget tree is data and needs nothing.
+- **A session carries the run it was**: the cwd, the homes, the config file and the mode. Picking one back up is therefore a different agent in a different folder rather than a transcript replayed into this one, and the two travel together as a pair — which is also why the CLI refuses `--session` alongside `--config`, `--home` or `--mode` rather than quietly dropping one of them.
+- **It is written on a cadence, before a clear, and on the way out.** Five exchanges is about not paying for a file write nobody notices, not about not losing anything: a run killed outright loses what it said since the last write. A clear writes first and then takes a new name, because what came before is a session of its own now.
+- **The write is synchronous**, because the save worth the most is the one on the way out of the process, and an awaited write loses the session exactly when it was asked for. The record is taken at the moment `save` is called rather than when the write lands, so a save asked for before a clear still holds what the clear is about to throw away.
+- **Core owns the files and the conversation owns the moment.** `jeng-core` reads, writes and lists them, and knows only what a list needs: the name, the title, the two timestamps. `jeng-view` decides when a conversation is worth writing and what a session has to hold, through a port the host fills in. Neither can do the other's half, which is the whole reason the port exists.
+- **A title is the first thing that was asked**, on one line, because a list is read rather than searched. It comes from the transcript where there is one and from the history where there is not.
+
 ## Configuration
 
 `config` is the single definition of where Jeng's homes and model come from, so a caller never has to know how they were chosen.

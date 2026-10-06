@@ -1,4 +1,4 @@
-import type { ApprovalDecision, Mode } from "@jeng/core";
+import type { ApprovalDecision, Mode, SessionRef } from "@jeng/core";
 import type { State } from "@jeng/view";
 import type { RPCSchema } from "electrobun/main";
 
@@ -41,6 +41,11 @@ export type JengRPC = {
             forget: { params: { path: string }; response: Applied };
             browseConfig: { params: Nothing; response: Applied };
             browseCwd: { params: Nothing; response: Applied };
+            // Asked for when the picker opens rather than with the state, because which
+            // sessions there are follows the homes the window is pointed at.
+            sessions: { params: Nothing; response: { sessions: SessionRef[] } };
+            /** A session carries its own cwd, config, homes and mode, so one request does all of it. */
+            resume: { params: { id: string }; response: Applied };
             send: { params: { text: string }; response: { sent: boolean } };
             interrupt: { params: Nothing; response: Nothing };
             clear: { params: Nothing; response: Nothing };

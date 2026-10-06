@@ -1,5 +1,5 @@
-import type { Agent } from "@jeng/core";
-import { blank, type Conversation, createConversation, isAsk, QUIET } from "@jeng/view";
+import type { Agent, SessionRef } from "@jeng/core";
+import { blank, type Conversation, isAsk, QUIET } from "@jeng/view";
 import {
     createCliRenderer,
     type KeyEvent,
@@ -7,17 +7,32 @@ import {
     type TextareaRenderable,
 } from "@opentui/core";
 import { createRoot, useKeyboard } from "@opentui/react";
-import { useEffect, useMemo, useRef, useSyncExternalStore } from "react";
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { ApprovalBar } from "./approval";
 import { useCopySelection } from "./copy";
 import { Panel } from "./panel";
 import { PromptInput } from "./prompt";
+import { SessionPicker } from "./sessions";
 import { useSpinner } from "./spinner";
-import { Footer, Header, Instructions } from "./status";
+import { Footer, Header, Instructions, PAGES } from "./status";
 import { MODE_COLOR, MUTED } from "./theme";
 import { BlockView, blocks, nameOf } from "./transcript";
 
 const END = Number.MAX_SAFE_INTEGER;
+
+/**
+ * Everything a run of Jeng is made of. A session carries its own cwd, homes and mode, so
+ * picking one is a different agent in a different folder rather than a transcript replayed
+ * into this one, which is why the two travel together and are swapped together.
+ */
+export interface Run {
+    agent: Agent;
+    talk: Conversation;
+    /** Where this run keeps its sessions, which is the first home it was given. */
+    home: string;
+    /** What that home has written down, read when a list of it is wanted. */
+    sessions: () => SessionRef[];
+}
 
 // A scroll is a number of screens from wherever the transcript already is rather
 // than an absolute row, because the region clamps to its own extent.
@@ -25,11 +40,14 @@ function scroll(region: ScrollBoxRenderable | null, screens: number): void {
     region?.scrollBy(screens, screens === END ? "content" : "viewport");
 }
 
-export async function renderTui(agent: Agent): Promise<void> {
+/** The run that is on screen, and the one that replaces it when a session is picked. */
+export type Resume = (id: string, from: Run) => Promise<Run>;
+
+export async function renderTui(run: Run, resume: Resume): Promise<void> {
     const renderer = await createCliRenderer({ exitOnCtrlC: true });
     try {
         await new Promise<void>((resolve) => {
-            createRoot(renderer).render(<App agent={agent} onExit={() => resolve()} />);
+            createRoot(renderer).render(<App run={run} resume={resume} onExit={() => resolve()} />);
             renderer.once("destroy", () => resolve());
         });
     } finally {
@@ -41,21 +59,38 @@ export async function renderTui(agent: Agent): Promise<void> {
  * The prompt holds the focus, so the keys that scroll the transcript are taken here rather
  * than left to the scroll region, which never sees one.
  */
-function onKeys(
-    talk: Conversation,
-    scrollTo: (screens: number) => void,
-    holding: boolean,
-    onExit: () => void,
-) {
+function onKeys({
+    talk,
+    scrollTo,
+    holding,
+    picking,
+    onPick,
+    onExit,
+    onPage,
+}: {
+    talk: Conversation;
+    scrollTo: (screens: number) => void;
+    holding: boolean;
+    picking: boolean;
+    onPick: () => void;
+    onExit: () => void;
+    onPage: () => void;
+}) {
     return (key: KeyEvent): void => {
         const plain = !key.ctrl && !key.shift;
 
-        if (key.name === "pageup") scrollTo(-1);
+        if (key.ctrl && key.name === "escape") onExit();
+        else if (key.ctrl && key.name === "p" && !picking) onPick();
+        // The picker has the keys while it is up, since it is what the user came for.
+        else if (picking) return;
+        // A footer holding the keys that answer something has no page to turn, and a key
+        // that changes nothing on screen is worse than one that does nothing.
+        else if (key.ctrl && key.name === "g" && !holding) onPage();
+        else if (key.name === "pageup") scrollTo(-1);
         else if (key.name === "pagedown") scrollTo(1);
         else if (key.ctrl && key.name === "end") scrollTo(END);
         // Escape means nothing when idle, which keeps it from eating a keystroke, and
         // it reaches for whatever is holding the turn up rather than cutting it short.
-        else if (key.ctrl && key.name === "escape") onExit();
         else if (plain && key.name === "escape") talk.escape();
         else if (key.ctrl && key.name === "l") talk.clear();
         else if (key.ctrl && key.name === "r") talk.toggleThinking();
@@ -63,14 +98,30 @@ function onKeys(
     };
 }
 
-export function App({ agent, onExit }: { agent: Agent; onExit: () => void }) {
-    const talk = useMemo(() => createConversation(agent), [agent]);
+export function App({ run, resume, onExit }: { run: Run; resume: Resume; onExit: () => void }) {
+    const [current, setCurrent] = useState(run);
+    const { agent, talk } = current;
     const state = useSyncExternalStore(talk.subscribe, talk.get);
     const input = useRef<TextareaRenderable>(null);
     const scroller = useRef<ScrollBoxRenderable>(null);
+    const [sessions, setSessions] = useState<SessionRef[]>([]);
+    const [picking, setPicking] = useState(false);
+    const [refused, setRefused] = useState<string>();
+    // Which page of keys the footer is showing, which outlives the run because a page a
+    // user has found once is worth keeping rather than finding again.
+    const [page, setPage] = useState(0);
     const showThinking = state.thinking;
     const spinner = useSpinner(state.busy);
     useCopySelection();
+
+    // Every exit is a chance to be resumable, whichever key took it, so the conversation
+    // is written down from the one place they all pass through.
+    useEffect(() => {
+        process.once("exit", talk.save);
+        return () => {
+            process.off("exit", talk.save);
+        };
+    }, [talk]);
 
     // The agent cannot have an interface to draw on until there is one, so the port is
     // handed over here rather than at construction.
@@ -78,11 +129,39 @@ export function App({ agent, onExit }: { agent: Agent; onExit: () => void }) {
         agent.setUi((widget) => talk.ask({ surface: "tui", widget }));
     }, [agent, talk]);
 
+    // What is on disk is read when the picker is opened rather than kept in step with a
+    // conversation that may never be looked up, and again for the run it becomes.
+    useEffect(() => {
+        if (picking) setSessions(current.sessions());
+    }, [picking, current]);
+
+    const onPick = (id: string): void => {
+        void resume(id, current).then(
+            (next) => {
+                setCurrent(next);
+                setRefused(undefined);
+                setPicking(false);
+            },
+            (thrown: unknown) =>
+                setRefused(thrown instanceof Error ? thrown.message : String(thrown)),
+        );
+    };
+
     // An approval and a gadget's interface are the same thing to the user: Jeng has
     // stopped to be answered, which is what decides whether tab walks the answers.
     const holding = state.asks.length > 0 || state.approval !== undefined;
 
-    useKeyboard(onKeys(talk, (screens) => scroll(scroller.current, screens), holding, onExit));
+    useKeyboard(
+        onKeys({
+            talk,
+            scrollTo: (screens: number) => scroll(scroller.current, screens),
+            holding,
+            picking,
+            onPick: () => setPicking(true),
+            onExit,
+            onPage: () => setPage((at) => (at + 1) % PAGES.length),
+        }),
+    );
 
     // The transcript is the record, so an interface is only drawn here once answered.
     const visible = useMemo(
@@ -102,12 +181,14 @@ export function App({ agent, onExit }: { agent: Agent; onExit: () => void }) {
 
     const waiting = useMemo(
         () =>
-            state.asks.length
-                ? { enter: "enter answer", other: "tab next, esc skip" }
-                : state.approval
-                  ? { enter: "enter picks", other: "tab moves, esc rejects" }
-                  : undefined,
-        [state.asks.length, state.approval],
+            picking
+                ? { enter: "enter load", other: "up down move, esc close" }
+                : state.asks.length
+                  ? { enter: "enter answer", other: "tab next, esc skip" }
+                  : state.approval
+                    ? { enter: "enter picks", other: "tab moves, esc rejects" }
+                    : undefined,
+        [picking, state.asks.length, state.approval],
     );
 
     // The bars only ever draw inside the viewport, so hiding them is what keeps
@@ -164,11 +245,20 @@ export function App({ agent, onExit }: { agent: Agent; onExit: () => void }) {
 
             {state.approval && <ApprovalBar onDecide={(decision) => talk.decide(decision)} />}
 
+            {picking && (
+                <SessionPicker
+                    sessions={sessions}
+                    refused={refused}
+                    onPick={onPick}
+                    onClose={() => setPicking(false)}
+                />
+            )}
+
             <PromptInput
                 input={input}
                 onSubmit={() => void onSend(talk, input)}
                 mode={state.mode}
-                focused={state.asks.length === 0 && !state.approval}
+                focused={!picking && state.asks.length === 0 && !state.approval}
                 visible={!state.approval}
             />
             <Footer
@@ -176,6 +266,7 @@ export function App({ agent, onExit }: { agent: Agent; onExit: () => void }) {
                 showThinking={showThinking}
                 spinner={spinner}
                 waiting={waiting}
+                page={page}
             />
 
             {/* Laid over the transcript's first row rather than pushing it down, because a
@@ -194,10 +285,7 @@ export function App({ agent, onExit }: { agent: Agent; onExit: () => void }) {
     );
 }
 
-async function onSend(
-    talk: ReturnType<typeof createConversation>,
-    input: { current: TextareaRenderable | null },
-): Promise<void> {
+async function onSend(talk: Conversation, input: { current: TextareaRenderable | null }) {
     const prompt = input.current?.plainText.trim() ?? "";
     input.current?.clear();
     await talk.send(prompt);

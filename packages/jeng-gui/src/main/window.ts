@@ -1,4 +1,4 @@
-import type { ApprovalDecision, Mode } from "@jeng/core";
+import type { ApprovalDecision, Mode, SessionRef } from "@jeng/core";
 import type { State } from "@jeng/view";
 import { BrowserView, BrowserWindow } from "electrobun/main";
 import type { Applied, JengRPC } from "..";
@@ -10,6 +10,8 @@ export interface Handle {
     forget: (path: string) => Applied;
     browseConfig: () => Promise<Applied>;
     browseCwd: () => Promise<Applied>;
+    sessions: () => SessionRef[];
+    resume: (id: string) => Promise<Applied>;
     send: (text: string) => { sent: boolean };
     interrupt: () => void;
     clear: () => void;
@@ -35,6 +37,8 @@ export function openWindow(url: string, handle: Handle) {
                 forget: ({ path }) => handle.forget(path),
                 browseConfig: async () => await handle.browseConfig(),
                 browseCwd: async () => await handle.browseCwd(),
+                sessions: () => ({ sessions: handle.sessions() }),
+                resume: async ({ id }) => await handle.resume(id),
                 send: ({ text }) => handle.send(text),
                 interrupt: () => handle.interrupt(),
                 clear: () => handle.clear(),

@@ -1,4 +1,5 @@
-import type { Conversation } from "@jeng/view";
+import { listSessions, readSession } from "@jeng/core";
+import type { Conversation, Session } from "@jeng/view";
 import { app, Utils } from "electrobun/main";
 import type { Applied } from "..";
 import { open } from "./open";
@@ -20,7 +21,7 @@ let settings = await discoverConfigs(remembered, talk.get());
 let listening = false;
 let unwatch = () => {};
 
-async function set(next: Settings): Promise<Applied> {
+async function set(next: Settings, resume?: Session): Promise<Applied> {
     const wanted = {
         ...next,
         configs:
@@ -31,7 +32,7 @@ async function set(next: Settings): Promise<Applied> {
 
     let opened: Conversation;
     try {
-        opened = await open(wanted, talk.get().mode);
+        opened = await open(wanted, { resume, mode: talk.get().mode });
     } catch (error) {
         // A config that cannot be read leaves the window on the one it had, which is the
         // only thing a picker can do about a file it does not understand.
@@ -42,8 +43,10 @@ async function set(next: Settings): Promise<Applied> {
         };
     }
 
-    // A turn in flight is writing to homes this is about to stop being.
+    // A turn in flight is writing to homes this is about to stop being, and what it said is
+    // a conversation somebody may want back, so it is written down on the way out.
     talk.escape();
+    talk.save();
     settings = wanted;
     talk = opened;
     // The old conversation's gadgets go with it: nothing left on screen is drawing them.
@@ -54,6 +57,25 @@ async function set(next: Settings): Promise<Applied> {
     if (listening) window.state(talk.get());
     await saveSettings(settings);
     return { ok: true, configs: settings.configs };
+}
+
+/**
+ * A session names the run it was, so opening one points the window at that directory and
+ * that config file as well as handing back the conversation. The window's own list of
+ * configs is kept, since those were chosen by the user rather than by the session.
+ */
+async function resume(id: string): Promise<Applied> {
+    let session: Session;
+    try {
+        session = readSession<Session>(talk.get().homes[0], id);
+    } catch (error) {
+        return {
+            ok: false,
+            error: error instanceof Error ? error.message : String(error),
+            configs: settings.configs,
+        };
+    }
+    return await set({ ...settings, cwd: session.cwd, config: session.config }, session);
 }
 
 /**
@@ -94,6 +116,8 @@ const window = openWindow(site.url, {
     },
     browseConfig: async () => await browse("config"),
     browseCwd: async () => await browse("cwd"),
+    sessions: () => listSessions(talk.get().homes[0]),
+    resume,
     send: (text) => {
         void talk.send(text);
         return { sent: Boolean(text.trim()) };
@@ -122,7 +146,11 @@ watch();
 // Electrobun waits for that loop to drain before letting the process exit, so a window
 // closed with the server still listening hangs on the way out rather than quitting.
 // Both the window closing and a quit from anywhere else go through here, and stopping a
-// server that has already stopped is a no-op, so the two overlap harmlessly.
-const stop = () => site.stop();
+// server that has already stopped is a no-op, so the two overlap harmlessly. The
+// conversation is written down on the way out, since a window closed is a run that ended.
+const stop = () => {
+    talk.save();
+    site.stop();
+};
 window.onClose(stop);
 app.on("before-quit", stop);

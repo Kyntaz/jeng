@@ -81,19 +81,19 @@ describe("status bars", () => {
 
     test("reminds of the keys that never change", async () => {
         const { renderer, captureCharFrame, flush } = await testRender(
-            <Footer busy={false} showThinking={false} spinner="⠋" />,
+            <Footer busy={false} showThinking={false} spinner="⠋" page={0} />,
             { width: 80, height: 1 },
         );
         await flush();
         const frame = captureCharFrame();
         act(() => renderer.destroy());
 
-        expect(frame).toContain("ctrl+esc quit  ctrl+l clear  esc interrupt");
+        expect(frame).toContain("ctrl+esc quit  ctrl+l clear  esc interrupt  tab mode");
     });
 
     test("names the key that changes the mode", async () => {
         const { renderer, captureCharFrame, flush } = await testRender(
-            <Footer busy={false} showThinking={false} spinner="⠋" />,
+            <Footer busy={false} showThinking={false} spinner="⠋" page={0} />,
             { width: 80, height: 1 },
         );
         await flush();
@@ -105,7 +105,7 @@ describe("status bars", () => {
 
     test("leaves the spinner out while jeng is idle", async () => {
         const { renderer, captureCharFrame, flush } = await testRender(
-            <Footer busy={false} showThinking={false} spinner="⠋" />,
+            <Footer busy={false} showThinking={false} spinner="⠋" page={0} />,
             { width: 80, height: 1 },
         );
         await flush();
@@ -117,7 +117,7 @@ describe("status bars", () => {
 
     test("shows the spinner while jeng works", async () => {
         const { renderer, captureCharFrame, flush } = await testRender(
-            <Footer busy showThinking={false} spinner="⠋" />,
+            <Footer busy showThinking={false} spinner="⠋" page={0} />,
             { width: 80, height: 1 },
         );
         await flush();
@@ -125,5 +125,67 @@ describe("status bars", () => {
         act(() => renderer.destroy());
 
         expect(frame).toContain("⠋ thinking");
+    });
+
+    test("fits a whole page of keys and the spinner and the counter on one line", async () => {
+        const { renderer, captureCharFrame, flush } = await testRender(
+            <Footer busy showThinking={false} spinner="⠋" page={0} />,
+            { width: 80, height: 1 },
+        );
+        await flush();
+        const frame = captureCharFrame();
+        act(() => renderer.destroy());
+
+        expect(frame.trim()).toBe(
+            "ctrl+esc quit  ctrl+l clear  esc interrupt  tab mode  ⠋ thinking  ctrl+g 1/3",
+        );
+    });
+
+    test("says which page of keys it is showing", async () => {
+        const { renderer, captureCharFrame, flush } = await testRender(
+            <Footer busy={false} showThinking={false} spinner="⠋" page={1} />,
+            { width: 80, height: 1 },
+        );
+        await flush();
+        const frame = captureCharFrame();
+        act(() => renderer.destroy());
+
+        expect(frame.trim()).toBe("ctrl+r detail  ctrl+p sessions  ctrl+g 2/3");
+    });
+
+    test("gives up its own room before the counter does when the line is too narrow", async () => {
+        const { renderer, captureCharFrame, flush } = await testRender(
+            <Footer busy={false} showThinking={false} spinner="⠋" page={0} />,
+            { width: 60, height: 1 },
+        );
+        await flush();
+        const frame = captureCharFrame();
+        act(() => renderer.destroy());
+
+        expect({
+            page: frame.includes("ctrl+esc quit"),
+            counter: frame.includes("ctrl+g 1/3"),
+        }).toEqual({ page: false, counter: true });
+    });
+
+    test("replaces the pages with the keys that answer something jeng is waiting for", async () => {
+        const { renderer, captureCharFrame, flush } = await testRender(
+            <Footer
+                busy={false}
+                showThinking={false}
+                spinner="⠋"
+                page={2}
+                waiting={{ enter: "enter picks", other: "tab moves, esc rejects" }}
+            />,
+            { width: 80, height: 1 },
+        );
+        await flush();
+        const frame = captureCharFrame();
+        act(() => renderer.destroy());
+
+        expect({
+            waiting: frame.includes("enter picks"),
+            paged: frame.includes("ctrl+g 3/3"),
+        }).toEqual({ waiting: true, paged: false });
     });
 });

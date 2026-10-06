@@ -1,8 +1,24 @@
 import { describe, expect, test } from "bun:test";
 import type { Agent } from "@jeng/core";
+import { createConversation } from "@jeng/view";
 import { testRender } from "@opentui/react/test-utils";
 import { act } from "react";
 import { App } from "../../../src/tui/app";
+
+/** A run with nothing written down to it, so the picker has nothing to offer. */
+function run(agent: Agent) {
+    return {
+        run: {
+            agent,
+            talk: createConversation(agent),
+            home: "/home/jeng",
+            sessions: () => [],
+        },
+        resume: async () => {
+            throw new Error("there is no session to load in this test");
+        },
+    };
+}
 
 function stubAgent(answer: string): Agent {
     return {
@@ -27,7 +43,7 @@ describe("copying", () => {
     test("hands what the mouse dragged over to the clipboard", async () => {
         const copied: string[] = [];
         const { renderer, mockInput, mockMouse, flush, captureCharFrame, waitFor } =
-            await testRender(<App agent={stubAgent("a reply")} onExit={() => {}} />, {
+            await testRender(<App {...run(stubAgent("a reply"))} onExit={() => {}} />, {
                 width: 60,
                 height: 20,
                 kittyKeyboard: true,

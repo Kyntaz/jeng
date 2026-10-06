@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { Agent, AgentEvent, Mode } from "@jeng/core";
+import { createConversation } from "@jeng/view";
 import { testRender } from "@opentui/react/test-utils";
 import { act } from "react";
 import { App } from "../../../src/tui/app";
@@ -39,6 +40,21 @@ function stubAgent(
     };
 }
 
+/** A run with nothing written down to it, so the picker has nothing to offer. */
+function run(agent: Agent) {
+    return {
+        run: {
+            agent,
+            talk: createConversation(agent),
+            home: "/home/jeng",
+            sessions: () => [],
+        },
+        resume: async () => {
+            throw new Error("there is no session to load in this test");
+        },
+    };
+}
+
 async function render(
     sent: string[],
     switched: Mode[] = [],
@@ -49,7 +65,7 @@ async function render(
     // Shift+Enter only arrives as its own key when the terminal reports
     // modifiers, which is what the kitty keyboard protocol buys.
     return testRender(
-        <App agent={stubAgent(sent, switched, answer, events, agents)} onExit={() => {}} />,
+        <App {...run(stubAgent(sent, switched, answer, events, agents))} onExit={() => {}} />,
         {
             width: 80,
             height: 24,
@@ -263,7 +279,7 @@ describe("app", () => {
             },
         };
         const { renderer, mockInput, flush, captureCharFrame, waitFor } = await testRender(
-            <App agent={failing} onExit={() => {}} />,
+            <App {...run(failing)} onExit={() => {}} />,
             { width: 80, height: 24, kittyKeyboard: true },
         );
 
@@ -455,5 +471,47 @@ describe("app", () => {
         act(() => renderer.destroy());
 
         expect(modes).toEqual(["work"]);
+    });
+
+    test("turns to the next page of keys on ctrl+g", async () => {
+        const { renderer, mockInput, flush, captureCharFrame } = await render([]);
+
+        await act(async () => await flush());
+        act(() => mockInput.pressKey("g", { ctrl: true }));
+        await act(async () => await flush());
+        const frame = captureCharFrame();
+        act(() => renderer.destroy());
+
+        expect(frame).toContain("ctrl+r detail");
+    });
+
+    test("comes back round to the first page of keys", async () => {
+        const { renderer, mockInput, flush, captureCharFrame } = await render([]);
+
+        await act(async () => await flush());
+        act(() => mockInput.pressKey("g", { ctrl: true }));
+        await act(async () => await flush());
+        act(() => mockInput.pressKey("g", { ctrl: true }));
+        await act(async () => await flush());
+        act(() => mockInput.pressKey("g", { ctrl: true }));
+        await act(async () => await flush());
+        const frame = captureCharFrame();
+        act(() => renderer.destroy());
+
+        expect(frame).toContain("ctrl+g 1/3");
+    });
+
+    test("leaves the half-typed prompt alone when the page turns", async () => {
+        // ctrl+h would have been the natural key and is backspace, so the one this
+        // replaces had to be a key the prompt does not want.
+        const { renderer, mockInput, flush, captureCharFrame } = await render([]);
+
+        await act(async () => await mockInput.typeText("what was left to do?"));
+        act(() => mockInput.pressKey("g", { ctrl: true }));
+        await act(async () => await flush());
+        const frame = captureCharFrame();
+        act(() => renderer.destroy());
+
+        expect(frame).toContain("what was left to do?");
     });
 });

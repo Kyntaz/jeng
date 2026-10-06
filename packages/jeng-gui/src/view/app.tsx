@@ -1,3 +1,4 @@
+import type { SessionRef } from "@jeng/core";
 import { place } from "@jeng/view";
 import type { CSSProperties } from "react";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
@@ -19,6 +20,7 @@ export function App({ bridge }: { bridge: Bridge }) {
     const scroller = useRef<HTMLDivElement>(null);
     const [picking, setPicking] = useState(false);
     const [configs, setConfigs] = useState<string[]>([]);
+    const [sessions, setSessions] = useState<SessionRef[]>([]);
     const spinner = useSpinner(Boolean(state?.busy));
 
     // The window asks for the state once it is listening, because there is no telling
@@ -26,6 +28,13 @@ export function App({ bridge }: { bridge: Bridge }) {
     useEffect(() => {
         void bridge.hello().then(setConfigs);
     }, [bridge]);
+
+    // Which sessions there are follows the homes the window is pointed at, so the list is
+    // read when the picker is opened rather than kept in step with it.
+    useEffect(() => {
+        if (!picking) return;
+        void bridge.sessions().then(setSessions, () => setSessions([]));
+    }, [bridge, picking]);
 
     useEffect(() => {
         const element = scroller.current;
@@ -147,6 +156,7 @@ export function App({ bridge }: { bridge: Bridge }) {
                 <Picker
                     bridge={bridge}
                     configs={configs}
+                    sessions={sessions}
                     state={state}
                     onConfigs={setConfigs}
                     onClose={() => setPicking(false)}
