@@ -78,12 +78,17 @@ const blankWidget = (widget: Widget): boolean => {
  * A turn is written in more than one piece, so text and thinking both join the entry they
  * are already part of — keeping the number they were given, because a reply arriving a
  * word at a time is one row the whole way through rather than one row per word.
+ *
+ * The row they belong to is named by the number the caller gave them, so a piece is only ever
+ * joined to the one before it when they were given the same number: a host hands every piece
+ * of one reply the same number and takes a new one per reply, so two replies are two rows
+ * even though nothing but words arrives between them.
  */
 export function append(entries: Entry[], event: AgentEvent, mode: Mode, id: number): Entry[] {
     if (event.type === "text" || event.type === "reasoning") {
         const kind = event.type === "text" ? "jeng" : "think";
         const last = entries.at(-1);
-        if (last?.kind === kind)
+        if (last?.kind === kind && last.id === id)
             return [...entries.slice(0, -1), { ...last, text: last.text + event.text }];
         return [...entries, { kind, id, text: event.text, mode }];
     }

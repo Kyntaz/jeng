@@ -1,1 +1,1 @@
-That was plain text, which does not reach the user. Call action="end" with that answer now, or call a tool if you still need one.
+That was plain text, which the user can see but which does not end your turn. Call action="end" with no content now, since you have already said it, or call a tool if you still need one.

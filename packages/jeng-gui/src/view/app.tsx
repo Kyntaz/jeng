@@ -1,5 +1,5 @@
-import type { SessionRef } from "@jeng/core";
-import { place } from "@jeng/view";
+import type { Mode, SessionRef } from "@jeng/core";
+import { compact, place } from "@jeng/view";
 import type { CSSProperties } from "react";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { ApprovalCard } from "./approval";
@@ -9,15 +9,16 @@ import type { Bridge } from "./rpc";
 import { useSpinner } from "./spinner";
 import { Transcript } from "./transcript";
 
-// A mode is told apart by its colour, and the window wears the same two the terminal
-// does, so the same sentence reads the same way in both. Each comes in two strengths,
-// because the bright one is a block that takes dark type and no other will do, and a
-// line drawn on the cream paper wants the same hue a long way down or it does not
-// read at all.
-const MODE_COLOR = {
-    learn: { accent: "#d9a441", tint: "#f8ebd4", ink: "#8a6410" },
-    work: { accent: "#5fb3d4", tint: "#d7e8f2", ink: "#435175" },
-};
+/**
+ * The mode, pointed at the two colours the style gave it. The window sets all three on one
+ * element, since a stylesheet rule on the root could not read back what this one puts.
+ */
+const modeStyle = (mode: Mode): CSSProperties =>
+    ({
+        "--jeng-accent": `var(--jeng-${mode}-accent)`,
+        "--jeng-accent-tint": `var(--jeng-${mode}-accent-tint)`,
+        "--jeng-accent-ink": `var(--jeng-${mode}-accent-ink)`,
+    }) as CSSProperties;
 
 export function App({ bridge }: { bridge: Bridge }) {
     // The third argument is what a server renderer would ask for; the window is the only
@@ -41,6 +42,16 @@ export function App({ bridge }: { bridge: Bridge }) {
         if (!picking) return;
         void bridge.sessions().then(setSessions, () => setSessions([]));
     }, [bridge, picking]);
+
+    // The style reaches the page through the stylesheet rather than through the bridge, so
+    // picking a config that carries a different one means asking for it again. Keyed on the
+    // config rather than the state, since the state changes on every word and the stylesheet
+    // does not.
+    useEffect(() => {
+        if (!state?.config) return;
+        const link = document.querySelector<HTMLLinkElement>('link[rel="stylesheet"]');
+        if (link) link.href = `/theme.css?v=${encodeURIComponent(state.config)}`;
+    }, [state?.config]);
 
     useEffect(() => {
         const element = scroller.current;
@@ -75,19 +86,7 @@ export function App({ bridge }: { bridge: Bridge }) {
     const waiting = holding ? "waiting for you" : "thinking";
 
     return (
-        <div
-            className="app"
-            // The window's own mode, so a gadget's component inherits it too. They are all
-            // set on the same element, since a wash written in :root could not read the
-            // accent this one puts back.
-            style={
-                {
-                    "--jeng-accent": MODE_COLOR[state.mode].accent,
-                    "--jeng-accent-tint": MODE_COLOR[state.mode].tint,
-                    "--jeng-accent-ink": MODE_COLOR[state.mode].ink,
-                } as CSSProperties
-            }
-        >
+        <div className="app" style={modeStyle(state.mode)}>
             <header className="header">
                 {/* The two things the window can be pointed elsewhere are its first two
                  * items, and they are buttons that read as text. */}
@@ -102,7 +101,7 @@ export function App({ bridge }: { bridge: Bridge }) {
                 </span>
                 <span>{state.model}</span>
                 <span className="grow" />
-                <span>{state.tokens} tokens</span>
+                <span>{compact(state.tokens)} tokens</span>
                 <button
                     type="button"
                     className="chip"

@@ -1,4 +1,13 @@
-import type { Agent, Answers, Approval, ApprovalDecision, Draw, Mode, Widget } from "@jeng/core";
+import type {
+    Agent,
+    AgentEvent,
+    Answers,
+    Approval,
+    ApprovalDecision,
+    Draw,
+    Mode,
+    Widget,
+} from "@jeng/core";
 import type { Session, Sessioning } from "./session";
 import { titled } from "./session";
 import { append, type Entry, isAsk } from "./transcript";
@@ -288,12 +297,28 @@ export function createConversation(agent: Agent, config?: string, sessioning?: S
             const speaking = state.mode;
             try {
                 let streamed = "";
+                // Every piece of one reply is given the same row and the next reply a row
+                // of its own, so a model that narrates, is nudged and narrates again leaves
+                // two rows rather than one run of words. Anything that is neither text nor
+                // thinking takes a row of its own and ends the row it was in.
+                let row = "";
+                let said = 0;
+                const rowOf = (event: AgentEvent): number => {
+                    const key =
+                        event.type === "text" || event.type === "reasoning"
+                            ? `${event.reply}:${event.type}`
+                            : "";
+                    if (key && key === row) return said;
+                    row = key;
+                    said = ++numbered;
+                    return said;
+                };
                 const reply = await agent.send(text, {
                     signal: controller.signal,
                     onEvent: (event) => {
                         if (event.type === "usage") return update({ tokens: event.promptTokens });
                         if (event.type === "text") streamed += event.text;
-                        update({ entries: append(state.entries, event, speaking, ++numbered) });
+                        update({ entries: append(state.entries, event, speaking, rowOf(event)) });
                     },
                 });
                 // The answer is said out loud rather than only in the transcript, so a

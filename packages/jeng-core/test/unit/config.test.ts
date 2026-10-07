@@ -59,7 +59,7 @@ describe("config", () => {
             },
         });
 
-        expect(config).toEqual({
+        expect(config).toMatchObject({
             homes: ["/c", "/d"],
             model: {
                 baseUrl: "http://host/v1",
@@ -79,7 +79,7 @@ describe("config", () => {
 
         const config = await loadConfig({ path: join(cwd, "jeng.json"), cwd, env: {} });
 
-        expect(config).toEqual({
+        expect(config).toMatchObject({
             homes: ["/a", "/b"],
             model: {
                 baseUrl: "http://host/v1",

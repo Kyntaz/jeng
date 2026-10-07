@@ -1,7 +1,6 @@
 import COMPACT_NO_SUMMARY from "./compact-no-summary.txt" with { type: "text" };
 import CONTEXT_USAGE from "./context-usage.txt" with { type: "text" };
 import DRAWS_UNDECLARED from "./draws-undeclared.txt" with { type: "text" };
-import END_NO_CONTENT from "./end-no-content.txt" with { type: "text" };
 import GADGET_DRAWS from "./gadget-draws.txt" with { type: "text" };
 import GUI_LANGUAGE from "./gui-language.txt" with { type: "text" };
 import IDENTITY_LEARN from "./identity-learn.txt" with { type: "text" };
@@ -26,7 +25,6 @@ const ALL = {
     "compact-no-summary": COMPACT_NO_SUMMARY,
     "context-usage": CONTEXT_USAGE,
     "draws-undeclared": DRAWS_UNDECLARED,
-    "end-no-content": END_NO_CONTENT,
     "gadget-draws": GADGET_DRAWS,
     "gui-language": GUI_LANGUAGE,
     "identity-learn": IDENTITY_LEARN,

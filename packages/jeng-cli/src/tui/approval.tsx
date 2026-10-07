@@ -3,10 +3,7 @@ import type { TextareaRenderable } from "@opentui/core";
 import { useKeyboard } from "@opentui/react";
 import { useRef, useState } from "react";
 import { useGrowing } from "./prompt";
-import { BORDER, MUTED, SELECTION, USER } from "./theme";
-
-const YES = USER;
-const NO = "#e06c75";
+import { BORDER, FAILURE, MUTED, SELECTION, USER } from "./theme";
 
 // Down the bar in the order the eye reads it: the two ways out of the decision
 // first, and what is written into the turn-down underneath them.
@@ -38,11 +35,16 @@ export function ApprovalBar({ onDecide }: { onDecide: (decision: ApprovalDecisio
 
     return (
         <box flexDirection="column" flexShrink={0}>
-            <Button label="approve" focused={stop === "approve"} color={YES} />
-            <Button label="reject" focused={stop === "reject"} color={NO} />
+            <Button label="approve" focused={stop === "approve"} color={USER} />
+            <Button label="reject" focused={stop === "reject"} color={FAILURE} />
             {/* The reason is a box rather than a row because turning something down is
-                the one answer worth more than a line. */}
-            <box border borderColor={stop === "reason" ? NO : BORDER} paddingX={1} flexShrink={0}>
+             * the one answer worth more than a line. */}
+            <box
+                border
+                borderColor={stop === "reason" ? FAILURE : BORDER}
+                paddingX={1}
+                flexShrink={0}
+            >
                 <textarea
                     ref={reason}
                     focused={stop === "reason"}

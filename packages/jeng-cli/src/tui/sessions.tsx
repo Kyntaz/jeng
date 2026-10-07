@@ -1,7 +1,7 @@
 import type { SessionRef } from "@jeng/core";
 import { useKeyboard } from "@opentui/react";
 import { useEffect, useState } from "react";
-import { BORDER, MUTED, USER } from "./theme";
+import { BORDER, FAILURE, MUTED, USER } from "./theme";
 
 // How many rows a list may take, because a picker taller than the transcript behind it is
 // a picker that hides what it is picking out of.
@@ -57,7 +57,7 @@ export function SessionPicker({
                     content={`${session.id}  ${session.title || "nothing said yet"}`}
                 />
             ))}
-            {refused && <text fg="#e06c75" wrapMode="word" content={refused} />}
+            {refused && <text fg={FAILURE} wrapMode="word" content={refused} />}
         </box>
     );
 }

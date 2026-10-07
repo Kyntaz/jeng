@@ -1,8 +1,13 @@
 import { describe, expect, test } from "bun:test";
+import { DEFAULT_STYLE, STYLES } from "@jeng/core";
 import { RGBA } from "@opentui/core";
 import { testRender } from "@opentui/react/test-utils";
 import { act } from "react";
 import { BlockView, blocks, nameOf } from "../../../src/tui/transcript";
+
+// What the terminal wears with nothing chosen, so these say "the colour the style gives
+// it" rather than pinning a hex that a palette change would then have to come and edit.
+const DEFAULT = STYLES[DEFAULT_STYLE];
 
 describe("transcript", () => {
     test("gathers jeng's own words and thinking into one box", () => {
@@ -58,7 +63,7 @@ describe("transcript", () => {
             .find((span) => span.text.includes("a"));
         act(() => renderer.destroy());
 
-        expect(output?.fg.equals(RGBA.fromHex("#606070"))).toBe(true);
+        expect(output?.fg.equals(RGBA.fromHex(DEFAULT.tui.muted))).toBe(true);
     });
 
     test("draws what an action could not return in the color of an error", async () => {
@@ -76,7 +81,7 @@ describe("transcript", () => {
             .find((span) => span.text.includes("boom"));
         act(() => renderer.destroy());
 
-        expect(failure?.fg.equals(RGBA.fromHex("#e06c75"))).toBe(true);
+        expect(failure?.fg.equals(RGBA.fromHex(DEFAULT.tui.failure))).toBe(true);
     });
 
     test("keeps the speaker's turn apart from the other one", () => {
@@ -157,7 +162,7 @@ describe("transcript", () => {
             .find((span) => span.text.includes("─"));
         act(() => renderer.destroy());
 
-        expect(border?.fg.equals(RGBA.fromHex("#d9a441"))).toBe(true);
+        expect(border?.fg.equals(RGBA.fromHex(DEFAULT.tui.learn))).toBe(true);
     });
 
     test("draws the same box in blue once jeng is only working", async () => {
@@ -178,7 +183,7 @@ describe("transcript", () => {
             .find((span) => span.text.includes("─"));
         act(() => renderer.destroy());
 
-        expect(border?.fg.equals(RGBA.fromHex("#5fb3d4"))).toBe(true);
+        expect(border?.fg.equals(RGBA.fromHex(DEFAULT.tui.work))).toBe(true);
     });
 
     test("draws an action in the mode it was called in, not learn's", async () => {
@@ -199,7 +204,7 @@ describe("transcript", () => {
             .find((span) => span.text.includes("read_file"));
         act(() => renderer.destroy());
 
-        expect(call?.fg.equals(RGBA.fromHex("#5fb3d4"))).toBe(true);
+        expect(call?.fg.equals(RGBA.fromHex(DEFAULT.tui.work))).toBe(true);
     });
 
     test("gives the user green, which is neither mode", async () => {
@@ -214,7 +219,7 @@ describe("transcript", () => {
             .find((span) => span.text.includes("─"));
         act(() => renderer.destroy());
 
-        expect(border?.fg.equals(RGBA.fromHex("#98c379"))).toBe(true);
+        expect(border?.fg.equals(RGBA.fromHex(DEFAULT.tui.user))).toBe(true);
     });
 
     test("holds the icon off the call it marks, in a column of its own", async () => {

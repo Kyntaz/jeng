@@ -342,7 +342,7 @@ describe("a turn", () => {
         const turn = talk.send("hi");
         await Promise.resolve();
 
-        say({ type: "text", text: "hello" });
+        say({ type: "text", text: "hello", reply: 0 });
         release("hello");
         await turn;
 
@@ -354,7 +354,7 @@ describe("a turn", () => {
         const turn = talk.send("hi");
         await Promise.resolve();
 
-        say({ type: "text", text: "one thing" });
+        say({ type: "text", text: "one thing", reply: 0 });
         release("another");
         await turn;
 
@@ -364,6 +364,38 @@ describe("a turn", () => {
             text: "another",
             mode: "learn",
         });
+    });
+
+    test("gives each thing jeng said a row of its own", async () => {
+        const { talk, say, release } = harness();
+        const turn = talk.send("what is 2+2?");
+        await Promise.resolve();
+
+        // What a model that talks instead of calling end produces: one reply, then
+        // another after the nudge, with nothing but words between them.
+        say({ type: "text", text: "let me work that out", reply: 0 });
+        say({ type: "text", text: "4", reply: 1 });
+        release("");
+        await turn;
+
+        expect(talk.get().entries.filter((entry) => entry.kind === "jeng")).toEqual([
+            { kind: "jeng", id: 2, text: "let me work that out", mode: "learn" },
+            { kind: "jeng", id: 3, text: "4", mode: "learn" },
+        ]);
+    });
+
+    test("folds the pieces of one reply back into a single row", async () => {
+        const { talk, say, release } = harness();
+        const turn = talk.send("what is 2+2?");
+        await Promise.resolve();
+
+        say({ type: "text", text: "4", reply: 0 });
+        release("");
+        await turn;
+
+        expect(talk.get().entries.filter((entry) => entry.kind === "jeng")).toEqual([
+            { kind: "jeng", id: 2, text: "4", mode: "learn" },
+        ]);
     });
 
     test("records an interrupted turn rather than leaving it half finished", async () => {

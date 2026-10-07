@@ -4,6 +4,7 @@ import {
     createAgent,
     loadConfig,
     type Mode,
+    type Style,
     sessionId,
     writeSession,
 } from "@jeng/core";
@@ -51,8 +52,14 @@ function drawable(session: Session): Session {
  * A session is that with a conversation behind it: it carries the cwd, the homes, the
  * config and the mode the run it was had, and everything it is written to is kept in the
  * first of those homes.
+ *
+ * The style is handed back rather than applied here because the window draws nothing: it
+ * reaches the page through the stylesheet the server serves, which is built out of this.
  */
-export async function open(from: Settings, opening: Opening = {}): Promise<Conversation> {
+export async function open(
+    from: Settings,
+    opening: Opening = {},
+): Promise<{ conversation: Conversation; style: Style }> {
     const session = opening.resume ? drawable(opening.resume) : undefined;
     const config = await loadConfig({
         path: session?.config ?? from.config,
@@ -88,5 +95,5 @@ export async function open(from: Settings, opening: Opening = {}): Promise<Conve
         await keep(draw.file).catch(() => {});
         return await conversation.ask(draw);
     });
-    return conversation;
+    return { conversation, style: config.style };
 }

@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { testRender } from "@opentui/react/test-utils";
 import { act } from "react";
-import { compact, Footer, Header, Instructions } from "../../../src/tui/status";
+import { Footer, Header, Instructions } from "../../../src/tui/status";
 
 describe("status bars", () => {
     test("names the files whose instructions the model always reads", async () => {
@@ -73,10 +73,6 @@ describe("status bars", () => {
         act(() => renderer.destroy());
 
         expect(frame).toContain("ctx 1.5k");
-    });
-
-    test("keeps a small context as it was counted", () => {
-        expect(compact(999)).toBe("999");
     });
 
     test("reminds of the keys that never change", async () => {

@@ -42,7 +42,8 @@ Without `-c`, Jeng looks for `./jeng.json`, then `jeng.json` inside the first ho
 Every key is optional, and any key you leave out falls back to its default.
 
 Once a config file is found it is the only source of configuration; the environment is
-read only when there is no config file, which keeps existing setups working:
+read only when there is no config file, which keeps existing setups working. `JENG_STYLE` is
+the exception, since a style is how something looks rather than which agent it is:
 
 | Variable       | Default                      | Meaning                        |
 | -------------- | ---------------------------- | ------------------------------ |
@@ -51,6 +52,42 @@ read only when there is no config file, which keeps existing setups working:
 | `JENG_MODEL`   | `gpt-4o-mini`                | model name                     |
 | `JENG_CONTEXT` | `8192`                       | context window, in tokens      |
 | `JENG_HOME`    | `~/.jeng`                    | `;`-separated home folders     |
+| `JENG_STYLE`   | `simple-dark`                | a builtin style name, or a path |
+
+## Styles
+
+A style is a set of tokens: the colours, the roundness, the fonts and everything else either
+frontend draws in. There are six built in — `simple-dark` (the default), `simple-light`,
+`modern-dark`, `modern-light`, `colorful-dark`, `colorful-light`.
+
+```json
+{ "style": "modern-light" }
+```
+
+A style can also be a path to a file of your own, resolved against the config file that names
+it, or inlined:
+
+```json
+{
+    "style": {
+        "gui": { "paper": "#101010", "surface": "#181818", "radius-card": "8px" },
+        "tui": { "learn": "#d9a441", "work": "#5fb3d4" }
+    }
+}
+```
+
+`gui` is the window's half and `tui` the terminal's, because a terminal has no roundness and a
+window has no selection highlight, so the two are genuinely different vocabularies. Any token
+you leave out keeps the default style's value, so a style that sets one colour is a style
+rather than an incomplete document. A token that does not exist is an error naming it.
+
+`JENG_STYLE` takes a builtin name or a path — there is nowhere to inline one into an
+environment variable. It is read when a config file says nothing about style, so a config
+file's own `style` wins over it.
+
+Every built-in style is checked to be readable rather than only looked at: each colour token
+is held to the contrast ratio it needs against the surface it is actually drawn on, so a
+palette cannot quietly ship a thought at 2:1 on the desk.
 
 ## How to use?
 
@@ -261,6 +298,7 @@ executable and needs none of it.
 
 Jeng keeps working until it decides it has an answer, and there is no time limit on that.
 Your answer is a call rather than something Jeng says in passing, so Jeng narrating while it works never reads as a finished turn.
+Once it has already said the answer, it ends with nothing more to add rather than repeating itself.
 
 Jeng loads up and edits context on the following locations:
 
@@ -410,12 +448,15 @@ Three things are worth knowing before writing one:
   they have, which is how what was asked and what was decided stays on screen. Draw yourself read-only
   when `answers` is set, the way the example above does.
 - **It needs no stylesheet of its own.** The window already defines `--jeng-paper`, `--jeng-surface`,
-  `--jeng-text`, `--jeng-muted`, `--jeng-border`, `--jeng-shadow`, `--jeng-radius`, `--jeng-serif`,
-  `--jeng-mono`, and an accent, user, jeng and danger colour with a pastel tint to pair with each,
-  and a component mounted into the window inherits them. The accent is the mode's own colour, with
-  `--jeng-accent-tint` as a wash of it for anything a panel is printed on and `--jeng-accent-ink`
-  as the same colour darkened for a rule or a label, since the bright one only reads as a block it
-  can carry dark type on.
+  `--jeng-text`, `--jeng-muted`, `--jeng-dim`, `--jeng-border`, `--jeng-shadow`, `--jeng-serif`,
+  `--jeng-mono`, `--jeng-size`, `--jeng-radius-card`, `--jeng-radius-control`,
+  `--jeng-radius-field`, an accent, user, jeng and danger colour with a tint to pair with each,
+  and a colour for every kind of code token. A component mounted into the window inherits them.
+  The accent is the mode's own colour, with `--jeng-accent-tint` as a wash of it for anything a
+  panel is printed on, `--jeng-accent-ink` as the same colour darkened for a rule or a label,
+  and `--jeng-on-accent` as the type that block carries. Every one of them is a style token, so
+  reach for the variables rather than picking colours and a component looks right in all six
+  styles instead of only the one in force.
 
 A gadget that draws a component needs `* gui: true` in its header and is written to a `.tsx` file,
 because it is jsx. It cannot run without a window, so it is left out of the TUI and out of any piped

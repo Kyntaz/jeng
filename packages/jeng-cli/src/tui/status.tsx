@@ -1,10 +1,7 @@
 import type { Mode } from "@jeng/core";
-import { place } from "@jeng/view";
+import { compact, place } from "@jeng/view";
 import type { ReactNode } from "react";
 import { BORDER, MODE_COLOR, MUTED } from "./theme";
-
-export const compact = (tokens: number) =>
-    tokens >= 1000 ? `${(tokens / 1000).toFixed(1)}k` : String(tokens);
 
 // Every key the footer is allowed to say, in pages that each fit one line beside the
 // spinner, because a line of keys that has to be clipped is a line of keys nobody reads.

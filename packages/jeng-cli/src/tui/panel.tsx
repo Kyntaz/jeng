@@ -1,4 +1,4 @@
-import { type Answers, type Widget } from "@jeng/core";
+import type { Answers, Widget } from "@jeng/core";
 import { fields } from "@jeng/view";
 import { useKeyboard } from "@opentui/react";
 import { useEffect, useMemo, useRef, useState } from "react";

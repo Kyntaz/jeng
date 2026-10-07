@@ -1,4 +1,4 @@
-import { blank, type Entry, isAsk, Pending, QUIET } from "@jeng/view";
+import { blank, type Entry, isAsk, type Pending, QUIET } from "@jeng/view";
 import { Code } from "./code";
 import { Gadget } from "./gadget";
 

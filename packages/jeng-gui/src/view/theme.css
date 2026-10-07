@@ -1,54 +1,68 @@
 /*
- * The window's own styling, and the contract a gadget's component inherits: the same
- * file is served to gadgets as `/gadget.css`, so anything written here is in scope
- * inside a component too. A gadget that uses only these variables and plain elements
- * already looks like part of the app.
+ * The window's own layout, and the contract a gadget's component inherits: the same file
+ * is served to gadgets as `/gadget.css`, so anything written here is in scope inside a
+ * component too. A gadget that uses only these variables and plain elements already looks
+ * like part of the app.
  *
- * The window is a desk of dark taupe: the page is the desk, a turn is a slip of paper
- * lying on it, and a speaker is told apart by the colour its slip is printed in.
+ * Nothing here is a colour or a length. Every value a style can change is a custom
+ * property, and the style in force is appended to this file when it is served, so the
+ * `:root` block below is the default style and nothing more -- a page that loaded this file
+ * on its own is still a complete window, it is just wearing the default.
  *
- * The colours are the terminal's, so the same sentence reads the same way in both: gold to
- * learn in, blue to work in, and a coral that is the user's because they are neither mode.
- * The desk and the paper are the window's own — Wada Sanzo's taupe brown, its cream, and one
- * crimson borrowed from the same atlas for a failure, since a failure has to shout — and
- * everything printed on the desk is lighter than the desk. Gold and blue are light enough
- * to take dark type directly, so a mode is a solid block of its own colour, and the only
- * thing invented for a mode is that colour a long way down again: a bright gold fills a
- * block, but drawn as a line on the cream paper it is not there at all.
+ * `--jeng-accent` is not a token: the window points it at whichever mode is in force, so a
+ * gadget writing it gets the mode too. It defaults to learn here for the same reason.
  */
 
 :root {
-    --jeng-paper: #45232f;
-    --jeng-surface: #fdf7ee;
-    --jeng-text: #3a1f28;
-    --jeng-muted: #7a5765;
-    /* The muted colour again, for the only two lines the window draws straight onto the desk
-     * rather than onto a slip. A colour can only be dimmed against one ground. */
-    --jeng-dim: #c9a8b4;
-    --jeng-border: #7a4456;
-    --jeng-radius: 0px;
-    --jeng-shadow: 6px 6px 0 rgb(217 164 65 / 60%);
-    --jeng-serif:
-        "Times New Roman", Times, "Liberation Serif", "Nimbus Roman No9 L", Georgia, serif;
+    /* The default style, token for token. `style.test.ts` holds these two to being the
+     * same thing, because a stylesheet that has drifted from the style it defaults to is
+     * two sources of truth and one of them is wrong. */
+    --jeng-paper: #000000;
+    --jeng-surface: #0e100f;
+    --jeng-text: #9cb29e;
+    --jeng-muted: #7e8f81;
+    --jeng-dim: #79877c;
+    --jeng-border: #252b26;
+
+    --jeng-learn-accent: #c6b800;
+    --jeng-learn-accent-tint: #1f1d05;
+    --jeng-learn-accent-ink: #a09400;
+    --jeng-work-accent: #7aa0c2;
+    --jeng-work-accent-tint: #0d141b;
+    --jeng-work-accent-ink: #5f86a8;
+    --jeng-on-accent: #000000;
+
+    --jeng-user: #8fae8a;
+    --jeng-user-tint: #101a10;
+    --jeng-jeng: #9cb29e;
+    --jeng-jeng-tint: #0e100f;
+    --jeng-think-tint: #121513;
+    --jeng-danger: #c97060;
+    --jeng-danger-tint: #2a1512;
+
+    --jeng-radius-card: 2px;
+    --jeng-radius-control: 2px;
+    --jeng-radius-field: 2px;
+    --jeng-shadow: none;
+
+    --jeng-serif: system-ui, "Segoe UI", Helvetica, Arial, sans-serif;
     --jeng-mono: ui-monospace, "Cascadia Code", "JetBrains Mono", Menlo, Consolas, monospace;
+    --jeng-size: 15px;
+    --jeng-grain: rgb(156 178 158 / 3%);
 
-    /* Gold learns and blue works, the same two the terminal wears. The window sets both per
-     * mode, so a gadget's component is told the mode too. */
-    --jeng-accent: #d9a441;
-    --jeng-accent-tint: #f8ebd4;
-    /* The accent again, at ink strength rather than fill strength: a rule, a border, a dot or
-     * a hover that has to read as a line on the cream paper. A colour can only be dimmed
-     * against another ground, so the fill keeps its brightness and the line takes the same
-     * hue a long way down. */
-    --jeng-accent-ink: #8a6410;
+    --jeng-code-comment: #7e8f81;
+    --jeng-code-keyword: #c6b800;
+    --jeng-code-string: #8fae8a;
+    --jeng-code-number: #b98a6b;
+    --jeng-code-title: #9cb29e;
+    --jeng-code-type: #7f9e8a;
+    --jeng-code-attr: #b98a6b;
+    --jeng-code-add: #63a063;
+    --jeng-code-delete: #b06d66;
 
-    --jeng-user: #b23a4a;
-    --jeng-user-tint: #f8cdc4;
-    --jeng-jeng: #7a4456;
-    --jeng-jeng-tint: #f8ebd4;
-    --jeng-think-tint: #e7dbd8;
-    --jeng-danger: #7a1230;
-    --jeng-danger-tint: #c02748;
+    --jeng-accent: var(--jeng-learn-accent);
+    --jeng-accent-tint: var(--jeng-learn-accent-tint);
+    --jeng-accent-ink: var(--jeng-learn-accent-ink);
 
     /* What a slip is printed in. Set per speaker below. */
     --jeng-tint: var(--jeng-surface);
@@ -67,10 +81,10 @@ body,
 
 body {
     background:
-        repeating-linear-gradient(90deg, rgb(217 164 65 / 4%) 0 1px, transparent 1px 4px),
+        repeating-linear-gradient(90deg, var(--jeng-grain) 0 1px, transparent 1px 4px),
         var(--jeng-paper);
     color: var(--jeng-text);
-    font: 16px / 1.6 var(--jeng-serif);
+    font: var(--jeng-size) / 1.6 var(--jeng-serif);
 }
 
 .app {
@@ -129,7 +143,7 @@ body {
     justify-content: center;
     align-items: flex-start;
     padding: 7vh 20px 20px;
-    background: rgb(20 6 12 / 45%);
+    background: rgb(0 0 0 / 45%);
 }
 
 .header .grow {
@@ -141,7 +155,7 @@ button {
     cursor: pointer;
     padding: 7px 16px;
     border: 1px solid var(--jeng-border);
-    border-radius: var(--jeng-radius);
+    border-radius: var(--jeng-radius-control);
     background: var(--jeng-surface);
     color: var(--jeng-text);
 }
@@ -151,13 +165,13 @@ button:hover {
 }
 
 /* The mode is a solid block of its own colour rather than a wash of it: it is the one
- * thing always on screen, and a wash at this size reads as nothing at all. Both of the
- * palette's brights are light enough to take dark type, so the block carries its label. */
+ * thing always on screen, and a wash at this size reads as nothing at all. A style picks
+ * `on-accent` to go with it, because a colour can only carry type chosen against it. */
 .chip {
     padding: 3px 12px;
     border-color: transparent;
     background: var(--jeng-accent);
-    color: var(--jeng-text);
+    color: var(--jeng-on-accent);
 }
 
 .chip:hover {
@@ -217,6 +231,7 @@ button:hover {
 pre.card {
     padding: 10px 14px;
     border: 1px solid var(--jeng-border);
+    border-radius: var(--jeng-radius-card);
     background: var(--jeng-tint);
     box-shadow: var(--jeng-shadow);
 }
@@ -261,13 +276,14 @@ pre.card {
     color: var(--jeng-muted);
 }
 
-/* Reversed, since the fill is the colour rather than a wash of it. The note is named
- * because it matches the span directly, so the colour on .call would not reach it. */
+/* The one thing on screen allowed to be the danger colour, printed in the danger colour on
+ * a wash of it. The note is named because it matches the span directly, so the colour on
+ * .call would not reach it. */
 .call.failed,
 .note.failed {
     --jeng-tint: var(--jeng-danger-tint);
     border-color: var(--jeng-danger);
-    color: var(--jeng-surface);
+    color: var(--jeng-danger);
 }
 
 .call.failed .note {
@@ -285,7 +301,7 @@ pre.card {
 .card {
     padding: 14px 16px;
     border: 1px solid var(--jeng-border);
-    border-radius: var(--jeng-radius);
+    border-radius: var(--jeng-radius-card);
     background: var(--jeng-surface);
     box-shadow: var(--jeng-shadow);
 }
@@ -385,7 +401,7 @@ pre.card {
 
 .approval {
     border: 1px solid var(--jeng-accent-ink);
-    border-radius: var(--jeng-radius);
+    border-radius: var(--jeng-radius-card);
     padding: 16px;
     background: var(--jeng-accent-tint);
     box-shadow: var(--jeng-shadow);
@@ -398,7 +414,7 @@ pre.card {
     min-height: 60px;
     padding: 8px 10px;
     border: 1px solid var(--jeng-border);
-    border-radius: var(--jeng-radius);
+    border-radius: var(--jeng-radius-field);
     background: var(--jeng-surface);
     color: inherit;
     font: inherit;
@@ -415,15 +431,14 @@ pre.card {
 }
 
 /*
- * highlight.js marks up code and nothing else, so the colour is all there is to add. These
- * are picked against the paper rather than lifted from one of its themes, which are all
- * either dark or tuned for white and would leave a cream slip looking scuffed. The palette
- * gives a crimson for the keywords and a teal for the strings, which is the one hue it does
- * not have; everything else is the taupe or a shade of it.
+ * highlight.js marks up code and nothing else, so the colour is all there is to add, and
+ * every one of them is a token -- a code block is the one thing on screen that cannot be
+ * re-coloured by whatever is behind it, so a style that left these alone would put the
+ * default style's code inside another style's page.
  */
 .hljs-comment,
 .hljs-quote {
-    color: #8a6a74;
+    color: var(--jeng-code-comment);
     font-style: italic;
 }
 
@@ -432,7 +447,7 @@ pre.card {
 .hljs-tag,
 .hljs-literal,
 .hljs-doctag {
-    color: #a02c46;
+    color: var(--jeng-code-keyword);
 }
 
 .hljs-string,
@@ -440,20 +455,20 @@ pre.card {
 .hljs-symbol,
 .hljs-bullet,
 .hljs-addition {
-    color: #1f6f66;
+    color: var(--jeng-code-string);
 }
 
 .hljs-number,
 .hljs-meta,
 .hljs-link {
-    color: #8a6a1f;
+    color: var(--jeng-code-number);
 }
 
 .hljs-title,
 .hljs-title.function_,
 .hljs-section,
 .hljs-name {
-    color: #7a4456;
+    color: var(--jeng-code-title);
 }
 
 .hljs-type,
@@ -463,7 +478,7 @@ pre.card {
 .hljs-selector-class,
 .hljs-selector-id,
 .hljs-params {
-    color: #6a3352;
+    color: var(--jeng-code-type);
 }
 
 .hljs-attr,
@@ -471,7 +486,7 @@ pre.card {
 .hljs-variable,
 .hljs-template-variable,
 .hljs-subst {
-    color: #a8543a;
+    color: var(--jeng-code-attr);
 }
 
 .hljs-emphasis {
@@ -484,12 +499,12 @@ pre.card {
 
 /* A patch is the one thing read for what changed, so those two lines carry a wash of ink. */
 .hljs-addition {
-    background: rgb(31 111 102 / 16%);
+    background: color-mix(in srgb, var(--jeng-code-add) 16%, transparent);
 }
 
 .hljs-deletion {
-    color: #a02c46;
-    background: rgb(160 44 70 / 16%);
+    color: var(--jeng-code-delete);
+    background: color-mix(in srgb, var(--jeng-code-delete) 16%, transparent);
 }
 
 /* The button is as tall as the box beside it, so the two read as one control. */
@@ -512,7 +527,7 @@ pre.card {
     max-height: 30vh;
     padding: 12px 14px;
     border: 1px solid var(--jeng-border);
-    border-radius: var(--jeng-radius);
+    border-radius: var(--jeng-radius-field);
     background: var(--jeng-surface);
     color: var(--jeng-text);
     font: inherit;
@@ -543,7 +558,7 @@ pre.card {
 .send {
     background: var(--jeng-accent);
     border-color: transparent;
-    color: var(--jeng-text);
+    color: var(--jeng-on-accent);
 }
 
 .send:hover {
@@ -552,7 +567,7 @@ pre.card {
 }
 
 /* Yes is the user letting the turn go on, so it wears the user's own colour; no is the
- * turn stopping, which is the one thing on screen allowed to be crimson. */
+ * turn stopping, which is the one thing on screen allowed to be the danger colour. */
 .yes {
     color: var(--jeng-user);
     border-color: var(--jeng-user);

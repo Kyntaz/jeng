@@ -2,6 +2,8 @@ import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
 import { mkdir, stat } from "node:fs/promises";
 import { dirname, extname, join, relative } from "node:path";
+import { DEFAULT_STYLE, STYLES, type Style } from "@jeng/core";
+import { roots } from "./style";
 
 /**
  * The source tree, found by walking up to the folder the whole project hangs off.
@@ -191,7 +193,21 @@ const MARKUP = { headers: { "content-type": "text/html; charset=utf-8" } };
  * A gadget's component is compiled here on demand, because which gadgets exist is
  * decided by the model writing them and not by anything that ships with the app.
  */
-export function serve(): { url: string; stop: () => void } {
+/**
+ * The window is served rather than bundled, so one `bun build` path covers a dev run
+ * and a packaged app and the view can be rebuilt without relaunching the native side.
+ * A gadget's component is compiled here on demand, because which gadgets exist is
+ * decided by the model writing them and not by anything that ships with the app.
+ *
+ * `style` is read per request rather than closed over once, because the picker can swap
+ * the config the window is pointed at and a different config can carry a different style.
+ * The stylesheet is the one thing that has to follow, since it is the only way the style
+ * reaches the page at all.
+ */
+export function serve(style: () => Style = () => STYLES[DEFAULT_STYLE]): {
+    url: string;
+    stop: () => void;
+} {
     const server = Bun.serve({
         port: 0,
         async fetch(request) {
@@ -205,7 +221,10 @@ export function serve(): { url: string; stop: () => void } {
                 // component looks like part of the app by using the variables the
                 // document already has in scope.
                 if (pathname === "/theme.css" || pathname === "/gadget.css")
-                    return new Response(await shell(join(VIEW_DIR, "theme.css")), STYLE);
+                    return new Response(
+                        `${await shell(join(VIEW_DIR, "theme.css"))}\n${roots(style())}`,
+                        STYLE,
+                    );
                 if (pathname.startsWith("/gadget/")) {
                     const file = decodeURIComponent(pathname.slice("/gadget/".length));
                     return new Response(await gadget(file), SCRIPT);

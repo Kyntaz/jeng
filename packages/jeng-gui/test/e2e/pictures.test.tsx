@@ -1,5 +1,6 @@
 import { afterAll, describe, test } from "bun:test";
 import type { Approval, SessionRef } from "@jeng/core";
+import { STYLES, type StyleName } from "@jeng/core";
 import type { Entry, State } from "@jeng/view";
 import { renderToStaticMarkup } from "react-dom/server";
 import { App } from "../../src/view/app";
@@ -193,4 +194,29 @@ describe("the window as a picture", () => {
             ),
         );
     });
+
+    /**
+     * Every builtin style, in one window apiece.
+     *
+     * Six palettes is a claim about how six windows look, and a claim about pixels is only
+     * worth something if the pixels are kept. So each style is the same conversation
+     * rendered against the same components, and any change to any of them fails here saying
+     * which style moved — including a change made in the hope that nobody would notice it on
+     * the default, which is the change most worth noticing.
+     */
+    for (const name of Object.keys(STYLES) as StyleName[]) {
+        test(`a window in ${name}`, async () => {
+            await picture(
+                `style-${name}`,
+                drawn({
+                    ...quiet,
+                    entries: said,
+                    thinking: true,
+                    agents: ["/work/jeng"],
+                    tokens: 20431,
+                }),
+                STYLES[name],
+            );
+        });
+    }
 });

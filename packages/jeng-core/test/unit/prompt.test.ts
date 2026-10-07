@@ -9,8 +9,9 @@ describe("prompt", () => {
     });
 
     test("leaves out the editor's trailing newline", () => {
-        expect(prompt("end-no-content")).toBe(
-            "end was called with no content. Put the answer in content.",
+        expect(prompt("nudge")).toBe(
+            "That was plain text, which the user can see but which does not end your turn. " +
+                'Call action="end" with no content now, since you have already said it, or call a tool if you still need one.',
         );
     });
 

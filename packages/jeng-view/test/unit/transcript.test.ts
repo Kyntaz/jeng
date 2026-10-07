@@ -7,16 +7,29 @@ const drawn = (widget: Widget): Draw => ({ surface: "tui", widget });
 
 describe("entries", () => {
     test("keeps a run of streamed text as one jeng entry", () => {
-        const first = append([], { type: "text", text: "hel" }, "learn", 1);
-        const second = append(first, { type: "text", text: "lo" }, "learn", 2);
+        const first = append([], { type: "text", text: "hel", reply: 1 }, "learn", 1);
+        const second = append(first, { type: "text", text: "lo", reply: 1 }, "learn", 1);
 
         expect(second).toEqual([{ kind: "jeng", id: 1, text: "hello", mode: "learn" }]);
     });
 
+    test("opens a row of its own for each thing jeng said", () => {
+        // Two replies in one turn, which is what a model that narrates and is nudged
+        // produces: the words belong to different messages even though nothing but
+        // words arrived between them.
+        const first = append([], { type: "text", text: "let me look", reply: 1 }, "learn", 1);
+        const second = append(first, { type: "text", text: "three files", reply: 2 }, "learn", 2);
+
+        expect(second).toEqual([
+            { kind: "jeng", id: 1, text: "let me look", mode: "learn" },
+            { kind: "jeng", id: 2, text: "three files", mode: "learn" },
+        ]);
+    });
+
     test("holds a row's number while a reply grows, since a window builds rows by number", () => {
-        const first = append([], { type: "text", text: "hel" }, "learn", 7);
-        const second = append(first, { type: "text", text: "lo" }, "learn", 8);
-        const third = append(second, { type: "text", text: "!" }, "learn", 9);
+        const first = append([], { type: "text", text: "hel", reply: 1 }, "learn", 7);
+        const second = append(first, { type: "text", text: "lo", reply: 1 }, "learn", 7);
+        const third = append(second, { type: "text", text: "!", reply: 1 }, "learn", 7);
 
         expect(third.map((entry) => entry.id)).toEqual([7]);
     });
@@ -99,8 +112,8 @@ describe("entries", () => {
     });
 
     test("keeps a run of reasoning as one think entry", () => {
-        const first = append([], { type: "reasoning", text: "may" }, "learn", 1);
-        const second = append(first, { type: "reasoning", text: "be" }, "learn", 2);
+        const first = append([], { type: "reasoning", text: "may", reply: 1 }, "learn", 1);
+        const second = append(first, { type: "reasoning", text: "be", reply: 1 }, "learn", 1);
 
         expect(second).toEqual([{ kind: "think", id: 1, text: "maybe", mode: "learn" }]);
     });
@@ -108,7 +121,7 @@ describe("entries", () => {
     test("does not fold reasoning into a jeng entry", () => {
         const entries = append(
             [{ kind: "jeng", id: 1, text: "hi", mode: "learn" }],
-            { type: "reasoning", text: "wait" },
+            { type: "reasoning", text: "wait", reply: 1 },
             "learn",
             2,
         );
@@ -120,7 +133,7 @@ describe("entries", () => {
     });
 
     test("marks what jeng said with the mode it was said in", () => {
-        const entries = append([], { type: "text", text: "four" }, "work", 1);
+        const entries = append([], { type: "text", text: "four", reply: 1 }, "work", 1);
 
         expect(entries).toEqual([{ kind: "jeng", id: 1, text: "four", mode: "work" }]);
     });

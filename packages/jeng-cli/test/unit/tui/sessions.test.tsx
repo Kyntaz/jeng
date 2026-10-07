@@ -26,7 +26,7 @@ function stubAgent(answer = "done"): Agent {
         inject: () => {},
         clear: () => {},
         send: async (_prompt: string, options?: { onEvent?: (event: AgentEvent) => void }) => {
-            options?.onEvent?.({ type: "text", text: answer });
+            options?.onEvent?.({ type: "text", text: answer, reply: 0 });
             return answer;
         },
     } as unknown as Agent;

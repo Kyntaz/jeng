@@ -1,5 +1,5 @@
 import { listSessions, readSession } from "@jeng/core";
-import type { Conversation, Session } from "@jeng/view";
+import type { Session } from "@jeng/view";
 import { app, Utils } from "electrobun/main";
 import type { Applied } from "..";
 import { open } from "./open";
@@ -13,7 +13,7 @@ import { openWindow } from "./window";
  * folder it was launched from.
  */
 const remembered = await readSettings(process.cwd());
-let talk = await open(remembered);
+let { conversation: talk, style } = await open(remembered);
 let settings = await discoverConfigs(remembered, talk.get());
 
 // The window asks for the state once it is listening, because nothing before that would
@@ -30,7 +30,7 @@ async function set(next: Settings, resume?: Session): Promise<Applied> {
                 : next.configs,
     };
 
-    let opened: Conversation;
+    let opened: Awaited<ReturnType<typeof open>>;
     try {
         opened = await open(wanted, { resume, mode: talk.get().mode });
     } catch (error) {
@@ -48,7 +48,8 @@ async function set(next: Settings, resume?: Session): Promise<Applied> {
     talk.escape();
     talk.save();
     settings = wanted;
-    talk = opened;
+    talk = opened.conversation;
+    style = opened.style;
     // The old conversation's gadgets go with it: nothing left on screen is drawing them.
     forget();
     watch();
@@ -102,7 +103,10 @@ async function browse(key: "config" | "cwd"): Promise<Applied> {
     return await set({ ...settings, [key]: picked });
 }
 
-const site = serve();
+// A style is part of the config, so it changes with it. The server is handed a way to
+// ask rather than the style itself, which is what lets the picker swap one without
+// anything here having to be told twice.
+const site = serve(() => style);
 const window = openWindow(site.url, {
     ready: () => {
         listening = true;

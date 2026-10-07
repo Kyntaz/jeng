@@ -1,10 +1,13 @@
 import { homedir } from "node:os";
-import { dirname, isAbsolute, join, resolve } from "node:path";
+import { dirname, join } from "node:path";
+import { at } from "./at";
 import type { ModelConfig } from "./model";
+import { resolveStyle, type Style, type StyleParts } from "./style";
 
 export interface Config {
     homes: string[];
     model: ModelConfig;
+    style: Style;
     /** The file it was read from, so a window can say which config it is on. */
     path?: string;
 }
@@ -12,6 +15,7 @@ export interface Config {
 interface FileConfig {
     homes?: string[];
     model?: Partial<ModelConfig>;
+    style?: string | StyleParts;
 }
 
 const FILE_NAME = "jeng.json";
@@ -75,15 +79,7 @@ function objectAt(path: string, value: unknown, key: string): Record<string, unk
     return value as Record<string, unknown>;
 }
 
-function homeAt(path: string, home: string): string {
-    if (home === "~")
-        return fail(
-            path,
-            'home "~" is your entire home folder. Use "~/.jeng" or a folder inside it.',
-        );
-    if (home.startsWith("~/")) return join(homedir(), home.slice(1));
-    return isAbsolute(home) ? home : resolve(dirname(path), home);
-}
+const homeAt = (path: string, home: string) => at(dirname(path), home);
 
 async function loadConfigFile(path: string): Promise<FileConfig> {
     const file = Bun.file(path);
@@ -101,7 +97,7 @@ async function loadConfigFile(path: string): Promise<FileConfig> {
     const raw = parsed as Record<string, unknown>;
 
     for (const key of Object.keys(raw))
-        if (key !== "homes" && key !== "model") fail(path, `unknown key ${key}`);
+        if (key !== "homes" && key !== "model" && key !== "style") fail(path, `unknown key ${key}`);
 
     const homes = raw.homes;
     if (
@@ -123,6 +119,7 @@ async function loadConfigFile(path: string): Promise<FileConfig> {
     return {
         homes: (homes as string[] | undefined)?.map((home) => homeAt(path, home)),
         model: fields as Partial<ModelConfig>,
+        style: raw.style as string | StyleParts | undefined,
     };
 }
 
@@ -152,12 +149,21 @@ export async function loadConfig(
     const fromArgs = options.homeArgs ?? [];
     const path = options.path ?? (await configPaths(cwd, resolveHomes(fromArgs, env)[0]))[0];
 
-    if (!path) return { homes: resolveHomes(fromArgs, env), model: resolveConfig(env) };
+    if (!path) {
+        return {
+            homes: resolveHomes(fromArgs, env),
+            model: resolveConfig(env),
+            style: await resolveStyle(undefined, { dir: cwd, env }),
+        };
+    }
 
     const file = await loadConfigFile(path);
     return {
         homes: fromArgs.length > 0 ? fromArgs : (file.homes ?? [defaultHome()]),
         model: withDefaults(file.model ?? {}),
+        // A path in a config file is relative to that file rather than to wherever jeng
+        // happened to be launched from, which is what every other path in one does.
+        style: await resolveStyle(file.style, { dir: dirname(path), env }),
         path,
     };
 }

@@ -87,7 +87,7 @@ describe("the window", () => {
     });
 
     test("says how much of the context the model is working with", () => {
-        expect(shown({ ...quiet, tokens: 4096 })).toContain("4096 tokens");
+        expect(shown({ ...quiet, tokens: 4096 })).toContain("4.1k tokens");
     });
 
     test("says escape is there to interrupt when nothing is being asked", () => {

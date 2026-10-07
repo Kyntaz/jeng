@@ -1,8 +1,10 @@
 import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
+import { DEFAULT_STYLE, STYLES, type Style } from "@jeng/core";
 import pixelmatch from "pixelmatch";
 import { type Browser, chromium, type Page } from "playwright-core";
 import { PNG } from "pngjs";
+import { roots } from "../../src/main/style";
 
 /**
  * The window as a picture.
@@ -11,6 +13,9 @@ import { PNG } from "pngjs";
  * Nothing is bundled and no transport is stood up: what is being looked at is theme.css
  * against the components that use it, and going through the rpc would add a moving part
  * that says nothing about how it looks.
+ *
+ * The style is appended exactly as the server appends it, so a picture is the stylesheet
+ * the window would really have been served rather than the default wearing another's name.
  */
 
 const THEME = await Bun.file(join(import.meta.dir, "..", "..", "src", "view", "theme.css")).text();
@@ -29,11 +34,12 @@ const ARTIFACTS = join(import.meta.dir, "..", "..", "..", "..", "artifacts", "pi
  * Motion is stilled for the same reason: a spinner pulsing makes two runs of the same
  * window differ by pixels that are nobody's fault.
  */
-const html = (markup: string) => `<!doctype html>
+const html = (markup: string, style: Style) => `<!doctype html>
 <html lang="en">
     <head>
         <meta charset="UTF-8" />
         <style>${THEME}</style>
+        <style>${roots(style)}</style>
         <style>
             *,
             *::before,
@@ -55,24 +61,28 @@ const html = (markup: string) => `<!doctype html>
  * comes to something else, the diff is written next to the picture: the test says what
  * moved, and the picture says where.
  */
-export async function picture(name: string, markup: string): Promise<void> {
+export async function picture(
+    name: string,
+    markup: string,
+    style: Style = STYLES[DEFAULT_STYLE],
+): Promise<void> {
     const before = Bun.file(join(BASELINES, `${name}.png`));
     if (!(await before.exists())) {
-        await Bun.write(join(BASELINES, `${name}.png`), await shoot(markup));
+        await Bun.write(join(BASELINES, `${name}.png`), await shoot(markup, style));
         return;
     }
-    await compare(name, await before.arrayBuffer(), await shoot(markup));
+    await compare(name, await before.arrayBuffer(), await shoot(markup, style));
 }
 
 let browser: Browser | undefined;
 let shot: Page | undefined;
 
-async function shoot(markup: string): Promise<Buffer> {
+async function shoot(markup: string, style: Style): Promise<Buffer> {
     // One page for every scenario: a browser per picture costs more than the pictures are
     // worth, and a page holds nothing a scenario depends on being clean for.
     if (!browser) browser = await chromium.launch();
     if (!shot) shot = await browser.newPage({ viewport: VIEWPORT });
-    await shot.setContent(html(markup));
+    await shot.setContent(html(markup, style));
     return shot.screenshot();
 }
 

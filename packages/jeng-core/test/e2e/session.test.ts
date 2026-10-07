@@ -66,6 +66,7 @@ interface Step {
 }
 
 const end = (content: string) => ({ call: JSON.stringify({ action: "end", content }) });
+const silence = { call: JSON.stringify({ action: "end" }) };
 const act = (args: Record<string, unknown>) => ({ call: JSON.stringify(args) });
 
 const CONFIG = (url: string) => ({
@@ -512,7 +513,48 @@ describe("a jeng session", () => {
         });
         await agent.send("what is 2+2?");
 
-        expect(model.requests()[1]).toContain("with that answer now");
+        expect(model.requests()[1]).toContain("with no content now");
+        model.stop();
+        await leave(home);
+    });
+
+    test("ends the turn on an end with no content, since the answer was already said", async () => {
+        const home = await mkdtemp(join(tmpdir(), "jeng-e2e-"));
+        const model = fakeModel([{ delta: { content: "4" } }, silence]);
+
+        const agent = await createAgent({
+            cwd: home,
+            homes: [home],
+            config: CONFIG(model.url),
+            approve: allow,
+        });
+
+        expect(await agent.send("what is 2+2?")).toBe("");
+        expect(model.requests()).toHaveLength(2);
+        model.stop();
+        await leave(home);
+    });
+
+    test("pairs an empty end with a result like any other, so the history replays", async () => {
+        const home = await mkdtemp(join(tmpdir(), "jeng-e2e-"));
+        const model = fakeModel([{ delta: { content: "4" } }, silence]);
+
+        const agent = await createAgent({
+            cwd: home,
+            homes: [home],
+            config: CONFIG(model.url),
+            approve: allow,
+        });
+        await agent.send("what is 2+2?");
+
+        // The empty end is still a call, so it is still answered: the transcript would
+        // replay one it never saw the result of.
+        expect(agent.history.at(-2)?.toolCall).toBeDefined();
+        expect(agent.history.at(-1)).toEqual({
+            role: "tool",
+            toolCallId: "call_2",
+            content: "ended",
+        });
         model.stop();
         await leave(home);
     });

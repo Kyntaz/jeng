@@ -66,7 +66,7 @@ export function jengTool(mode: Mode) {
                 ...(growing ? GROWTH : {}),
                 content: {
                     type: "string",
-                    description: `for end: the answer the user reads${
+                    description: `for end: the answer the user reads, or nothing if you already said it in plain text${
                         growing ? ". for create_protocol: the markdown body" : ""
                     }`,
                 },

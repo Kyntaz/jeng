@@ -17,7 +17,7 @@ import {
 } from "@jeng/core";
 import { createConversation, type Session, type Sessioning } from "@jeng/view";
 import { Command } from "commander";
-import { approvalText, type Run, renderTui } from "./tui";
+import { approvalText, dress, type Run, renderTui } from "./tui";
 
 interface Options {
     home: string[];
@@ -162,6 +162,11 @@ async function open(options: Options, resume?: Session): Promise<Run> {
         approve: approve(options),
     });
 
+    // The style goes on before the TUI is rendered and before the agent could put anything
+    // on screen, since it is read at draw time rather than handed down. A run that resumes
+    // a session brings its own config, so this happens on that path too.
+    dress(config.style);
+
     // Sessions belong to the home a run was given first, which is the one whose agent this
     // is: a second home is another agent's memory rather than somewhere this one's
     // conversations go.
@@ -198,7 +203,9 @@ async function once({ agent, talk }: Run, prompt: string, options: Options): Pro
                 if (event.type === "result") process.stderr.write(`↳ ${event.content}\n`);
             },
         });
-        if (reply.trim() !== streamed.trim())
+        // An end with nothing in it has already been said, so there is no answer to
+        // write out again and no blank line to leave behind.
+        if (reply.trim() && reply.trim() !== streamed.trim())
             process.stdout.write(`${streamed.trim() ? "\n" : ""}${reply}`);
         process.stdout.write("\n");
     } finally {

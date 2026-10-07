@@ -20,12 +20,18 @@ This should make Jeng particularly well suited to work with local or weaker mode
     - **Load Protocol** pulls a Protocol's body into context when its `when` matches the task.
     - **Load Gadget** hands back a Gadget's whole source, which is otherwise described by its header alone. A gadget the model wrote earlier has left its context, so this is the only way to see what one actually does before rewriting it, and it is learn-only because a work run would have nothing to do with the source.
     - **Load UI** hands over the language a Gadget's `ui` argument is written in, and is the only description of an interface that costs nothing until it is asked for. Which of the two languages it hands over is decided by what the run can draw in.
-    - **End** hands control back to the user. It is the only way a turn finishes, so an answer is a call rather than text.
+    - **End** hands control back to the user. It is the only way a turn finishes, so an answer is a call rather than text. Content may be left out of it, because a model that has already said its answer in plain text ends rather than being made to say it twice.
     - **Compact** replaces the transcript with a summary the model writes, so a long turn can keep going instead of running out of context.
 - **Config file** is a JSON file named through `-c`/`--config`, holding the homes to load and the model to talk to.
     - It exists so one disk can carry several agents, each with a config of its own.
     - It is the only source of configuration once found, so the environment is a fallback rather than a second voice.
     - Anything it leaves out falls back to the same default the environment would have supplied, which keeps a config file from having to be complete.
+- **Style** is the set of tokens a frontend draws in: colors, roundness, fonts, and everything else that
+    could be configured. It is segmented by frontend, since a terminal has no roundness and a window has no
+    selection highlight. Six are built in, each on a color combination from Wada Sanzo's dictionary.
+    - It comes from the config file, then `JENG_STYLE`, then `simple-dark`. It is the one key that keeps
+      reading the environment after a config file is found, because a style is presentation rather than
+      identity.
 - **Mode** is which of the two shapes of Jeng is running: `learn` grows the home, `work` uses only what it holds.
     - It comes from `--mode` and nowhere else. A config file describes an agent, and the mode is a decision about this run rather than a fact about the agent, so it is not written down anywhere the user has to keep in step with it.
     - Learn is the default, because an agent that cannot grow cannot get started.
@@ -39,13 +45,14 @@ The same agent is two things depending on what it is allowed to do to its home, 
 - **The actions are removed, not discouraged.** Work mode's tool does not list the actions that change the home and does not carry the arguments only they need, so a model cannot spend a turn talking itself into one and a small model never sees the words at all. `test_gadget` goes with them, because a throwaway gadget in a run that cannot keep anything is a turn wasted, and so does `load_ui`, which exists only to describe writing one. `load_gadget` goes too, because source it cannot rewrite is a gadget description with more words on it.
 - **A call that names one anyway is refused, and told which mode would have it.** A model asked to work will sometimes reach for what it was asked not to, and a refusal that only says no leaves it with nothing to do instead of something to try.
 - **A mode changes the prompt and the tool, never the conversation.** Switching mid-session rewrites neither the history nor what is on disk, and takes hold at the next model call rather than halfway through the current one, so a turn is never spent in two modes at once.
-- **The user is shown which mode is in force by color.** Learn is gold and work is blue, in the window as well as in the terminal, so the same sentence reads the same way in both. The prompt box is bordered in the mode's color because that box is the one thing on screen that is always there to read it. It is washed in a fainter version of the same color, because the transcript scrolls under it and a border showing through reads as a broken one. A line drawn on the cream paper takes the mode's color darkened rather than the bright one, since a bright gold fills a block but is not there at all as a rule on cream. The user wears a third color, because they are neither mode: green in the terminal, coral in the window. What the user answered wears it too, since an approval or a turn-down is the user talking rather than the model reporting on itself.
+- **The user is shown which mode is in force by color.** A style gives each mode a color, and the window and the terminal read the same one, so the same sentence reads the same way in both. Learn is gold and work is blue in the default style, but that is the style's decision rather than jeng's. The prompt box is bordered in the mode's color because that box is the one thing on screen that is always there to read it. It is washed in a fainter version of the same color, because the transcript scrolls under it and a border showing through reads as a broken one. A line drawn on the surface takes the mode's color darkened rather than the bright one, since a bright accent fills a block but is not there at all as a rule. The user wears a third color, because they are neither mode. What the user answered wears it too, since an approval or a turn-down is the user talking rather than the model reporting on itself.
 
 ## Turns
 
 A turn is one message from the user to the moment Jeng hands control back, which it only does through `end`. Keeping a turn well formed is most of what separates an agent that works from one that spirals, so the rules are few and stated once.
 
-- Every message Jeng sends is one call. Text on its own is progress, not an answer, and a model that narrates and then keeps working is doing the right thing rather than finishing.
+- Every message Jeng sends is one call. Text on its own is progress, not an answer, and a model that narrates and then keeps working is doing the right thing rather than finishing. Text the model cannot follow with a call is nudged once, and an empty `end` is the answer to that nudge.
+- **A reply is one row, and a turn is as many of them as the model took.** Words arriving a word at a time are one message however many pieces they arrive in, but two replies are two messages even when nothing but words came between them — which is what a model that narrates, is nudged and narrates again produces. So the agent numbers its replies and the transcript merges on that number, and a mode switch or a tool call still splits rows for its own reasons.
 - An assistant message carrying a call is always followed by the message carrying that call's result, in the history as well as in the request. A history that keeps the request and forgets the result replays a call the model never saw answered, which is what sends it round again.
 - The same action with the same arguments twice in a row means nothing changed in between, so the call is refused and the model is told to say what it knows instead. The turn keeps going, because a repeat is a nudge and not a stop. The same action again *after* something else is legitimate, because the context moved.
 - **A quoted argument is unwrapped, then judged.** A model that quotes its json tends to quote a list inside it too, so a string that parses as json is taken apart before a gadget is handed it. What is left has to be a JSON object, and anything else — a list, a bare string, a number — comes back as an error rather than reaching a gadget that would trip over it. The reason a call was refused is what the model is told, including when its arguments were not json at all, because a model that cannot see why is a model that repeats itself.
@@ -223,6 +230,19 @@ A conversation is written down so a later run can be the same conversation, whic
 - The working directory it is given is also the directory it runs in, because a gadget is a script and a script runs somewhere. A window launched from an app icon has a process directory nobody chose, so a gadget left in it would work in the wrong place while the header said otherwise. It is the process that moves rather than a path handed to a gadget, because a relative path only means anything where it is resolved.
 - The context window is configured rather than assumed, because a wrong guess is what makes an agent compact too late to be useful.
 
+## Styles
+
+A style is a set of tokens, and a token is a decision that would otherwise be hardcoded somewhere. Colors, roundness, fonts, and the shape of everything either frontend draws are all of them.
+
+- **A style is config, so it is read where config is read.** `jeng.json` can name one of the builtins, point at a file of your own, or inline one; `JENG_STYLE` names a builtin or points at a file. A config file that says nothing about style still lets `JENG_STYLE` work, which is the one place style differs from the model beside it in the file — a style is how something looks rather than which agent it is, so it is not silenced by the file's existence.
+- **A token left out is a token not chosen.** Any token a style omits keeps the default style's value, so a style that sets one colour is a style rather than an incomplete document. A token that does not exist, or a value that is not a string, is an error naming it — a style that quietly loses half its colours is indistinguishable from one that was never read.
+- **The two halves are genuinely different vocabularies.** The window has roundness and a serif and no selection highlight; the terminal has a selection highlight and neither of the others. So a style is `{ gui, tui }` rather than one flat list, and each frontend reads only its own half.
+- **Six styles, each from a different place in an atlas.** Sanzo Wada's dictionary of color combinations, which pairs colors that were never meant to be neighbours — one hue and almost none of it, a serious pair held to a narrow range, and three that will not sit next to each other without a fight. Distinctness is the point of picking from it rather than from taste, and `style.test.ts` holds each one to filling every token and to a paper the others do not have.
+- **The window is styled through the stylesheet it is served.** `roots()` writes one custom property per token onto `:root` and the loopback server appends it to `theme.css`, which is why the window needs no new request and no state field for it. The three `--jeng-accent*` names are not tokens: the window points them at whichever mode is in force, so a gadget writing `var(--jeng-accent)` gets the mode too.
+- **The terminal is styled by filling in what it already reads.** `theme.ts` exports its values rather than declaring them, and `dress` puts the style in place once before the first frame. Module bindings are live, so this is one place written and seven read, rather than a style threaded through every component to reach a border.
+- **The stylesheet's own `:root` is the default style, token for token.** So a page that loaded `theme.css` on its own is still a complete window, and a test holds the two to being the same thing — a stylesheet that has drifted from the style it defaults to is two sources of truth and one of them is wrong.
+- **Every style is a valid window, and a readable one.** The window is photographed against the real stylesheet for each of the six, because "these are six palettes" is a claim about pixels and not about code — and the five nobody is looking at are exactly where a palette that reads badly survives. Legibility is not left to the eye either: `contrast.ts` holds every style to the pairs the stylesheet actually draws, which is the only place a two-ground problem shows up. A colour can only be dimmed against one ground, so `dim` is for the desk and `muted` is for the paper and neither is ever asked to do the other's job.
+
 ## Context
 
 Jeng cannot see how full its own context is, so it is told: the token count from the last request is the first line of its context, and past four fifths of the window that line tells it to compact.
@@ -308,6 +328,9 @@ Four packages, in one direction of dependence: `jeng-core` ← `jeng-view` ← {
 - **jeng-core** is the harness and nothing else. It has no pixels, no dom and no react of its own
   except the one copy it needs to compile a gadget that draws a component. Everything a frontend can
   vary — what a draw looks like, which port it takes, which keys it answers to — is a parameter here.
+  A style is a token set rather than a pixel, so the six builtins and the resolution of them sit
+  here too: both frontends already read config from one place, and a style nobody resolves twice is
+  a style that can disagree with itself.
 - **jeng-view** is the conversation as state: the transcript log, the queue of forms waiting to be
   answered, and the approval waiting to be decided. It draws nothing and imports no framework, which
   is what lets a terminal and a window agree about what a turn was without either of them having read
@@ -338,7 +361,9 @@ run in a terminal and pretending otherwise would mean offering it somewhere it c
   `@jeng/core` for types only, which is what lets the window load the barrel instead of a path around
   it: the agent, the tool schema and the gadget compiler stay out of a bundle with no use for them.
   `place` is the rule about how a path is said, and it is worded rather than computed so both frontends
-  can hold to the same one without either of them reaching for `node:path`.
+  can hold to the same one without either of them reaching for `node:path`. `compact` is the same for the
+  context count, so a header that could not fit five digits in a terminal says the same short one in a
+  window that could.
 - **`node:` is dropped for a gadget and refused for the window.** A gadget has a bun half that needs it
   and a component half that does not, so swapping it for an empty module builds cleanly and throws the
   first time anything is called off it. The window has no bun half at all, so `window.test.ts` builds
@@ -367,7 +392,8 @@ The following structure includes only the most relevant files and paths of the p
     - `/packages`
         - `/jeng-core` (core jeng behaviors)
             - `/package.json`
-            - `/src` (TypeScript files with the core behavior of jeng)
+            - `/src` (TypeScript files with the core behavior of jeng, `style/` being the six builtin
+                styles and the one function that decides which one is in force)
             - `/test`
                 `/unit` (unit tests; structure mirrors `../src`)
                 `/e2e` (tests mirroring realistic uses of this library)

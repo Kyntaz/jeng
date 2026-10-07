@@ -3,7 +3,7 @@ import { prompt } from "./prompts";
 /**
  * What a call the model made means for the turn. The two that end or rewrite a turn are
  * answered here rather than inside the turn loop, because both are all or nothing: a good
- * one is over, and an empty one is refused in the same shape as a repeat.
+ * one is over, and an empty one that could not be is refused in the same shape as a repeat.
  */
 type Call =
     | { kind: "answer"; answer: string }
@@ -19,12 +19,9 @@ export function readCall(given: Record<string, unknown>, previous: string): Call
     // so the reason is what comes back rather than an unknown action with an empty name.
     if (typeof args.error === "string") return { kind: "refused", content: args.error };
 
-    if (name === "end") {
-        const answer = String(args.content ?? "").trim();
-        return answer
-            ? { kind: "answer", answer }
-            : { kind: "refused", content: prompt("end-no-content") };
-    }
+    // An end with nothing in it is how a model finishes after it has already said its
+    // answer, so it ends the turn rather than being asked to say it a second time.
+    if (name === "end") return { kind: "answer", answer: String(args.content ?? "").trim() };
 
     if (name === "compact") {
         const summary = String(args.summary ?? "").trim();

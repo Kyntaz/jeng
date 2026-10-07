@@ -16,8 +16,8 @@ import type { Draw, GuiDraw, Ui } from "./ui";
 const NUDGE = prompt("nudge");
 
 export type AgentEvent =
-    | { type: "text"; text: string }
-    | { type: "reasoning"; text: string }
+    | { type: "text"; text: string; reply: number }
+    | { type: "reasoning"; text: string; reply: number }
     | { type: "tool"; action: string; args: Record<string, unknown> }
     | { type: "view"; draw: Draw }
     | { type: "result"; content: string; ok: boolean }
@@ -175,8 +175,10 @@ export async function createAgent(options: AgentOptions): Promise<Agent> {
                 config,
                 tools: [jengTool(speaking)],
                 signal,
-                onDelta: (text) => onEvent?.({ type: "text", text }),
-                onReasoning: (text) => onEvent?.({ type: "reasoning", text }),
+                // The iteration is what says one reply from the next, and it is what a
+                // frontend needs to keep two of them off one row.
+                onDelta: (text) => onEvent?.({ type: "text", text, reply: turn }),
+                onReasoning: (text) => onEvent?.({ type: "reasoning", text, reply: turn }),
                 onUsage: (tokens) => {
                     promptTokens = tokens;
                     onEvent?.({ type: "usage", promptTokens: tokens });
