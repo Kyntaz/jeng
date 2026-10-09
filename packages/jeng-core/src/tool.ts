@@ -66,8 +66,8 @@ export function jengTool(mode: Mode) {
                     }`,
                 },
                 input: {
-                    type: "object",
-                    description: `arguments for run_gadget${growing ? " and test_gadget" : ""}, as an object`,
+                    type: "string",
+                    description: `for run_gadget${growing ? " and test_gadget" : ""}: the gadget's input, as a json object written as a string`,
                 },
                 ...(growing ? GROWTH : {}),
                 content: {

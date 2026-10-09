@@ -30,7 +30,7 @@ action="create_gadget", name=<new kebab-case name>, reason=<why you need it>, de
   holds any value and is gone when the conversation is cleared; `persistent` is committed to
   the home and is still there in a later session, so it only holds json: an object, array,
   number, string, boolean or null.
-action="test_gadget", reason=<why you need it>, description=<one line>, source=<TypeScript>, input=<object>
+action="test_gadget", reason=<why you need it>, description=<one line>, source=<TypeScript>, input=<a json object, written as a string>
   Run a gadget you wrote without committing it. Same file, same header, same rules and same
   approval as create_gadget, but nothing is written to the home and it does not outlive the
   call, so use it to get the source right and then commit exactly what you tested. State is the

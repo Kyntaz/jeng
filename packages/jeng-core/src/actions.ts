@@ -76,45 +76,23 @@ async function commit(
     await refresh(ctx, dir);
 }
 
-/**
- * A model that quotes its json tends to quote a list inside it too, so a string that
- * parses as json is taken apart before a gadget is handed it. Nothing is lost by
- * trying, because a string that does not parse is left exactly as it was.
- */
-function unwrap(value: unknown): unknown {
-    if (Array.isArray(value)) return value.map(unwrap);
-    if (typeof value === "object" && value !== null)
-        return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, unwrap(item)]));
-    if (typeof value !== "string") return value;
-    try {
-        return unwrap(JSON.parse(value));
-    } catch {
-        return value;
-    }
-}
-
-const kindOf = (value: unknown): string =>
-    Array.isArray(value) ? "a list" : value === null ? "null" : `a ${typeof value}`;
-
-/** The packages a call asked to install, which arrive quoted as often as anything else does. */
 const dependencyList = (args: Args): string[] => {
-    const value = unwrap(args.dependencies);
+    const value = args.dependencies;
     return Array.isArray(value) ? value.map(String).filter((spec) => spec.trim()) : [];
 };
 
 /**
- * What a gadget is handed is always an object, which is what the tool says `input` is.
- * Absent input is the same as none at all, and anything else is refused rather than
- * passed on, so a call that got its shape wrong is told so instead of tripping the
- * gadget over its own arguments.
+ * What a gadget is handed is the object `input` spells out. Absent input is the same as
+ * none at all, and anything else is refused rather than passed on, so a call that got its
+ * shape wrong is told so instead of tripping the gadget over its own arguments.
  */
-function coerceInput(
-    input: unknown,
-): { bad: string } | { bad: undefined; input: Record<string, unknown> } {
-    const value = input === undefined || input === null ? {} : unwrap(input);
-    if (typeof value !== "object" || value === null || Array.isArray(value))
-        return { bad: `input must be a json object, not ${kindOf(value)}` };
-    return { bad: undefined, input: value as Record<string, unknown> };
+function coerceInput(input: unknown): { bad: string } | { bad: undefined; input: Args } {
+    try {
+        const value = JSON.parse(String(input ?? "{}"));
+        if (typeof value === "object" && value !== null && !Array.isArray(value))
+            return { bad: undefined, input: value as Args };
+    } catch {}
+    return { bad: 'input must be a json object written as a string, e.g. input={"who":"ada"}' };
 }
 
 function findIn(ctx: ActionContext, noun: Noun, name: string): Found | undefined {

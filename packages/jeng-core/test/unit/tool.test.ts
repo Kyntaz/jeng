@@ -55,11 +55,16 @@ describe("tool", () => {
 
     test("shows both modes a gadget call that puts the name in name", () => {
         expect(jengTool("learn").description).toContain(
-            '{"action":"run_gadget","name":"read-file","input":{"path":"README.md"}}',
+            '{"action":"run_gadget","name":"read-file","input":"{\\"path\\":\\"README.md\\"}"}',
         );
         expect(jengTool("work").description).toContain(
-            '{"action":"run_gadget","name":"read-file","input":{"path":"README.md"}}',
+            '{"action":"run_gadget","name":"read-file","input":"{\\"path\\":\\"README.md\\"}"}',
         );
+    });
+
+    test("tells both modes input is a string rather than an object", () => {
+        expect(jengTool("learn").parameters.properties.input.type).toBe("string");
+        expect(jengTool("work").parameters.properties.input.type).toBe("string");
     });
 
     test("always tells both modes that end is the only way a turn finishes", () => {

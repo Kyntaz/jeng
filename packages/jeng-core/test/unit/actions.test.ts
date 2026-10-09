@@ -366,7 +366,7 @@ describe("actions", () => {
         await cleanup();
     });
 
-    test("run_gadget passes a json string input on as an object", async () => {
+    test("run_gadget hands the gadget the object its input spells out", async () => {
         const { ctx, dir, cleanup } = await context();
         await Bun.write(
             join(dir, "gadgets", "greet.ts"),
@@ -385,7 +385,7 @@ describe("actions", () => {
         await cleanup();
     });
 
-    test("run_gadget unwraps a quoted list inside input", async () => {
+    test("run_gadget reads a list inside its input as the list it is", async () => {
         const { ctx, dir, cleanup } = await context();
         await Bun.write(
             join(dir, "gadgets", "greet.ts"),
@@ -395,7 +395,7 @@ describe("actions", () => {
 
         const result = await runAction(
             "run_gadget",
-            { name: "greet", input: { who: '["ada","grace"]' } },
+            { name: "greet", input: '{"who":["ada","grace"]}' },
             ctx,
         );
 
@@ -403,50 +403,39 @@ describe("actions", () => {
         await cleanup();
     });
 
-    test("run_gadget unwraps a quoted number inside input", async () => {
+    test("run_gadget refuses an input string that is not json", async () => {
         const { ctx, dir, cleanup } = await context();
         await Bun.write(
-            join(dir, "gadgets", "count.ts"),
-            "/**\n * name: count\n * description: counts\n */\n\nexport default async (input: { lines: number }) => String(input.lines * 2)\n",
+            join(dir, "gadgets", "greet.ts"),
+            "/**\n * name: greet\n * description: says hi\n */\n\nexport default async () => 'hi'\n",
         );
         ctx.homes = [await loadHome(dir)];
 
-        const result = await runAction(
-            "run_gadget",
-            { name: "count", input: { lines: '"3"' } },
-            ctx,
-        );
-
-        expect(result).toEqual({ ok: true, content: "6" });
-        await cleanup();
-    });
-
-    test("run_gadget refuses a list of its own", async () => {
-        const { ctx, cleanup } = await context();
-
-        expect(await runAction("run_gadget", { name: "greet", input: ["ada"] }, ctx)).toEqual({
+        expect(await runAction("run_gadget", { name: "greet", input: "world" }, ctx)).toEqual({
             ok: false,
-            content: "input must be a json object, not a list",
+            content: 'input must be a json object written as a string, e.g. input={"who":"ada"}',
         });
         await cleanup();
     });
 
-    test("run_gadget refuses a quoted list of its own", async () => {
+    test("run_gadget refuses a json string that is not an object", async () => {
         const { ctx, cleanup } = await context();
 
         expect(await runAction("run_gadget", { name: "greet", input: '["ada"]' }, ctx)).toEqual({
             ok: false,
-            content: "input must be a json object, not a list",
+            content: 'input must be a json object written as a string, e.g. input={"who":"ada"}',
         });
         await cleanup();
     });
 
-    test("run_gadget refuses a quoted null rather than reading it as no input", async () => {
+    test("run_gadget refuses an input sent as an object rather than a string", async () => {
         const { ctx, cleanup } = await context();
 
-        expect(await runAction("run_gadget", { name: "greet", input: "null" }, ctx)).toEqual({
+        expect(
+            await runAction("run_gadget", { name: "greet", input: { who: "ada" } }, ctx),
+        ).toEqual({
             ok: false,
-            content: "input must be a json object, not null",
+            content: 'input must be a json object written as a string, e.g. input={"who":"ada"}',
         });
         await cleanup();
     });
@@ -459,24 +448,9 @@ describe("actions", () => {
         );
         ctx.homes = [await loadHome(dir)];
 
-        expect(await runAction("run_gadget", { input: { name: "greet" } }, ctx)).toEqual({
+        expect(await runAction("run_gadget", { input: '{"name":"greet"}' }, ctx)).toEqual({
             ok: false,
             content: 'no gadget named ""',
-        });
-        await cleanup();
-    });
-
-    test("run_gadget rejects an input string that is not json", async () => {
-        const { ctx, dir, cleanup } = await context();
-        await Bun.write(
-            join(dir, "gadgets", "greet.ts"),
-            "/**\n * name: greet\n * description: says hi\n */\n\nexport default async () => 'hi'\n",
-        );
-        ctx.homes = [await loadHome(dir)];
-
-        expect(await runAction("run_gadget", { name: "greet", input: "world" }, ctx)).toEqual({
-            ok: false,
-            content: "input must be a json object, not a string",
         });
         await cleanup();
     });
@@ -638,20 +612,6 @@ describe("actions", () => {
         await runAction("create_gadget", { reason: WHY, source: IMPORTING }, ctx);
 
         expect(asked).toEqual([]);
-        await cleanup();
-    });
-
-    test("takes a quoted list of packages as readily as a bare one", async () => {
-        const { ctx, dir, cleanup } = await context();
-        const source = await gadgetImporting(dir, "parse");
-
-        const result = await runAction(
-            "create_gadget",
-            { reason: WHY, source, dependencies: '["jeng-local-pkg@file:./pkg"]' },
-            ctx,
-        );
-
-        expect(result.ok).toBe(true);
         await cleanup();
     });
 
@@ -896,7 +856,7 @@ describe("actions", () => {
         ).toMatchObject({ ok: true });
 
         expect(
-            await runAction("run_gadget", { name: "review", input: { branch: "main" } }, ctx),
+            await runAction("run_gadget", { name: "review", input: '{"branch":"main"}' }, ctx),
         ).toEqual({
             ok: true,
             content: '{"verdict":"main"}',
@@ -981,7 +941,7 @@ describe("actions", () => {
         );
         ctx.homes = [await loadHome(dir)];
 
-        await runAction("run_gadget", { name: "remember", input: { who: "ada" } }, ctx);
+        await runAction("run_gadget", { name: "remember", input: '{"who":"ada"}' }, ctx);
 
         expect(await runAction("run_gadget", { name: "recall" }, ctx)).toEqual({
             ok: true,
@@ -1014,7 +974,7 @@ describe("actions", () => {
 
         const result = await runAction(
             "test_gadget",
-            { reason: WHY, source, input: { who: "world" } },
+            { reason: WHY, source, input: '{"who":"world"}' },
             ctx,
         );
 
@@ -1029,7 +989,7 @@ describe("actions", () => {
 
         const result = await runAction(
             "test_gadget",
-            { reason: WHY, source, input: { who: "world" } },
+            { reason: WHY, source, input: '{"who":"world"}' },
             ctx,
         );
 
@@ -1044,7 +1004,7 @@ describe("actions", () => {
 
         const result = await runAction(
             "test_gadget",
-            { reason: WHY, source, input: {}, dependencies: ["is-odd"] },
+            { reason: WHY, source, dependencies: ["is-odd"] },
             ctx,
         );
 
@@ -1053,27 +1013,12 @@ describe("actions", () => {
         await cleanup();
     });
 
-    test("test_gadget unwraps a quoted list in the input it is given", async () => {
-        const { ctx, cleanup } = await context();
-        const source =
-            '/**\n * name: greet\n * description: says hi\n */\n\nexport default async (input: { who: string[] }) => input.who.join(" and ")\n';
-
-        const result = await runAction(
-            "test_gadget",
-            { reason: WHY, source, input: { who: '["ada","grace"]' } },
-            ctx,
-        );
-
-        expect(result.content).toContain("ada and grace");
-        await cleanup();
-    });
-
     test("saves nothing when a gadget was only tested", async () => {
         const { ctx, cleanup } = await context();
         const source =
             '/**\n * name: greet\n * description: says hi\n */\n\nexport default async (input: { who: string }) => "hi " + input.who\n';
 
-        await runAction("test_gadget", { reason: WHY, source, input: { who: "world" } }, ctx);
+        await runAction("test_gadget", { reason: WHY, source, input: '{"who":"world"}' }, ctx);
 
         expect(ctx.homes[0].gadgets).toEqual([]);
         await cleanup();
@@ -1084,7 +1029,7 @@ describe("actions", () => {
         const source =
             '/**\n * name: greet\n * description: says hi\n */\n\nexport default async (input: { who: string }) => "hi " + input.who\n';
 
-        await runAction("test_gadget", { reason: WHY, source, input: { who: "world" } }, ctx);
+        await runAction("test_gadget", { reason: WHY, source, input: '{"who":"world"}' }, ctx);
 
         expect(await Bun.file(join(dir, "gadgets", "greet.ts")).exists()).toBe(false);
         await cleanup();

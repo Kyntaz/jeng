@@ -149,7 +149,7 @@ describe("a jeng session", () => {
                 call: JSON.stringify({
                     action: "run_gadget",
                     name: "greet",
-                    input: { who: "world" },
+                    input: '{"who":"world"}',
                 }),
             },
             end("hi world"),
@@ -422,7 +422,7 @@ describe("a jeng session", () => {
         await Bun.write(join(home, "gadgets", "recall.ts"), RECALL);
 
         const model = fakeModel([
-            act({ action: "run_gadget", name: "remember", input: { who: "ada" } }),
+            act({ action: "run_gadget", name: "remember", input: '{"who":"ada"}' }),
             act({ action: "run_gadget", name: "recall" }),
             end("greeted"),
             act({ action: "run_gadget", name: "recall" }),
@@ -454,7 +454,7 @@ describe("a jeng session", () => {
         await Bun.write(join(home, "gadgets", "recall-note.ts"), RECALL_NOTE);
 
         const model = fakeModel([
-            act({ action: "run_gadget", name: "keep", input: { note: "ship on fridays" } }),
+            act({ action: "run_gadget", name: "keep", input: '{"note":"ship on fridays"}' }),
             end("kept"),
             act({ action: "run_gadget", name: "recall-note" }),
             end("ship on fridays"),
@@ -859,7 +859,7 @@ describe("a jeng session", () => {
         await Bun.$`mkdir -p ${join(home, "gadgets")}`.quiet();
         await Bun.write(join(home, "gadgets", "greet.ts"), GADGET);
         const model = fakeModel([
-            act({ action: "run_gadget", name: "greet", input: { who: "world" } }),
+            act({ action: "run_gadget", name: "greet", input: '{"who":"world"}' }),
             end("hi world"),
         ]);
 

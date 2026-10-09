@@ -1,6 +1,7 @@
-action="run_gadget", name=<existing gadget>, input=<object>
+action="run_gadget", name=<existing gadget>, input=<a json object, written as a string>
   Run a gadget. `name` must be a gadget listed under Gadgets in your context.
-  e.g. {"action":"run_gadget","name":"read-file","input":{"path":"README.md"}}
+  e.g. {"action":"run_gadget","name":"read-file","input":"{\"path\":\"README.md\"}"}
+  input is a string holding json, not an object itself. `{}` if the gadget takes nothing.
   The name goes in name. It is not one of the gadget's own input fields, so never
   put it inside input.
 action="load_protocol", name=<existing protocol>
