@@ -32,6 +32,7 @@ export async function prepareGadget(
     reason: string,
     action: string,
     surface: Surface | undefined,
+    dependencies: string[] = [],
 ): Promise<Prepared> {
     if (!reason.trim())
         return {
@@ -39,7 +40,7 @@ export async function prepareGadget(
             content: `${action} needs a \`reason\`: the user reads it to decide whether to allow the gadget`,
         };
 
-    const valid = validateGadget(source);
+    const valid = validateGadget(source, dependencies);
     if (!valid.ok) return { ok: false, content: valid.error };
 
     const { header } = valid;
@@ -52,17 +53,14 @@ export async function prepareGadget(
         return { ok: false, content: prompt("no-interface") };
     if (gui && surface !== "gui") return { ok: false, content: prompt("no-window") };
 
+    const compiles = validateGadgetSyntax(source, extension(header));
+    if (!compiles.ok) return { ok: false, content: compiles.error };
+
     const dir = await mkdtemp(join(tmpdir(), "jeng-draft-"));
-    // The header decides the extension, so a gadget that writes jsx is compiled as
+    // The header decides the extension, so a gadget that writes jsx is run as
     // jsx rather than refused by the parser.
     const file = join(dir, `${header.name || "gadget"}.${extension(header)}`);
     await Bun.write(file, source);
-
-    const compiles = await validateGadgetSyntax(file);
-    if (!compiles.ok) {
-        await rm(dir, { recursive: true, force: true });
-        return { ok: false, content: compiles.error };
-    }
 
     return {
         ok: true,

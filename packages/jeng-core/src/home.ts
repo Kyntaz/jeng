@@ -1,5 +1,5 @@
 import { statSync } from "node:fs";
-import { basename, join } from "node:path";
+import { basename, dirname, join } from "node:path";
 import { extension, type Header, parseGadget, parseProtocol } from "./header";
 
 export interface GadgetRef {
@@ -25,6 +25,16 @@ export interface Home {
 /** Where a gadget of this name and flavour belongs, which its header alone decides. */
 export const gadgetFile = (dir: string, name: string, header: Header): string =>
     join(dir, "gadgets", `${name}.${extension(header)}`);
+
+/**
+ * The home a gadget came from, which is where its packages are. A gadget lives at
+ * `<home>/gadgets/<name>.<ext>`, while a draft lives in a temp folder that belongs to no
+ * home — which is why a draft's packages are bun's to install rather than the home's.
+ */
+export const homeOf = (file: string): string => {
+    const folder = dirname(file);
+    return basename(folder) === "gadgets" ? dirname(folder) : folder;
+};
 
 const isDirectory = (path: string) => {
     try {

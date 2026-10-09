@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -46,13 +46,45 @@ export function View() {
 export default async () => "shelled";
 `;
 
-async function withGadget(source: string, run: (url: string, file: string) => Promise<void>) {
+/** A gadget that imports a package of its own, which the home has to have installed. */
+const PACKAGED = `/**
+ * name: greet
+ * gui: true
+ * description: shouts through a package
+ */
+
+import { shout } from "jeng-local-ui";
+
+export function View() {
+    return <p>{shout()}</p>;
+}
+
+export default async () => "shouted";
+`;
+
+/** A package put in a home by hand, so bundling one never has to reach for npm. */
+async function installed(home: string): Promise<void> {
+    await mkdir(join(home, "node_modules", "jeng-local-ui"), { recursive: true });
+    await writeFile(
+        join(home, "node_modules", "jeng-local-ui", "package.json"),
+        '{"name":"jeng-local-ui","version":"1.0.0","main":"index.js"}',
+    );
+    await writeFile(
+        join(home, "node_modules", "jeng-local-ui", "index.js"),
+        'export const shout = () => "HI";\n',
+    );
+}
+
+async function withGadget(
+    source: string,
+    run: (url: string, file: string, home: string) => Promise<void>,
+) {
     const dir = await mkdtemp(join(tmpdir(), "jeng-gui-"));
     const file = join(dir, "gadget.tsx");
     await writeFile(file, source);
     const site = serve();
     try {
-        await run(site.url, file);
+        await run(site.url, file, dir);
     } finally {
         site.stop();
         await rm(dir, { recursive: true, force: true });
@@ -204,6 +236,23 @@ describe("a gadget's component", () => {
                 expect(await reply.text()).not.toBe("");
             },
         );
+    });
+
+    test("brings a package the home installed in with the component", async () => {
+        await withGadget(PACKAGED, async (url, file, home) => {
+            await installed(home);
+
+            expect((await fetch(`${url}gadget/${encodeURIComponent(file)}`)).status).toBe(200);
+        });
+    });
+
+    test("names the package a component wants when the home has not installed it", async () => {
+        await withGadget(PACKAGED, async (url, file) => {
+            const reply = await fetch(`${url}gadget/${encodeURIComponent(file)}`);
+
+            expect(reply.status).toBe(500);
+            expect(await reply.text()).toContain('"jeng-local-ui" is not installed');
+        });
     });
 
     test("is not found at all when there is no such file", async () => {

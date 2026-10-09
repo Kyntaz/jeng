@@ -57,6 +57,19 @@ const GUI_GADGET =
 
 const WHY = "so i can say hi for you";
 
+const IMPORTING =
+    '/**\n * name: parse\n * description: parses yaml\n */\n\nimport { parse } from "yaml"\n\nexport default async () => parse("a: 1")\n';
+
+/** A gadget with one import, plus the package it imports, so nothing has to come from npm. */
+async function gadgetImporting(dir: string, name: string): Promise<string> {
+    await Bun.write(
+        join(dir, "pkg", "package.json"),
+        '{"name":"jeng-local-pkg","version":"1.0.0","main":"index.js"}',
+    );
+    await Bun.write(join(dir, "pkg", "index.js"), 'export const parse = () => "parsed";\n');
+    return `/**\n * name: ${name}\n * description: parses\n */\n\nimport { parse } from "jeng-local-pkg"\n\nexport default async () => parse()\n`;
+}
+
 describe("actions", () => {
     test("create_protocol writes the protocol and makes it available", async () => {
         const { ctx, cleanup } = await context();
@@ -599,6 +612,107 @@ describe("actions", () => {
         await cleanup();
     });
 
+    test("refuses a gadget that imports a package it did not ask for", async () => {
+        const asked: Approval[] = [];
+        const { ctx, cleanup } = await context(async (request) => {
+            asked.push(request);
+            return { approved: true };
+        });
+
+        const result = await runAction("create_gadget", { reason: WHY, source: IMPORTING }, ctx);
+
+        expect(result).toEqual({
+            ok: false,
+            content: "gadget imports a package `dependencies` does not ask for: `yaml`",
+        });
+        await cleanup();
+    });
+
+    test("never troubles the user with a gadget whose package it never declared", async () => {
+        const asked: Approval[] = [];
+        const { ctx, cleanup } = await context(async (request) => {
+            asked.push(request);
+            return { approved: true };
+        });
+
+        await runAction("create_gadget", { reason: WHY, source: IMPORTING }, ctx);
+
+        expect(asked).toEqual([]);
+        await cleanup();
+    });
+
+    test("takes a quoted list of packages as readily as a bare one", async () => {
+        const { ctx, dir, cleanup } = await context();
+        const source = await gadgetImporting(dir, "parse");
+
+        const result = await runAction(
+            "create_gadget",
+            { reason: WHY, source, dependencies: '["jeng-local-pkg@file:./pkg"]' },
+            ctx,
+        );
+
+        expect(result.ok).toBe(true);
+        await cleanup();
+    });
+
+    test("installs a gadget's package into the home before committing it", async () => {
+        const { ctx, dir, cleanup } = await context();
+        const source = await gadgetImporting(dir, "parse");
+
+        await runAction(
+            "create_gadget",
+            { reason: WHY, source, dependencies: ["jeng-local-pkg@file:./pkg"] },
+            ctx,
+        );
+
+        const manifest = await Bun.file(join(dir, "package.json")).json();
+        expect(manifest).toEqual({ dependencies: { "jeng-local-pkg": "file:./pkg" } });
+        await cleanup();
+    });
+
+    test("installs nothing until the user has approved the gadget", async () => {
+        const user = turnsDownFirst("i do not know that package");
+        const { ctx, dir, cleanup } = await context(user.approve);
+        const source = await gadgetImporting(dir, "parse");
+
+        await runAction(
+            "create_gadget",
+            { reason: WHY, source, dependencies: ["jeng-local-pkg@file:./pkg"] },
+            ctx,
+        );
+
+        expect(await Bun.file(join(dir, "package.json")).exists()).toBe(false);
+        await cleanup();
+    });
+
+    test("commits nothing when a package cannot be installed", async () => {
+        const { ctx, dir, cleanup } = await context();
+        const source = await gadgetImporting(dir, "parse");
+
+        const result = await runAction(
+            "create_gadget",
+            { reason: WHY, source, dependencies: ["jeng-local-pkg@file:./nope"] },
+            ctx,
+        );
+
+        expect(result.ok).toBe(false);
+        await cleanup();
+    });
+
+    test("leaves no gadget file behind when a package cannot be installed", async () => {
+        const { ctx, dir, cleanup } = await context();
+        const source = await gadgetImporting(dir, "parse");
+
+        await runAction(
+            "create_gadget",
+            { reason: WHY, source, dependencies: ["jeng-local-pkg@file:./nope"] },
+            ctx,
+        );
+
+        expect(await Bun.file(join(dir, "gadgets", "parse.ts")).exists()).toBe(false);
+        await cleanup();
+    });
+
     test("writes nothing when the user turns the gadget down, and tells the model why", async () => {
         const user = turnsDownFirst("it deletes files");
         const { ctx, cleanup } = await context(user.approve);
@@ -923,6 +1037,22 @@ describe("actions", () => {
         await cleanup();
     });
 
+    test("runs a tested gadget that imports a package, installed where it runs", async () => {
+        const { ctx, dir, cleanup } = await context();
+        const source =
+            '/**\n * name: parity\n * description: uses a package\n */\n\nimport isOdd from "is-odd"\n\nexport default async () => String(isOdd(3))\n';
+
+        const result = await runAction(
+            "test_gadget",
+            { reason: WHY, source, input: {}, dependencies: ["is-odd"] },
+            ctx,
+        );
+
+        expect(result.content).toContain("true");
+        expect(await Bun.file(join(dir, "package.json")).exists()).toBe(false);
+        await cleanup();
+    });
+
     test("test_gadget unwraps a quoted list in the input it is given", async () => {
         const { ctx, cleanup } = await context();
         const source =
@@ -1084,6 +1214,49 @@ describe("actions", () => {
                 reason: "it does nothing i want",
             },
         ]);
+        await cleanup();
+    });
+
+    test("keeps a package another gadget in the home is still importing", async () => {
+        const { ctx, dir, cleanup } = await context();
+        const source = await gadgetImporting(dir, "parse");
+        await Bun.write(join(dir, "gadgets", "parse.ts"), source);
+        await Bun.write(join(dir, "gadgets", "greet.ts"), GADGET);
+        await Bun.$`bun add jeng-local-pkg@file:./pkg`.cwd(dir).quiet();
+        ctx.homes = [await loadHome(dir)];
+
+        await runAction("delete_gadget", { name: "greet", reason: "it is noise" }, ctx);
+
+        const manifest = await Bun.file(join(dir, "package.json")).json();
+        expect(manifest).toEqual({ dependencies: { "jeng-local-pkg": "file:./pkg" } });
+        await cleanup();
+    });
+
+    test("takes a package out with the last gadget that was importing it", async () => {
+        const { ctx, dir, cleanup } = await context();
+        await Bun.write(join(dir, "gadgets", "parse.ts"), await gadgetImporting(dir, "parse"));
+        await Bun.$`bun add jeng-local-pkg@file:./pkg`.cwd(dir).quiet();
+        ctx.homes = [await loadHome(dir)];
+
+        await runAction("delete_gadget", { name: "parse", reason: "it is noise" }, ctx);
+
+        expect(await Bun.file(join(dir, "package.json")).json()).toEqual({});
+        await cleanup();
+    });
+
+    test("says what went with the gadget rather than only that it went", async () => {
+        const { ctx, dir, cleanup } = await context();
+        await Bun.write(join(dir, "gadgets", "parse.ts"), await gadgetImporting(dir, "parse"));
+        await Bun.$`bun add jeng-local-pkg@file:./pkg`.cwd(dir).quiet();
+        ctx.homes = [await loadHome(dir)];
+
+        const result = await runAction(
+            "delete_gadget",
+            { name: "parse", reason: "it is noise" },
+            ctx,
+        );
+
+        expect(result.content).toContain("jeng-local-pkg");
         await cleanup();
     });
 

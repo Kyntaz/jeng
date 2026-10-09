@@ -12,6 +12,8 @@ bun run setup
 
 This builds Jeng into a single executable with `bun run build` and installs it as `jeng` in `~/.jeng/bin`, adding that folder to your PATH if it isn't there yet. Open a new terminal afterwards. `bun run build` alone just writes the executable to `dist/jeng` (`dist/jeng.exe` on Windows).
 
+Bun is only needed to build Jeng. The executable carries its own runtime, so `jeng` needs nothing else on your PATH — it installs a gadget's packages and checks a gadget's source itself.
+
 ## Configuration
 
 Jeng talks to any OpenAI-compatible endpoint, so a local model works as well as a hosted one.
@@ -307,6 +309,7 @@ Jeng loads up and edits context on the following locations:
         - `/*.md` (memory files containing situational knowledge that Jeng may want to load into context)
     - `/gadgets`
         - `/*.ts` (tools that Jeng can use to interact with the system; these run on the bun runtime)
+    - `/package.json`, `/bun.lock`, `/node_modules` (the npm packages the gadgets here import, which `create_gadget` installs and `delete_gadget` prunes)
     - `/AGENTS.md` (global agents file; always loaded into Jeng's context)
     - `/.state` (json a gadget has committed, kept between sessions)
     - `/sessions`
@@ -343,6 +346,32 @@ how it fixes a gadget that misbehaves long after writing it.
 Deleting a gadget is the one thing `--yes` will not do for it, because there is no undo and no backup.
 All of that is learn mode only: under `--mode work` Jeng is never offered the actions that would let
 it write, so it works the home as it finds it.
+
+### Gadgets with packages
+
+A gadget can import any package from npm by asking for it, rather than importing it and hoping:
+
+```ts
+/**
+ * name: parse-config
+ * description: reads a config file into an object. input: { path: string }
+ */
+
+import { parse } from "yaml";
+
+export default async (input: { path: string }) => parse(await Bun.file(input.path).text());
+```
+
+That is written with `{"action": "create_gadget", "dependencies": ["yaml@^2"], "source": "..."}`.
+
+The packages land in the home as a `package.json` with a `bun.lock` beside it, so a gadget written
+today runs the same code tomorrow rather than whatever `latest` has become. Nothing is installed
+until you have approved the gadget, and a gadget that imports a package it did not ask for is refused
+before you are troubled with it. When the last gadget using a package is deleted, the package goes
+with it, so the home does not accumulate them.
+
+A `test_gadget` needs none of this: it runs out of a temp folder that belongs to no home, so bun
+installs what it imports while it runs and your home is never touched.
 
 ### Gadgets with an interface
 

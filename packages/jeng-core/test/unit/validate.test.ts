@@ -1,7 +1,4 @@
 import { describe, expect, test } from "bun:test";
-import { mkdtemp, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import { validateGadget, validateGadgetSyntax, validateProtocol } from "../../src/validate";
 
 const PROTOCOL =
@@ -10,6 +7,11 @@ const GADGET =
     '/**\n * name: greet\n * description: greets\n */\n\nexport default async () => "hi"\n';
 const GUI_GADGET =
     '/**\n * name: review\n * gui: true\n * description: asks for a look\n */\n\nexport function View() {\n    return null;\n}\n\nexport default async () => "looked"\n';
+const GUI_GADGET_JSX =
+    '/**\n * name: review\n * gui: true\n * description: asks\n */\n\nexport function View() {\n    return <p>look</p>;\n}\n\nexport default async () => "looked"\n';
+
+const IMPORTING =
+    '/**\n * name: parse\n * description: parses yaml\n */\n\nimport { parse } from "yaml"\nimport { join } from "node:path"\nimport { useState } from "react"\n\nexport default async () => parse(join("a", "b"))\n';
 
 describe("validate", () => {
     test("accepts a well formed protocol", () => {
@@ -91,38 +93,45 @@ describe("validate", () => {
         });
     });
 
-    test("compiles a gadget that draws jsx, because its header gave it a tsx file", async () => {
-        const dir = await mkdtemp(join(tmpdir(), "jeng-validate-"));
-        const file = join(dir, "review.tsx");
-        await Bun.write(
-            file,
-            '/**\n * name: review\n * gui: true\n * description: asks\n */\n\nexport function View() {\n    return <p>look</p>;\n}\n\nexport default async () => "looked"\n',
-        );
-
-        expect(await validateGadgetSyntax(file)).toEqual({ ok: true });
-        await rm(dir, { recursive: true, force: true });
+    test("rejects a gadget that imports a package it did not ask for", () => {
+        expect(validateGadget(IMPORTING)).toEqual({
+            ok: false,
+            error: "gadget imports a package `dependencies` does not ask for: `yaml`",
+        });
     });
 
-    test("accepts a gadget that compiles", async () => {
-        const dir = await mkdtemp(join(tmpdir(), "jeng-validate-"));
-        const file = join(dir, "greet.ts");
-        await Bun.write(file, GADGET);
-
-        expect(await validateGadgetSyntax(file)).toEqual({ ok: true });
-        await rm(dir, { recursive: true, force: true });
+    test("accepts a gadget whose package it asked for by name and range", () => {
+        expect(validateGadget(IMPORTING, ["yaml@^2"]).ok).toBe(true);
     });
 
-    test("rejects a gadget that does not compile", async () => {
-        const dir = await mkdtemp(join(tmpdir(), "jeng-validate-"));
-        const file = join(dir, "broken.ts");
-        await Bun.write(
-            file,
-            "/**\n * name: broken\n * description: nope\n */\n\nexport default async () => {\n",
-        );
+    test("takes the name off a range before comparing it", () => {
+        expect(validateGadget(IMPORTING, ["yaml"]).ok).toBe(true);
+    });
 
-        const result = await validateGadgetSyntax(file);
+    test("names every package it refused rather than only the first", () => {
+        expect(validateGadget(`${IMPORTING}import "kleur"\n`, ["yaml"])).toEqual({
+            ok: false,
+            error: "gadget imports a package `dependencies` does not ask for: `kleur`",
+        });
+    });
 
-        expect(result.ok).toBe(false);
-        await rm(dir, { recursive: true, force: true });
+    test("compiles a gadget that draws jsx, because its header gave it a tsx file", () => {
+        expect(validateGadgetSyntax(GUI_GADGET_JSX, "tsx")).toEqual({ ok: true });
+    });
+
+    test("accepts a gadget that compiles", () => {
+        expect(validateGadgetSyntax(GADGET, "ts")).toEqual({ ok: true });
+    });
+
+    test("rejects a gadget that does not compile", () => {
+        expect(
+            validateGadgetSyntax(
+                "/**\n * name: broken\n * description: nope\n */\n\nexport default async () => {\n",
+                "ts",
+            ),
+        ).toEqual({
+            ok: false,
+            error: "gadget does not compile: Unexpected end of file",
+        });
     });
 });

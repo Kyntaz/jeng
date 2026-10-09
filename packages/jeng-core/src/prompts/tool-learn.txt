@@ -1,4 +1,4 @@
-action="create_gadget", name=<new kebab-case name>, reason=<why you need it>, description=<one line>, source=<TypeScript>
+action="create_gadget", name=<new kebab-case name>, reason=<why you need it>, description=<one line>, dependencies=[<npm packages>], source=<TypeScript>
   Write a gadget you do not have yet.
   The user reads the whole file and decides, so reason is required and must be honest:
   they are about to let code run on their machine. If they say no you are told why, so
@@ -13,7 +13,13 @@ action="create_gadget", name=<new kebab-case name>, reason=<why you need it>, de
 
   Then code that compiles with bun, ending in:
   export default async (input: { path: string }) => string
-  Only `node:*` builtins and the `Bun` global are available. No other package can be imported.
+  `node:*` builtins and the `Bun` global are always there, as are `react` and `react-dom`.
+  Any other package has to be asked for by name in `dependencies`, as `name@range`:
+  import { z } from "zod" means dependencies=["zod@^4"]. A gadget that imports a package it
+  did not ask for is refused, so list every one of them and nothing else. They are installed
+  into the home with a `bun.lock`, which is what makes a gadget written today run the same
+  code tomorrow. Deleting the last gadget here that imports a package takes it out again, so
+  a home does not accumulate them.
   The description is all you will see about this gadget later, so name its input fields.
   A gadget may take a second argument, `ui`, to put an interface in front of the user. That
   has a language of its own: call action="load_ui" for it, and add the line `* ui: true` to
@@ -29,6 +35,12 @@ action="test_gadget", reason=<why you need it>, description=<one line>, source=<
   approval as create_gadget, but nothing is written to the home and it does not outlive the
   call, so use it to get the source right and then commit exactly what you tested. State is the
   exception: a gadget that commits during a test really has committed it.
+  A test needs no `dependencies`. It runs out of a temp folder that belongs to no home, so
+  whatever the source imports is installed there and the home is never touched either way.
+  That also means a test imports `latest` where the committed gadget imports the locked version,
+  so a test that passes is not a promise the commit behaves identically.
+  A gadget whose component imports a package cannot be drawn in a test, because the window only
+  draws what the home has installed. Commit it first.
 action="load_gadget", name=<existing gadget>
   Read a gadget's whole source back. All you have of a gadget is its description, so this
   is how you see what one you wrote earlier actually does when it misbehaves: read it,

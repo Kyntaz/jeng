@@ -1,4 +1,7 @@
+import { readFileSync } from "node:fs";
+import { dirname } from "node:path";
 import { compileGadget } from "./compile";
+import { imported } from "./dependency";
 import type { Gui, GuiAnswers } from "./gui";
 import { type State, sessionState } from "./state";
 import type { Ui } from "./ui";
@@ -26,6 +29,32 @@ const nowhereState = (): State => ({
     },
 });
 
+/** Whether a package is installed in this folder or in any folder above it, as a runtime looks. */
+function resolves(name: string, from: string): boolean {
+    for (let folder = from; ; folder = dirname(folder)) {
+        try {
+            Bun.resolveSync(name, folder);
+            return true;
+        } catch {
+            const up = dirname(folder);
+            if (up === folder) return false;
+        }
+    }
+}
+
+/**
+ * A compiled jeng does not resolve a gadget's packages against the folder it lies in, so
+ * they are resolved here instead. Doing it before the load is also what names a package
+ * that is not installed there, rather than leaving it to fail as "cannot find package".
+ */
+function unresolved(file: string): string | undefined {
+    const folder = dirname(file);
+    for (const name of imported(readFileSync(file, "utf-8"))) {
+        if (!resolves(name, folder)) return `"${name}" is not installed for this gadget`;
+    }
+    return undefined;
+}
+
 export async function runGadget(
     file: string,
     input: unknown,
@@ -36,6 +65,11 @@ export async function runGadget(
         const { gui, ui } = ports;
         // A gadget that draws a component is jsx and cannot be run where it lies, so it
         // is compiled first. Which one a gadget is was decided by its header, not here.
+        // A compiled one carries its packages inside it, so there is nothing left to resolve.
+        if (typeof gui !== "function") {
+            const missing = unresolved(file);
+            if (missing) return { ok: false, error: missing };
+        }
         const module = typeof gui === "function" ? await compileGadget(file) : file;
 
         // Bun caches a module by path, so dropping it is what makes a rewritten

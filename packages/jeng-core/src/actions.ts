@@ -1,5 +1,6 @@
 import { dirname, join } from "node:path";
 import { type ApprovalKind, type Approve, review } from "./approve";
+import { imported, install, prune } from "./dependency";
 import { type Draft, prepareGadget } from "./draft";
 import { type Ports, runGadget } from "./gadget";
 import { GUI_LANGUAGE, type Gui } from "./gui";
@@ -95,6 +96,12 @@ function unwrap(value: unknown): unknown {
 const kindOf = (value: unknown): string =>
     Array.isArray(value) ? "a list" : value === null ? "null" : `a ${typeof value}`;
 
+/** The packages a call asked to install, which arrive quoted as often as anything else does. */
+const dependencyList = (args: Args): string[] => {
+    const value = unwrap(args.dependencies);
+    return Array.isArray(value) ? value.map(String).filter((spec) => spec.trim()) : [];
+};
+
 /**
  * What a gadget is handed is always an object, which is what the tool says `input` is.
  * Absent input is the same as none at all, and anything else is refused rather than
@@ -160,6 +167,21 @@ async function loadAction(ctx: ActionContext, args: Args, noun: Noun): Promise<A
     return { ok: true, content: await Bun.file(hit.found.ref.file).text() };
 }
 
+/**
+ * What a deletion takes with it. A gadget is gone whatever its packages do, so a prune that
+ * cannot reach npm is said rather than turned into a deletion that failed.
+ */
+async function pruned(dir: string): Promise<string> {
+    try {
+        const gone = await prune(dir);
+        return gone.length === 0
+            ? ""
+            : `, along with ${gone.join(", ")}, which nothing here imports any more`;
+    } catch (error) {
+        return `, though its packages could not be taken out: ${(error as Error).message}`;
+    }
+}
+
 async function deleteAction(ctx: ActionContext, args: Args, noun: Noun): Promise<ActionResult> {
     const name = String(args.name ?? "");
     const hit = named(ctx, noun, args);
@@ -180,7 +202,9 @@ async function deleteAction(ctx: ActionContext, args: Args, noun: Noun): Promise
     await Bun.file(ref.file).delete();
     await refresh(ctx, dir);
 
-    return { ok: true, content: `${noun} "${name}" deleted from ${dir}` };
+    const gone = noun === "gadget" ? await pruned(dir) : "";
+
+    return { ok: true, content: `${noun} "${name}" deleted from ${dir}${gone}` };
 }
 
 async function createProtocolAction(ctx: ActionContext, args: Args): Promise<ActionResult> {
@@ -222,7 +246,13 @@ async function withDraft(
 ): Promise<ActionResult> {
     const source = String(args.source ?? "");
     const reason = String(args.reason ?? "");
-    const prepared = await prepareGadget(source, reason, action, surfaceOf(ctx));
+    const prepared = await prepareGadget(
+        source,
+        reason,
+        action,
+        surfaceOf(ctx),
+        dependencyList(args),
+    );
     if (!prepared.ok) return prepared;
     try {
         return await body(prepared.draft, source, reason);
@@ -243,6 +273,13 @@ async function createGadgetAction(ctx: ActionContext, args: Args): Promise<Actio
         if (!approved.ok) return approved;
 
         const home = primaryHome(ctx);
+        const dependencies = dependencyList(args);
+        try {
+            await install(home, dependencies);
+        } catch (error) {
+            return { ok: false, content: (error as Error).message };
+        }
+
         const file = gadgetFile(home, draft.name, draft.header);
         await commit(ctx, home, file, source);
 
@@ -265,6 +302,16 @@ async function testGadgetAction(ctx: ActionContext, args: Args): Promise<ActionR
             reason,
         });
         if (!approved.ok) return approved;
+
+        // A draft belongs to no home, so its packages are installed into the folder it
+        // runs out of. That is what a test costs rather than the home it borrows from,
+        // and it is what a compiled binary has to do rather than leave to bun: there is
+        // no auto-install behind a compiled executable.
+        try {
+            await install(dirname(draft.file), imported(source));
+        } catch (error) {
+            return { ok: false, content: (error as Error).message };
+        }
 
         const result = await runGadget(
             draft.file,

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { runGadget } from "../../src/gadget";
@@ -128,6 +128,43 @@ describe("gadget", () => {
         await Bun.write(file, `${header}export default () => "hi there"\n`);
         expect(await runGadget(file, null)).toEqual({ ok: true, output: "hi there" });
 
+        await rm(dir, { recursive: true, force: true });
+    });
+
+    test("names a package that is not installed rather than leaving it to the loader", async () => {
+        const dir = await mkdtemp(join(tmpdir(), "jeng-gadget-"));
+        const file = join(dir, "needy.ts");
+        await Bun.write(
+            file,
+            '/**\n * name: needy\n * description: wants a package\n */\n\nimport isOdd from "is-odd"\n\nexport default () => String(isOdd(3))\n',
+        );
+
+        expect(await runGadget(file, null)).toEqual({
+            ok: false,
+            error: '"is-odd" is not installed for this gadget',
+        });
+        await rm(dir, { recursive: true, force: true });
+    });
+
+    test("does not call a package missing when the folder above the gadget has it", async () => {
+        const dir = await mkdtemp(join(tmpdir(), "jeng-gadget-"));
+        const home = join(dir, "home");
+        await mkdir(join(home, "gadgets"), { recursive: true });
+        await Bun.write(
+            join(home, "node_modules", "local-pkg", "package.json"),
+            '{"name":"local-pkg","version":"1.0.0","main":"index.js"}',
+        );
+        await Bun.write(
+            join(home, "node_modules", "local-pkg", "index.js"),
+            "export const v = 7;\n",
+        );
+        const file = join(home, "gadgets", "uses.ts");
+        await Bun.write(
+            file,
+            '/**\n * name: uses\n * description: uses a local package\n */\n\nimport { v } from "local-pkg"\n\nexport default () => String(v)\n',
+        );
+
+        expect(await runGadget(file, null)).toEqual({ ok: true, output: "7" });
         await rm(dir, { recursive: true, force: true });
     });
 

@@ -32,6 +32,12 @@ const GROWTH = {
         description:
             "for create_gadget and test_gadget: the complete TypeScript file, header first",
     },
+    dependencies: {
+        type: "array",
+        items: { type: "string" },
+        description:
+            "for create_gadget: every package the gadget imports from npm, as `name@range`, and nothing else",
+    },
 };
 
 export function actionsFor(mode: Mode): string[] {

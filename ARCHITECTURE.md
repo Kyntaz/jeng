@@ -177,6 +177,43 @@ is the whole of its cost and most of its rules.
   document, so a component that uses its custom properties and plain elements is already consistent,
   and there is no component library for a gadget to have to agree to.
 
+## Gadget Dependencies
+
+A gadget may import packages from npm, and a home is where the ones it can import are installed.
+
+- **A home is a bun project.** `<home>/package.json`, `<home>/bun.lock` and `<home>/node_modules`,
+  which is what a gadget at `<home>/gadgets/name.ts` resolves against by walking up. Nothing needs
+  to rewrite a specifier, in either half, because bun already looks there first.
+- **Bun is not something a user has to install.** A compiled `jeng` carries the runtime, so the
+  install is done by asking that executable to be the bun CLI, and a gadget is checked by parsing
+  it in-process rather than by shelling out to `bun build`. Jeng is the only thing on PATH.
+- **A gadget's packages are resolved by jeng rather than by bun's ambient resolution.** A compiled
+  `jeng` does not look in the home when a gadget is loaded from it, so the load fails with a bare
+  "cannot find package" for a package that is installed and sitting right there. Each package the
+  source imports is resolved against the folders above the gadget before it is loaded, which is
+  both what makes it work and what lets a genuinely absent one be named. A component is exempt:
+  it is bundled, so it carries its packages with it.
+- **`node_modules` being present is what turns bun's auto-install off.** That is the whole safety
+  argument: with it, a gadget resolves from the lockfile or not at all, and the global cache is
+  never consulted. Without it there is nothing to import from either, since a package a gadget
+  wants has to have been asked for.
+- **The list is a call argument rather than a header line.** The model states it, validation checks
+  it, and `create_gadget` installs it — one place where a package is named, rather than two that
+  can disagree. The trade is that the approval shows the source rather than the package list.
+- **What is pruned is read off the remaining gadgets, not off what they declared.** A scan of every
+  gadget left in the home is what has to stay installed, so a package another gadget is still using
+  survives however little that gadget said about it. `delete_gadget` prunes after the deletion,
+  because the remaining gadgets are what the answer depends on.
+- **A prune that fails is said rather than thrown.** The gadget is gone whatever npm does, and
+  reporting a successful deletion as a failure would be a worse lie than a leftover package.
+- **A test installs nothing.** A draft lives outside the home, so bun resolves what it imports on
+  its own and there is nothing in the home to prune afterwards. The cost is that a test imports
+  `latest` where the committed gadget imports the locked version.
+- **A gadget's component can use a package too**, which means it has to be one a browser can run.
+  The window resolves it from the home rather than from wherever the file being bundled sits, because
+  a kept draft is written out beside the server rather than where it was drawn. Only the gadget's
+  own imports are asked for; a dependency's resolve from where it was installed.
+
 ## Gadget State
 
 A gadget may take a third argument, `state`, and use it to leave something for another gadget or for a
@@ -294,6 +331,8 @@ unlike an interface there is no run in which having state is a claim that cannot
 - Nothing is written until validation passes, so a rejected creation leaves the home exactly as it was.
 - A Gadget the model has not had approved yet lives in a draft outside the home, so a run that is cut short cannot leave a half-written Gadget behind for a later run to find.
 - A Gadget is compiled but never executed at creation time, so writing a gadget cannot run arbitrary code before anyone has looked at it. Testing one is the one time it is executed, and that is also the one time it is put to the user first.
+- A Gadget that imports a package it did not ask for is refused, because the model asked for the source and not for what the source would download. The check is a scan rather than a resolve, which is what keeps validation off the network.
+- A Gadget's packages are installed only after its approval, because installing runs the lifecycle scripts of code the user has not read. One `bun add` for the whole list, so a package that does not exist leaves no manifest behind, and a failed install commits nothing.
 - A Gadget or Protocol whose name already exists is overwritten rather than rejected, because the model has no way to edit a file it is unhappy with. It is still validated first, so a rewrite cannot be a way in either, and it is still approved, so a rewrite cannot be a way around being read.
 - An approval names the verb as well as the thing, because "rewrite" and "delete" are not the same decision as "create" even when the bytes are identical. The user is always shown the bytes at stake, whether they are about to land or about to go.
 

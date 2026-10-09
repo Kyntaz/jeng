@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
 import { mkdir, stat } from "node:fs/promises";
 import { dirname, extname, join, relative } from "node:path";
-import { DEFAULT_STYLE, STYLES, type Style } from "@jeng/core";
+import { DEFAULT_STYLE, homeOf, packageOf, STYLES, type Style } from "@jeng/core";
 import { roots } from "./style";
 
 /**
@@ -68,7 +68,10 @@ const react: Bun.BunPlugin = {
     },
 };
 
-/** `node:` is dropped rather than refused, so a gadget's bun half can still use it. */
+/**
+ * `node:` is dropped rather than refused, so a gadget's bun half can still use it. It comes
+ * before the packages below, because `node:` is a builtin and not something to go looking for.
+ */
 const node: Bun.BunPlugin = {
     name: "jeng-no-node",
     setup(build) {
@@ -79,6 +82,28 @@ const node: Bun.BunPlugin = {
         }));
     },
 };
+
+/**
+ * A gadget's packages are its home's, asked for of the home rather than left to where the
+ * file being bundled happens to sit: a kept draft is written out beside this file rather
+ * than where it was drawn, and a home on another drive has nothing above it to resolve from.
+ *
+ * Only a gadget's own imports are asked for. A dependency's resolve from where it was
+ * installed, which bun already does, and asking the home for them would miss a nested one.
+ */
+const packages = (home: string): Bun.BunPlugin => ({
+    name: "jeng-packages",
+    setup(build) {
+        build.onResolve({ filter: /^[^./]/ }, (args) => {
+            if (!packageOf(args.path) || args.importer.includes("node_modules")) return;
+            try {
+                return { path: Bun.resolveSync(args.path, home) };
+            } catch {
+                throw new Error(`"${args.path}" is not installed in ${home}`);
+            }
+        });
+    },
+});
 
 const plugins = [react, node];
 
@@ -91,12 +116,12 @@ const PRODUCTION = {
     define: { "process.env.NODE_ENV": '"production"' },
 };
 
-async function bundle(entrypoint: string): Promise<string> {
+async function bundle(entrypoint: string, more: Bun.BunPlugin[] = []): Promise<string> {
     try {
         const built = await Bun.build({
             entrypoints: [entrypoint],
             format: "esm",
-            plugins,
+            plugins: [...plugins, ...more],
             ...PRODUCTION,
         });
         if (!built.success)
@@ -178,7 +203,9 @@ async function gadget(file: string): Promise<string> {
     if (held !== undefined) await Bun.write(from, held);
     await Bun.write(entry, wrapper(entry, from));
 
-    const code = await bundle(entry);
+    // The gadget's own path rather than `from`, which for a kept draft is a copy written out
+    // here: the home is where the packages are, and only the real path still says which it is.
+    const code = await bundle(entry, [packages(homeOf(file))]);
     gadgets.set(file, { at, code });
     return code;
 }

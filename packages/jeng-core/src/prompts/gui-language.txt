@@ -46,6 +46,10 @@ Two worlds, one file. The component runs in the window, so `react` and the dom a
 the file runs in bun, so `Bun.$`, `Bun.file` and `state` are there. Anything you import from `node:`
 is dropped from the window bundle, so keep it out of the component.
 
+A package from `dependencies` is the exception: it is bundled into both halves, so a component can
+use one. It then has to be something a browser can run, and it is the window half that says so when
+it is not — the gadget's own bun half runs either way.
+
 Import nothing to style with. The window already defines these, and a component that uses only them
 and plain elements looks like part of the app:
 

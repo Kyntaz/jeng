@@ -1,3 +1,4 @@
+import { imported, nameOf } from "./dependency";
 import { type Header, parseGadget, parseProtocol } from "./header";
 
 type Validation = { ok: true } | { ok: false; error: string };
@@ -41,7 +42,7 @@ export function validateProtocol(source: string): Validation {
     return { ok: true };
 }
 
-export function validateGadget(source: string): GadgetValidation {
+export function validateGadget(source: string, declared: string[] = []): GadgetValidation {
     const header = parseGadget(source);
     if (!header)
         return {
@@ -71,20 +72,30 @@ export function validateGadget(source: string): GadgetValidation {
             error: "header declares `gui: true` but there is no `export function View` to draw",
         };
 
+    // A package is fetched from npm and its lifecycle scripts run, so an import the model
+    // did not ask for is code nobody approved. Naming them here means the model is told
+    // before the user is troubled with it.
+    const asked = new Set(declared.map(nameOf));
+    const unasked = imported(source).filter((name) => !asked.has(name));
+    if (unasked.length > 0)
+        return {
+            ok: false,
+            error: `gadget imports a package \`dependencies\` does not ask for: ${unasked.map((name) => `\`${name}\``).join(", ")}`,
+        };
+
     return { ok: true, header };
 }
 
-export async function validateGadgetSyntax(file: string): Promise<Validation> {
-    const proc = Bun.spawn(["bun", "build", "--target=bun", "--no-bundle", file], {
-        stdout: "pipe",
-        stderr: "pipe",
-    });
-    const [code, stderr] = await Promise.all([proc.exited, new Response(proc.stderr).text()]);
-    if (code === 0) return { ok: true };
-
-    const detail =
-        stderr.split("\n").find((line) => /error/i.test(line)) ??
-        stderr.trim().split("\n")[0] ??
-        "unknown error";
-    return { ok: false, error: `gadget does not compile: ${detail.trim()}` };
+/**
+ * The source is parsed rather than run, which is what keeps a syntax error from being
+ * found out by executing code nobody has read. The loader is the extension the header
+ * already decided, so a gadget that writes jsx is parsed as jsx.
+ */
+export function validateGadgetSyntax(source: string, loader: "ts" | "tsx"): Validation {
+    try {
+        new Bun.Transpiler({ loader }).transformSync(source);
+        return { ok: true };
+    } catch (error) {
+        return { ok: false, error: `gadget does not compile: ${(error as Error).message}` };
+    }
 }
