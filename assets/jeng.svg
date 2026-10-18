@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="67 78 356 356">
+  <title>Jeng</title>
+
+  <defs>
+    <!-- Bluish-green gradient for the blob body -->
+    <linearGradient id="blobGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#2dd4bf" />
+      <stop offset="100%" stop-color="#0f766e" />
+    </linearGradient>
+
+    <!-- Dark gradient for the sunglasses fill -->
+    <linearGradient id="glassGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#1e293b" />
+      <stop offset="100%" stop-color="#0f172a" />
+    </linearGradient>
+
+    <filter id="dropShadow" x="-10%" y="-10%" width="130%" height="130%">
+      <feDropShadow dx="0" dy="10" stdDeviation="10" flood-opacity="0.15" />
+    </filter>
+  </defs>
+
+  <!-- Main Blob Body -->
+  <path d="M 250 120 
+           C 310 120, 320 170, 360 250 
+           C 410 330, 415 365, 360 380 
+           C 310 395, 170 395, 120 380 
+           C 70 360, 90 310, 140 240 
+           C 180 180, 190 120, 250 120 Z" fill="url(#blobGradient)" stroke="#064e3b" stroke-width="7" stroke-linejoin="round" stroke-linecap="round" filter="url(#dropShadow)" />
+
+  <!-- Glasses Frame / Temples -->
+  <!-- Left frame arm -->
+  <path d="M 175 190 Q 200 220 220 220" fill="none" stroke="#0f172a" stroke-width="6" stroke-linecap="round" />
+  
+  <!-- Right frame arm -->
+  <path d="M 325 180 Q 345 200 355 215" fill="none" stroke="#0f172a" stroke-width="6" stroke-linecap="round" />
+
+  <!-- Bridge between lenses -->
+  <path d="M 265 220 Q 282 215 300 220" fill="none" stroke="#0f172a" stroke-width="6" stroke-linecap="round" />
+
+  <!-- Left Lens -->
+  <ellipse cx="240" cy="225" rx="30" ry="26" fill="url(#glassGradient)" stroke="#0f172a" stroke-width="7" />
+  
+  <!-- Left Lens Glare Lines -->
+  <path d="M 225 210 L 220 240 M 235 205 L 230 245 M 245 205 L 240 245 M 255 210 L 250 240" stroke="#94a3b8" stroke-width="3" stroke-linecap="round" opacity="0.6" />
+
+  <!-- Right Lens -->
+  <ellipse cx="325" cy="225" rx="30" ry="26" fill="url(#glassGradient)" stroke="#0f172a" stroke-width="7" />
+
+  <!-- Right Lens Glare Lines -->
+  <path d="M 310 210 L 305 240 M 320 205 L 315 245 M 330 205 L 325 245 M 340 210 L 335 240" stroke="#94a3b8" stroke-width="3" stroke-linecap="round" opacity="0.6" />
+
+  <!-- Smile -->
+  <path d="M 252 300 C 252 320, 282 320, 282 300" fill="none" stroke="#0f172a" stroke-width="7" stroke-linecap="round" />
+</svg>

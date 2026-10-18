@@ -165,6 +165,17 @@ async function stageReact(into: string): Promise<void> {
     }
 }
 
+/**
+ * The window's icon: the drawing the page asks for, and the rasters the build and the
+ * window itself load. Nothing else in here, because the macOS set is only ever read by
+ * the build and it has already had it.
+ */
+async function stageAssets(into: string): Promise<void> {
+    await mkdir(into, { recursive: true });
+    for (const file of ["jeng.svg", "jeng.ico", "jeng.png"])
+        await cp(join(repo, "assets", file), join(into, file));
+}
+
 /** The Start menu, which is where Windows looks for an app that was never installed by one. */
 async function windowsEntry(launcher: string): Promise<void> {
     const script = [
@@ -247,6 +258,7 @@ async function installWindow(): Promise<void> {
 
     await stageView(join(resources, "view"));
     await stageReact(join(resources, "node_modules"));
+    await stageAssets(join(resources, "assets"));
 
     if (windows) {
         await windowsEntry(join(app, "bin", "launcher.exe"));

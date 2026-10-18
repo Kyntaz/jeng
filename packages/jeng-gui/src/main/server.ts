@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { mkdir, stat } from "node:fs/promises";
 import { dirname, extname, join, relative } from "node:path";
 import { DEFAULT_STYLE, homeOf, packageOf, STYLES, type Style } from "@jeng/core";
-import { cache, entry, react as reactFrom, view } from "./paths";
+import { assets, cache, entry, react as reactFrom, view } from "./paths";
 import { roots } from "./style";
 
 /**
@@ -188,6 +188,7 @@ async function gadget(file: string): Promise<string> {
 const SCRIPT = { headers: { "content-type": "text/javascript; charset=utf-8" } };
 const STYLE = { headers: { "content-type": "text/css; charset=utf-8" } };
 const MARKUP = { headers: { "content-type": "text/html; charset=utf-8" } };
+const IMAGE = { headers: { "content-type": "image/svg+xml" } };
 
 /**
  * The window is served rather than bundled, so one `bun build` path covers a dev run and
@@ -215,6 +216,10 @@ export function serve(style: () => Style = () => STYLES[DEFAULT_STYLE]): {
                 }
                 if (pathname === "/view.js")
                     return new Response(await shell(join(view, entry)), SCRIPT);
+                // The icon the taskbar, the dock and the applications menu all show, served
+                // as it is drawn rather than as the raster each of those platforms needs.
+                if (pathname === "/jeng.svg")
+                    return new Response(await shell(join(assets, "jeng.svg")), IMAGE);
                 // A gadget is served the same stylesheet the window uses, so its
                 // component looks like part of the app by using the variables the
                 // document already has in scope.

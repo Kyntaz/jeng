@@ -2,6 +2,7 @@ import type { ApprovalDecision, Mode, SessionRef } from "@jeng/core";
 import type { State } from "@jeng/view";
 import { BrowserView, BrowserWindow } from "electrobun/main";
 import type { Applied, JengRPC } from "..";
+import { setIcon } from "./icon";
 
 /** Everything the window is allowed to do to the conversation. */
 export interface Handle {
@@ -58,6 +59,7 @@ export function openWindow(url: string, handle: Handle) {
         frame: { width: 1100, height: 760 },
         rpc,
     });
+    setIcon(window);
 
     return {
         state: (next: State) => rpc.send.state(next),

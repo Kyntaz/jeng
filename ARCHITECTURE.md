@@ -427,6 +427,7 @@ The following structure includes only the most relevant files and paths of the p
     - `/package.json` (top level workspace package)
     - `/biome.json` (linter and formatter configuration)
     - `/hutch.config.ts`, `/electrobun.config.ts` (the desktop app's build)
+    - `/assets` (`jeng.svg` is the icon every platform's build is cut from)
     - `/README.md`
     - `/ARCHITECTURE.md`
     - `/AGENTS.md`

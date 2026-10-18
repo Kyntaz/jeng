@@ -16,6 +16,9 @@ export default {
             // `bun run setup` installs the app bundle into ~/Applications, so a disk image
             // of it would be built for nobody.
             createDmg: false,
+            icons: "assets/jeng.iconset",
         },
+        win: { icon: "assets/jeng.ico" },
+        linux: { icon: "assets/jeng.png" },
     },
 };

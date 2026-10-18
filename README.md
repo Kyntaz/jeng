@@ -1,4 +1,5 @@
-# Jeng - An agent for you.
+| <img src="assets/jeng.png" width="128" alt="Jeng"> |  <h1>Jeng - An agent for you.</h1>  |
+| :--- | :---: |
 
 Jeng is a bare-bones agent that starts out with zero context and evolves to fit your specific needs.
 It is not opinionated, and it starts out knowing nothing except how to learn.

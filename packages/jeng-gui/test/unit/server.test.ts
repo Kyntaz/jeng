@@ -159,6 +159,18 @@ describe("the window's own files", () => {
         }
     });
 
+    test("serves the icon the window is identified by", async () => {
+        const site = serve();
+        try {
+            const reply = await fetch(`${site.url}jeng.svg`);
+
+            expect(reply.headers.get("content-type")).toContain("svg");
+            expect(await reply.text()).toContain("<svg");
+        } finally {
+            site.stop();
+        }
+    });
+
     test("gives a gadget the same stylesheet the window uses", async () => {
         const site = serve();
         try {

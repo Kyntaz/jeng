@@ -31,6 +31,9 @@ export function paths(root: string) {
         // Beside what it belongs to rather than in the system temp folder, since a wrapper
         // reaches a gadget by a relative path and two folders on different drives have none.
         cache: join(root, ".jeng-gadgets"),
+        // The icon the window is identified by and the drawing the page asks for, which
+        // an install carries beside the staged view rather than inside it.
+        assets: join(root, "assets"),
     };
 }
 
@@ -41,4 +44,4 @@ if (found === undefined)
         "the window has nothing to serve: run bun run setup, or launch the app from the jeng tree",
     );
 
-export const { view, entry, react, cache } = paths(found);
+export const { view, entry, react, cache, assets } = paths(found);
