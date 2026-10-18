@@ -12,5 +12,10 @@ export default {
         bun: {
             entrypoint: "packages/jeng-gui/src/main/index.ts",
         },
+        mac: {
+            // `bun run setup` installs the app bundle into ~/Applications, so a disk image
+            // of it would be built for nobody.
+            createDmg: false,
+        },
     },
 };

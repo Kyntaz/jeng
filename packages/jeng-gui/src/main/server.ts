@@ -1,32 +1,9 @@
 import { createHash } from "node:crypto";
-import { existsSync } from "node:fs";
 import { mkdir, stat } from "node:fs/promises";
 import { dirname, extname, join, relative } from "node:path";
 import { DEFAULT_STYLE, homeOf, packageOf, STYLES, type Style } from "@jeng/core";
+import { cache, entry, react as reactFrom, view } from "./paths";
 import { roots } from "./style";
-
-/**
- * The source tree, found by walking up to the folder the whole project hangs off.
- *
- * This is here because the main process is bundled into the app while the view and the
- * gadgets are not: a gadget's component is compiled when the window asks for it, which
- * means react has to be resolvable at run time, which means this runs from source rather
- * than from a packaged app. A packaged build would carry its own react instead.
- */
-function source(): string {
-    const marker = join("packages", "jeng-gui", "src", "view");
-    for (let dir = import.meta.dir, up = 0; up < 12; up++, dir = dirname(dir))
-        if (existsSync(join(dir, marker))) return dir;
-    throw new Error("the desktop app has to run from source: no jeng project above it");
-}
-
-const ROOT = source();
-const VIEW_DIR = join(ROOT, "packages", "jeng-gui", "src", "view");
-const VIEW_ENTRY = join(VIEW_DIR, "index.tsx");
-
-// React is jeng's own rather than a gadget's, so it is resolved from the package that
-// depends on it instead of from whatever folder the gadget happens to sit in.
-const REACT_FROM = join(ROOT, "packages", "jeng-gui");
 
 /**
  * The component is bundled as a `mount` rather than exported as a component, because
@@ -37,8 +14,8 @@ const REACT_FROM = join(ROOT, "packages", "jeng-gui");
  * because a drive letter is not a module specifier anything can resolve, and because a
  * relative import is what keeps the gadget's own relative imports working.
  */
-const wrapper = (entry: string, file: string) => {
-    const specifier = relative(dirname(entry), file).replaceAll("\\", "/");
+const wrapper = (chunk: string, file: string) => {
+    const specifier = relative(dirname(chunk), file).replaceAll("\\", "/");
     return `
 import { createElement } from "react";
 import { createRoot } from "react-dom/client";
@@ -55,15 +32,15 @@ export function mount(element, props) {
 const EMPTY = "module.exports = {};";
 
 /**
- * React is jeng's own rather than a gadget's, so it is resolved from the package that
- * depends on it: a home folder is a folder of scripts with no `node_modules` in it to
- * resolve anything from.
+ * React is jeng's own rather than a gadget's, so it is resolved from whatever carries it:
+ * a home folder is a folder of scripts with no `node_modules` in it to resolve anything
+ * from, and it is not on the path an install laid react down either.
  */
 const react: Bun.BunPlugin = {
     name: "jeng-react",
     setup(build) {
         build.onResolve({ filter: /^(react|react-dom)(\/.*)?$/ }, (args) => ({
-            path: Bun.resolveSync(args.path, REACT_FROM),
+            path: Bun.resolveSync(args.path, reactFrom),
         }));
     },
 };
@@ -147,11 +124,6 @@ const shells = new Map<string, string>();
 const kept = new Map<string, string>();
 const gadgets = new Map<string, { at?: number; code: string }>();
 
-// Beside the source rather than in the system temp folder, because a wrapper reaches a
-// gadget by a relative path and two folders on different drives have no relative path
-// between them. A home on another drive is not unusual.
-const cache = join(ROOT, ".jeng-gadgets");
-
 const digest = (file: string) => createHash("sha256").update(file).digest("hex").slice(0, 16);
 
 const named = (file: string) => join(cache, `${digest(file)}.js`);
@@ -176,7 +148,10 @@ export function forget(): void {
     gadgets.clear();
 }
 
-/** The window's own files, built once and kept: there are three of them and they never change. */
+/**
+ * The window's own files, held once: the markup and the stylesheet are read as they are,
+ * and the view is either the bundle an install brought or one built here from the entry.
+ */
 async function shell(path: string): Promise<string> {
     const cached = shells.get(path);
     if (cached !== undefined) return cached;
@@ -198,14 +173,14 @@ async function gadget(file: string): Promise<string> {
     if (cached && cached.at === at) return cached.code;
 
     await mkdir(cache, { recursive: true });
-    const entry = named(file);
+    const chunk = named(file);
     const from = held === undefined ? file : pinned(file);
     if (held !== undefined) await Bun.write(from, held);
-    await Bun.write(entry, wrapper(entry, from));
+    await Bun.write(chunk, wrapper(chunk, from));
 
     // The gadget's own path rather than `from`, which for a kept draft is a copy written out
     // here: the home is where the packages are, and only the real path still says which it is.
-    const code = await bundle(entry, [packages(homeOf(file))]);
+    const code = await bundle(chunk, [packages(homeOf(file))]);
     gadgets.set(file, { at, code });
     return code;
 }
@@ -215,15 +190,10 @@ const STYLE = { headers: { "content-type": "text/css; charset=utf-8" } };
 const MARKUP = { headers: { "content-type": "text/html; charset=utf-8" } };
 
 /**
- * The window is served rather than bundled, so one `bun build` path covers a dev run
- * and a packaged app and the view can be rebuilt without relaunching the native side.
- * A gadget's component is compiled here on demand, because which gadgets exist is
- * decided by the model writing them and not by anything that ships with the app.
- */
-/**
- * The window is served rather than bundled, so one `bun build` path covers a dev run
- * and a packaged app and the view can be rebuilt without relaunching the native side.
- * A gadget's component is compiled here on demand, because which gadgets exist is
+ * The window is served rather than bundled, so one `bun build` path covers a dev run and
+ * an installed app, and the view can be rebuilt without relaunching the native side. An
+ * install is handed the bundle this would have built, so only the main process is launched
+ * against; a gadget's component is compiled here on demand, because which gadgets exist is
  * decided by the model writing them and not by anything that ships with the app.
  *
  * `style` is read per request rather than closed over once, because the picker can swap
@@ -241,15 +211,16 @@ export function serve(style: () => Style = () => STYLES[DEFAULT_STYLE]): {
             const { pathname } = new URL(request.url);
             try {
                 if (pathname === "/") {
-                    return new Response(await shell(join(VIEW_DIR, "index.html")), MARKUP);
+                    return new Response(await shell(join(view, "index.html")), MARKUP);
                 }
-                if (pathname === "/view.js") return new Response(await shell(VIEW_ENTRY), SCRIPT);
+                if (pathname === "/view.js")
+                    return new Response(await shell(join(view, entry)), SCRIPT);
                 // A gadget is served the same stylesheet the window uses, so its
                 // component looks like part of the app by using the variables the
                 // document already has in scope.
                 if (pathname === "/theme.css" || pathname === "/gadget.css")
                     return new Response(
-                        `${await shell(join(VIEW_DIR, "theme.css"))}\n${roots(style())}`,
+                        `${await shell(join(view, "theme.css"))}\n${roots(style())}`,
                         STYLE,
                     );
                 if (pathname.startsWith("/gadget/")) {

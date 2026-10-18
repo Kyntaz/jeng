@@ -12,6 +12,8 @@ bun run setup
 
 This builds Jeng into a single executable with `bun run build` and installs it as `jeng` in `~/.jeng/bin`, adding that folder to your PATH if it isn't there yet. Open a new terminal afterwards. `bun run build` alone just writes the executable to `dist/jeng` (`dist/jeng.exe` on Windows).
 
+It installs the desktop window too, as `Jeng` in `~/.jeng/gui`, and puts it where the system looks for applications: the Start menu on Windows, `~/Applications` on macOS, the applications menu on Linux. That half needs [Hutch](https://hutch.blackboard.sh), and prints the one-line install for it if Hutch is not there; `bun run gui:build` builds the window without installing it.
+
 Bun is only needed to build Jeng. The executable carries its own runtime, so `jeng` needs nothing else on your PATH — it installs a gadget's packages and checks a gadget's source itself.
 
 ## Configuration
@@ -214,6 +216,8 @@ Jeng also runs in a desktop window, with the same agent, the same homes and the 
 bun run gui
 ```
 
+`bun run gui` runs it from source, which is what you want while working on it. `bun run setup` installs a built one that the Start menu opens instead.
+
 ![the window: a header saying where it works, the conversation as slips of paper, a line of keys and a box to type in](packages/jeng-gui/test/e2e/__pictures__/conversation.png)
 
 It is a separate frontend rather than a mode, because a gadget that draws a react component is written
@@ -291,10 +295,11 @@ named is left alone.
 | `F2`           | show or hide the detail behind a turn: what the model is thinking |
 
 The window is built by [Hutch](https://hutch.blackboard.sh) and [Electrobun](https://electrobun.dev), and
-`bun run setup` prints the one-line install for Hutch if it is missing. It runs from source rather than
-as a packaged app, because a gadget's component is compiled when the window asks for it and that needs
-react to be on disk to compile against. None of that touches the terminal: `jeng` is still a single
-executable and needs none of it.
+`bun run setup` prints the one-line install for Hutch if it is missing. An installed window is the app
+bundle with two things beside it: the view, built ahead of time so that nothing has to be compiled to
+draw the window, and a copy of react, because a gadget's component is compiled when the window asks for
+it and that needs react to be on disk to compile against. None of that touches the terminal: `jeng` is
+still a single executable and needs none of it.
 
 ## How it works?
 

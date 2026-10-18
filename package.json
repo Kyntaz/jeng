@@ -8,6 +8,7 @@
     "scripts": {
         "jeng": "bun run packages/jeng-cli/src/index.ts",
         "gui": "hutch electrobun dev --watch",
+        "gui:build": "hutch electrobun build --env=stable",
         "build": "bun build --compile --outfile dist/jeng packages/jeng-cli/src/index.ts",
         "setup": "bun run build && bun run scripts/setup.ts",
         "test": "bun test",

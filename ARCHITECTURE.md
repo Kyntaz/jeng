@@ -394,8 +394,9 @@ run in a terminal and pretending otherwise would mean offering it somewhere it c
 - **What it picked is a plain text file rather than another store.** `~/.jeng/knownconfigs` is a list
   of paths a person is meant to read, edit and delete, which is the same promise `jeng.json` makes.
 - **The window is served over a loopback socket rather than bundled into the app.** One `bun build`
-  path then covers a dev run and a packaged app, and the view can be rebuilt without relaunching the
-  native side.
+  path then covers a dev run and an installed app, and the view can be rebuilt without relaunching the
+  native side. `setup` builds that bundle and lays it beside the app it installs, so an installed window
+  reads it rather than building one, and a run from source builds it on the way out.
 - **Anything the view shares with the terminal has to be importable by a browser.** `@jeng/view` takes
   `@jeng/core` for types only, which is what lets the window load the barrel instead of a path around
   it: the agent, the tool schema and the gadget compiler stay out of a bundle with no use for them.
@@ -414,8 +415,9 @@ run in a terminal and pretending otherwise would mean offering it somewhere it c
   to recognise is numbered rather than recognised by what it holds — a draw, an approval, and every row
   of the transcript.
 - **A gadget's component is compiled when the window asks for it**, because which gadgets exist is
-  decided by a model writing them and not by anything that ships with the app. This is also why the
-  app runs from source: compiling needs react on disk to compile against.
+  decided by a model writing them and not by anything that ships with the app. Compiling needs react on
+  disk to compile against, so an install carries a copy of it and the same versions the tree was built
+  against — which is also why the two are told apart by a view folder that already holds a bundle.
 
 ## File Structure
 
